@@ -1,0 +1,14 @@
+{
+  "name": "aurora-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Aurora 3-day prototype — local orchestrator. Receives intent text, calls OpenRouter, returns a tile spec. Executes selected actions on local backends.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
