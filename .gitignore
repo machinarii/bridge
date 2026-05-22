@@ -1,0 +1,6 @@
+source/
+node_modules/
+.env
+app/notes/*.md
+!app/notes/.gitkeep
+.DS_Store

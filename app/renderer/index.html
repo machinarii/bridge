@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aurora</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="baseplate">
+    <header id="context-strip">
+      <span id="context-label">Aurora</span>
+      <span id="listening-indicator" data-state="idle">
+        <span class="dot"></span>
+        <span class="state-text">Ready</span>
+      </span>
+    </header>
+
+    <main id="surface" aria-live="polite">
+      <section class="welcome" id="welcome">
+        <h1>Aurora</h1>
+        <p class="hint">Hold <kbd>Space</kbd> or the gamepad <kbd>RT</kbd> and speak.</p>
+        <p class="hint subtle">D-pad / arrows to navigate. <kbd>A</kbd> / <kbd>Enter</kbd> to select. <kbd>B</kbd> / <kbd>Escape</kbd> to go back.</p>
+      </section>
+    </main>
+
+    <footer id="action-bar" role="toolbar" aria-label="Available actions"></footer>
+  </div>
+
+  <div id="ptt-typed" hidden>
+    <input id="typed-input" type="text" placeholder="Type an intent and press Enter…" autocomplete="off" />
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
