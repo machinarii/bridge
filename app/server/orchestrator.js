@@ -2,7 +2,7 @@ import { listNotes } from './backends/notes.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-const SYSTEM_PROMPT = `You are Aurora's intent interpreter. The user speaks or types one short instruction. Your job: classify the intent and return a single JSON object describing the tile surface to render. No prose. No code fences. JSON only.
+const SYSTEM_PROMPT = `You are Bridge's intent interpreter. The user speaks or types one short instruction. Your job: classify the intent and return a single JSON object describing the tile surface to render. No prose. No code fences. JSON only.
 
 There are exactly three intent kinds:
 
@@ -51,7 +51,7 @@ If the intent is unclear or doesn't fit, treat it as "answer" and respond helpfu
 
 Rules:
 - Output a single JSON object. No markdown, no commentary.
-- Keep "body" speakable — Aurora reads it aloud via TTS.
+- Keep "body" speakable — Bridge reads it aloud via TTS.
 - Never include controller affordances inside body text; they live in "actions".`;
 
 export async function interpretIntent(text) {
@@ -66,8 +66,8 @@ export async function interpretIntent(text) {
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'http://localhost/aurora-prototype',
-      'X-Title': 'Aurora Prototype',
+      'HTTP-Referer': 'http://localhost/bridge-prototype',
+      'X-Title': 'Bridge Prototype',
     },
     body: JSON.stringify({
       model,
@@ -153,7 +153,7 @@ function fallbackSpec(text, note) {
     intent: 'answer',
     template: 'reader',
     context: 'Answer',
-    title: 'Aurora is offline',
+    title: 'Bridge is offline',
     body: note + ' I need an API key to answer free-form questions. Try: "take a note" or "show my notes".',
     actions: [{ verb: 'Back', glyph: 'B', action: { type: 'cancel' } }],
     _intentText: text,

@@ -1,10 +1,10 @@
 # Bridge — multi-agent command center
 
-> *Aurora Bridge*: the surface where one voice commands a named, role-typed crew. Captain at the helm; specialists at their stations; the lead delegates and reports back.
+> *Bridge*: the surface where one voice commands a named, role-typed crew. Captain at the helm; specialists at their stations; the lead delegates and reports back.
 
 **Status:** draft for review
 **Date:** 2026-05-22
-**Scope:** Aurora desktop env — `app/` (server + renderer)
+**Scope:** Bridge desktop env — `app/` (server + renderer)
 
 ## Goal
 
@@ -233,7 +233,7 @@ Same single-bubble tile spec as today. New: **Triangle opens the history drawer*
 
 ## Context efficiency model
 
-Aurora Bridge is built around a deliberate split of who knows what, to keep token usage bounded and outputs in-role:
+Bridge is built around a deliberate split of who knows what, to keep token usage bounded and outputs in-role:
 
 **Lead has oversight only.** The lead agent's working context contains:
 - project metadata (name, goal, team roster as `Name (Role)`)
@@ -479,7 +479,7 @@ This is a UI-heavy change; automated tests are limited.
 
 ## Decision log (from brainstorm)
 
-- Surface name → **Bridge** (Aurora Bridge when parent brand is in play)
+- Project name → **Bridge** (single brand; no parent product wrapper)
 - Role list scope → Comprehensive product org (14)
 - Grid shape → Reflow to fit
 - Prompt UI per agent → Single-bubble + Triangle history drawer

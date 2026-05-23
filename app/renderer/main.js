@@ -25,7 +25,7 @@ function setIndicator(state, text) {
 }
 
 function setContext(label) {
-  contextLabelEl.textContent = label || 'Aurora';
+  contextLabelEl.textContent = label || 'Bridge';
 }
 
 function clearSurface() {
@@ -37,13 +37,13 @@ function clearSurface() {
 function showWelcome() {
   surfaceEl.innerHTML = `
     <section class="welcome">
-      <h1>Aurora</h1>
+      <h1>Bridge</h1>
       <p class="hint">Hold <kbd>Space</kbd> or the gamepad <kbd>RT</kbd> and speak.</p>
       <p class="hint subtle">D-pad / arrows to navigate. <kbd>A</kbd> / <kbd>Enter</kbd> to select. <kbd>B</kbd> / <kbd>Escape</kbd> to go back. Press <kbd>/</kbd> to type instead.</p>
     </section>`;
   renderActionBar([]);
   ring.set([]);
-  setContext('Aurora');
+  setContext('Bridge');
   currentSpec = null;
 }
 
@@ -51,7 +51,7 @@ function showWelcome() {
 
 function renderSpec(spec) {
   currentSpec = spec;
-  setContext(spec.context || 'Aurora');
+  setContext(spec.context || 'Bridge');
   const { surface, focusables, autoSpeak } = renderTile(spec);
   surfaceEl.innerHTML = '';
   surfaceEl.appendChild(surface);
@@ -274,4 +274,4 @@ window.addEventListener('keyup', (e) => {
 
 showWelcome();
 setIndicator('idle', 'Ready');
-console.log('[aurora] renderer ready. PTT = Space / RT. Type with /.');
+console.log('[bridge] renderer ready. PTT = Space / RT. Type with /.');

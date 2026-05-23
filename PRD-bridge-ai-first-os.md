@@ -1,9 +1,9 @@
-# PRD — Aurora: An AI-First, Accessibility-First Desktop Environment
+# PRD — Bridge: An AI-First, Accessibility-First Desktop Environment
 
 > **Status:** Draft v0.4
 > **Author:** Jin
 > **Last updated:** 2026-05-22
-> **Working codename:** Aurora (placeholder — rename freely)
+> **Working codename:** Bridge (placeholder — rename freely)
 
 ---
 
@@ -19,7 +19,7 @@ Several decisions below were made on the author's behalf because the open questi
 
 ### 1.1 What this is
 
-Aurora is a Linux desktop environment built on the **Sway** Wayland compositor that reimagines the OS interface around **expressed intent** rather than **direct manipulation of applications**. The user states what they want (by voice) or navigates a structured, game-controller-style option surface (by joystick); an **orchestration layer** interprets that intent, drives existing Linux applications running in the background, and composes on-screen surfaces to present options, state, and results.
+Bridge is a Linux desktop environment built on the **Sway** Wayland compositor that reimagines the OS interface around **expressed intent** rather than **direct manipulation of applications**. The user states what they want (by voice) or navigates a structured, game-controller-style option surface (by joystick); an **orchestration layer** interprets that intent, drives existing Linux applications running in the background, and composes on-screen surfaces to present options, state, and results.
 
 ### 1.2 Why it matters — the two theses
 
@@ -30,7 +30,7 @@ The two theses reinforce each other: an intent-driven OS dramatically lowers the
 
 ### 1.3 Non-goals (v1)
 
-- Not a from-scratch compositor. Aurora **uses** Sway; it does not (yet) replace it. A custom compositor is explicitly deferred (see §11).
+- Not a from-scratch compositor. Bridge **uses** Sway; it does not (yet) replace it. A custom compositor is explicitly deferred (see §11).
 - Not a general-purpose "AI assistant app" bolted onto a normal desktop. The orchestrator must *drive* apps, not merely chat beside them.
 - Not a mobile or web product. Target is a single Linux PC. *(A macOS full-screen-wrapper alternative is documented in Appendix A; an Android interface-layer future direction in Appendix B.)*
 - Not a multi-user / enterprise product in v1.
@@ -134,7 +134,7 @@ Integration uses three tiers, chosen by how much access a given app permits — 
 | **T2 — Accessibility (AT-SPI)** | Read and act on UI via the Linux accessibility tree without modifying the app. | Closed-source apps that expose accessibility info | Good structured access where source isn't available |
 | **T3 — Vision / CV (fallback)** | Screenshot capture + computer-vision analysis + synthetic input. Analyze the screen, locate elements, act. | Opaque apps exposing neither source nor accessibility | Last resort; fragile, slower, app-specific |
 
-**Build implication:** T1 makes Aurora partly an *app-instrumentation project* — you select a small set of open-source OS-level apps, fork them, and add an "orchestrator interface." This is novel work and a genuine moat: deep, reliable control that pure-IPC or pure-accessibility approaches can't match. Curating that initial app set is a v1 scoping decision (see Open Questions).
+**Build implication:** T1 makes Bridge partly an *app-instrumentation project* — you select a small set of open-source OS-level apps, fork them, and add an "orchestrator interface." This is novel work and a genuine moat: deep, reliable control that pure-IPC or pure-accessibility approaches can't match. Curating that initial app set is a v1 scoping decision (see Open Questions).
 
 > **Risk flag:** T1 forking is real engineering and creates a maintenance burden (tracking upstream). T2 accessibility coverage is uneven. T3 vision is fragile. The perception-and-action capability across all three tiers is the spine of the system and **must be prototyped first** (see §10), starting with one T1 app end to end.
 
@@ -142,11 +142,11 @@ Integration uses three tiers, chosen by how much access a given app permits — 
 
 ## 5. AI / model architecture
 
-**Architecture decision: Aurora is fully cloud-based for AI.** STT, intent interpretation, reasoning, and TTS all run as cloud services. The one pragmatic local exception is wake-word detection (see §5.4). This trades local-compute complexity for network dependence — see §5.5 for the consequences, which are significant for an accessibility product.
+**Architecture decision: Bridge is fully cloud-based for AI.** STT, intent interpretation, reasoning, and TTS all run as cloud services. The one pragmatic local exception is wake-word detection (see §5.4). This trades local-compute complexity for network dependence — see §5.5 for the consequences, which are significant for an accessibility product.
 
 ### 5.1 Hardware envelope & platform decision *(revised — fully cloud)*
 
-**The fully-cloud decision collapses the GPU requirement.** With no local ML, Aurora no longer needs a capable GPU at all — the local machine only runs Sway, the orchestrator client, audio I/O, and joystick input. This materially changes the hardware recommendation:
+**The fully-cloud decision collapses the GPU requirement.** With no local ML, Bridge no longer needs a capable GPU at all — the local machine only runs Sway, the orchestrator client, audio I/O, and joystick input. This materially changes the hardware recommendation:
 
 | Need | Requirement under fully-cloud |
 |---|---|
@@ -155,7 +155,7 @@ Integration uses three tiers, chosen by how much access a given app permits — 
 | Network | **Now critical infrastructure** — low-latency, reliable, always-on. The single most important hardware/environment requirement. |
 | Machine | Any low-cost mini-PC / SFF PC running Ubuntu. The existing RTX 2060 PC is now over-specced and works fine; no upgrade needed. |
 
-- **Platform note (still applies):** the target is still a **Linux PC**, because Sway / Wayland / i3 IPC / AT-SPI are Linux-only. The Mac contradiction from earlier drafts is now moot for *compute* reasons (no local ML to host) but unchanged for *architecture* reasons (the compositor stack is Linux-only). Aurora runs on cheap Linux hardware; a Mac is neither needed nor suitable as the target device.
+- **Platform note (still applies):** the target is still a **Linux PC**, because Sway / Wayland / i3 IPC / AT-SPI are Linux-only. The Mac contradiction from earlier drafts is now moot for *compute* reasons (no local ML to host) but unchanged for *architecture* reasons (the compositor stack is Linux-only). Bridge runs on cheap Linux hardware; a Mac is neither needed nor suitable as the target device.
 - **Savings:** the ~$500 GPU is no longer in the budget; spend it on network reliability instead (see §5.5).
 
 ### 5.2 Model strategy — cloud services
@@ -185,7 +185,7 @@ Integration uses three tiers, chosen by how much access a given app permits — 
 
 The fully-cloud decision has two consequences that bear directly on the accessibility-first thesis and must be designed around, not assumed away:
 
-1. **Network = availability of the entire OS.** With cloud AI as the primary interface, **no network means the user cannot operate their computer.** For a general user this is an inconvenience; for an accessibility user who depends on Aurora as their primary input path, it is a critical lockout. Mitigations to decide on (Open Questions §12): a guaranteed-reliable connection (wired + cellular failover), and/or a **minimal local offline-survival mode** — a tiny on-device model that still provides core navigation and a few critical actions (and local TTS via Piper) when the network is down, so the user is never fully locked out. *Recommended: ship at least a degraded offline-survival mode, even if the primary experience is cloud.*
+1. **Network = availability of the entire OS.** With cloud AI as the primary interface, **no network means the user cannot operate their computer.** For a general user this is an inconvenience; for an accessibility user who depends on Bridge as their primary input path, it is a critical lockout. Mitigations to decide on (Open Questions §12): a guaranteed-reliable connection (wired + cellular failover), and/or a **minimal local offline-survival mode** — a tiny on-device model that still provides core navigation and a few critical actions (and local TTS via Piper) when the network is down, so the user is never fully locked out. *Recommended: ship at least a degraded offline-survival mode, even if the primary experience is cloud.*
 2. **Latency is now bounded by the network, not the GPU.** Every spoken interaction carries a round-trip. This is manageable with streaming + immediate local acknowledgment (§5.2), but it makes connection quality a first-class product requirement and a tracked metric.
 
 Privacy also shifts: voice and screen context now leave the device. Cloud-use is no longer "occasional escalation" but the default, so the transparency requirements in §8 apply continuously, and vendor data-handling terms become a real selection criterion.
@@ -198,12 +198,12 @@ The four candidates are different categories: **OpenRouter** is an aggregator (o
 
 Rationale:
 
-- **Why an abstraction layer (non-negotiable):** the integration sits behind Aurora's own interface so no model choice is a one-way door. Required for A/B testing during development and for swapping the routed models without a rewrite.
-- **Why OpenRouter-only:** an accessibility OS that *depends* on a cloud model must not be hard-wired to one vendor — a single provider's outage, degradation, or price change would otherwise take down the user's entire computer. OpenRouter provides **automatic cross-provider failover** and access to many models through **one API and one integration**, with no first-party SDK dependency. This is the single integration Aurora maintains.
-- **Task-based routing (within OpenRouter):** Aurora routes different jobs to different models *through* OpenRouter — see the configurable per-task model map below. This is essentially free to do and saves real money on the most-called paths; it does not reintroduce a vendor dependency because everything still flows through the one OpenRouter integration.
+- **Why an abstraction layer (non-negotiable):** the integration sits behind Bridge's own interface so no model choice is a one-way door. Required for A/B testing during development and for swapping the routed models without a rewrite.
+- **Why OpenRouter-only:** an accessibility OS that *depends* on a cloud model must not be hard-wired to one vendor — a single provider's outage, degradation, or price change would otherwise take down the user's entire computer. OpenRouter provides **automatic cross-provider failover** and access to many models through **one API and one integration**, with no first-party SDK dependency. This is the single integration Bridge maintains.
+- **Task-based routing (within OpenRouter):** Bridge routes different jobs to different models *through* OpenRouter — see the configurable per-task model map below. This is essentially free to do and saves real money on the most-called paths; it does not reintroduce a vendor dependency because everything still flows through the one OpenRouter integration.
 - The specific models chosen for each task are a routing-config decision, not an architectural one, and can change anytime (see note below).
 
-**Configurable per-task model map.** Rather than two hard-coded tiers, Aurora maintains an editable mapping of *task type → model*, so each job runs on the most appropriate model for cost/latency/quality. Illustrative (models are config, not commitments):
+**Configurable per-task model map.** Rather than two hard-coded tiers, Bridge maintains an editable mapping of *task type → model*, so each job runs on the most appropriate model for cost/latency/quality. Illustrative (models are config, not commitments):
 
 | Task type | Model class | Optimize for |
 |---|---|---|
@@ -230,7 +230,7 @@ The traditional "window" is replaced by the **surface**, of which there are four
 | **Backend (hidden)** | A background app the orchestrator drives but the **user never sees directly** | The browser engine, mail client, file manager — running, instrumented, invisible |
 | **Generated** | Ephemeral UI the orchestrator composes for a task — the **primary thing the user sees** | A joystick-navigable list of "options for this email", a re-rendered reading view of a web page |
 | **Conversational** | The voice/language interface state | Listening indicator, live transcript, spoken-response state |
-| **Ambient** | Persistent, glanceable system/agent state | "Aurora is fetching your messages…" |
+| **Ambient** | Persistent, glanceable system/agent state | "Bridge is fetching your messages…" |
 
 **Note on the "50/50" evolution:** Hiding all backend apps shifts the experience from "half traditional windows, half radical" to **predominantly radical** — the user almost always interacts with generated/conversational/ambient surfaces, while the "traditional" half is demoted to invisible backends the orchestrator perceives and operates. This is a *more* coherent and more radical position than side-by-side windows: traditional apps become capability, not interface. The rare exception is the edge-case fallback (§3.1), where a hosted app may be surfaced full-screen for direct keyboard/mouse operation when the orchestrator can't yet mediate a task.
 
@@ -361,7 +361,7 @@ The agency boundary — *when does the OS act vs. ask?* — is the central UX of
 - **Propose-then-confirm by default** for any consequential or irreversible action (sending, deleting, purchasing, modifying files). The orchestrator proposes; the user confirms via a single joystick press or voice "yes."
 - **Tiered autonomy:** trivial/reversible navigation acts immediately; consequential acts require confirmation; ambiguous intent triggers a clarifying option surface rather than a guess.
 - **Always-available interrupt/cancel** mapped to a consistent control. The user must be able to stop the system at any time.
-- **Transparency:** the ambient surface always shows what Aurora is doing or about to do. No silent action.
+- **Transparency:** the ambient surface always shows what Bridge is doing or about to do. No silent action.
 - **Cloud-use is continuous (not occasional):** because all primary AI runs in the cloud, voice and screen-context data leave the device by default. The user must understand this; provide a clear, persistent indication that processing is happening remotely, and surface vendor data-handling terms. Privacy is a continuous concern here, not an edge case.
 
 ---
@@ -415,13 +415,13 @@ A from-scratch compositor (e.g., **Smithay**, Rust) is the eventual route to sur
 8. **Target machine:** Any low-cost Linux mini-PC now suffices (no GPU needed). Confirm whether to prototype on the existing 2060 PC (fine) and what production hardware to standardize on.
 9. **AI-native features (§13.6):** should v1 include capabilities a traditional OS lacks — "summarize this page," "draft a reply," cross-app intent, video calling, notes/journal? This is where the AI-first thesis pays off most; the Ubuntu-bundle framing doesn't capture it.
 10. **Browser presentation registry (§13.5):** selection *rule* is decided (API → structured reinterpret; clean DOM → DOM reinterpret; interactive/media → render; switchable per-task within a site). Open: initial curated registry contents and the unknown-site "cleanly scrapable" heuristic threshold.
-11. **Codename:** keep "Aurora" or rename.
+11. **Codename:** keep "Bridge" or rename.
 
 ---
 
 ## 13. OS feature set & application bundle
 
-Defines which "default OS apps" (the bundle Ubuntu and similar ship) Aurora provides, and — critically — **how each is realized**, since in an AI-first OS most traditional apps are demoted to invisible capabilities or absorbed into surfaces rather than shipped as apps. Each entry maps to a §4.3 build tier and a v1/later priority.
+Defines which "default OS apps" (the bundle Ubuntu and similar ship) Bridge provides, and — critically — **how each is realized**, since in an AI-first OS most traditional apps are demoted to invisible capabilities or absorbed into surfaces rather than shipped as apps. Each entry maps to a §4.3 build tier and a v1/later priority.
 
 ### 13.1 Guiding principles (derived from design decisions)
 
@@ -432,7 +432,7 @@ Defines which "default OS apps" (the bundle Ubuntu and similar ship) Aurora prov
 
 ### 13.2 Feature catalog
 
-| Feature | How it's realized in Aurora | Tier | Priority |
+| Feature | How it's realized in Bridge | Tier | Priority |
 |---|---|---|---|
 | **Web browsing** | **Keystone.** A stripped-down, chromeless Chromium/CEF build acting as a *rendering surface only* — no tabs, toolbar, or omnibox. Orchestrator drives it via the **Chrome DevTools Protocol (CDP)** (navigate, read DOM, click, extract). User never touches browser UI; mouse/keyboard edge-case control added later. Supports **two presentation modes — faithful render vs. AI reinterpret (§13.5)**. Also delivers video, photos, and articles. | T1 (deep instrument via CDP) | **v1 — must work flawlessly** |
 | **Email** | Capability + generated surfaces (read view, option list, dictated reply). Primary async comms channel. | T1/T2 | **v1 — must work flawlessly** |
@@ -459,7 +459,7 @@ The browser surface can present a web page in **two fundamentally different mode
 
 **Mode A — Render (faithful display).** The chromeless surface displays the *actual* web page as built. Universal (works for anything), pixel-faithful, but it is the *old* paradigm — the user faces a layout designed for mouse-and-pointer, ads, navigation chrome, and clutter, which is exactly what is hard for the target user.
 
-**Mode B — Reinterpret (condensed & tailored).** The orchestrator reads the page via CDP/DOM extraction, a model *understands* the content, and Aurora **regenerates it as a condensed surface built from the §6.4 design-system components** — controller-navigable, TTS-friendly, stripped of ads/nav/clutter, surfacing only what's relevant to the user's actual intent. **The website becomes data; Aurora builds the interface.** Examples:
+**Mode B — Reinterpret (condensed & tailored).** The orchestrator reads the page via CDP/DOM extraction, a model *understands* the content, and Bridge **regenerates it as a condensed surface built from the §6.4 design-system components** — controller-navigable, TTS-friendly, stripped of ads/nav/clutter, surfacing only what's relevant to the user's actual intent. **The website becomes data; Bridge builds the interface.** Examples:
 
 - A recipe page → ingredients + steps as an `OptionList`/`ReadingView`, no popups or life-story preamble.
 - A news article → title + AI summary + read-aloud, no chrome.
@@ -501,7 +501,7 @@ The browser surface can present a web page in **two fundamentally different mode
 
 ### 13.7 Recommended backend tooling
 
-**Selection principle:** because Aurora renders its own surfaces and the orchestrator drives everything (§4.3, §6), an app's GUI is dead weight. The optimal backend for each feature is a **daemon, CLI, or library** — headless and scriptable — which is also *easier to instrument (T1)* than a GUI app is to drive via accessibility (T2). Most "apps" therefore become backend capabilities, not shipped applications, reinforcing the lean bundle of §13.
+**Selection principle:** because Bridge renders its own surfaces and the orchestrator drives everything (§4.3, §6), an app's GUI is dead weight. The optimal backend for each feature is a **daemon, CLI, or library** — headless and scriptable — which is also *easier to instrument (T1)* than a GUI app is to drive via accessibility (T2). Most "apps" therefore become backend capabilities, not shipped applications, reinforcing the lean bundle of §13.
 
 | Feature | Recommended backend (headless/scriptable) | Form | Tier | Rationale |
 |---|---|---|---|---|
@@ -512,7 +512,7 @@ The browser surface can present a web page in **two fundamentally different mode
 | **Messaging** | **signal-cli** *(decided)* | CLI/daemon | T1/backend | Headless Signal; the model integration pattern — capability with zero interface baggage. |
 | **Calendar** | **khal** + **vdirsyncer** (CalDAV sync) | CLI | Backend capability | Plain-text-ish, scriptable; mirrors the email-primitives approach. |
 | **Reminders / todos** | **todo.txt** tooling or **taskwarrior** | CLI / format | Backend capability | Machine-readable, headless task state. |
-| **Music** | **Spotify Web API** *(decided)*; **mpd** for local playback | API / daemon | Dedicated surface + API | mpd is a UI-less daemon designed to be driven by clients — exactly Aurora's model — if local music is wanted alongside Spotify. |
+| **Music** | **Spotify Web API** *(decided)*; **mpd** for local playback | API / daemon | Dedicated surface + API | mpd is a UI-less daemon designed to be driven by clients — exactly Bridge's model — if local music is wanted alongside Spotify. |
 | **Reading — render PDF** | **MuPDF / libmupdf** | Library | Backend capability | Minimal, fast, embeddable PDF rendering for a surface. |
 | **Reading — extract PDF text** | **poppler-utils (`pdftotext`)** or MuPDF text extraction | CLI/lib | Backend capability | Feeds PDFs into the §13.5 reinterpret pipeline (clean reading surface + TTS). |
 | **Articles** | (handled by browser reinterpret mode, §13.5) | — | — | No separate app. |
@@ -524,7 +524,7 @@ The browser surface can present a web page in **two fundamentally different mode
 
 - The recurring shape across every row — `signal-cli`, `mbsync`/`notmuch`, `khal`/`vdirsyncer`, `mpd`, `pandoc`, `rg`, MuPDF — is *daemon/CLI/library, not GUI app*. This is the intended pattern, not coincidence.
 - **Maintenance check:** the long-established tools (Pandoc, mbsync, notmuch, khal, vdirsyncer, mpd, ripgrep, MuPDF, LibreOffice) are safe long-term bets; verify active maintenance for anything newer (e.g., aerc) at integration time.
-- **Word-processing flow, concretely:** Aurora's dictation surface → text stored as Markdown → model edits the Markdown on command → **Pandoc** exports to the requested format only when the user asks to save/send. LibreOffice-headless enters only for fidelity-critical .docx round-trips.
+- **Word-processing flow, concretely:** Bridge's dictation surface → text stored as Markdown → model edits the Markdown on command → **Pandoc** exports to the requested format only when the user asks to save/send. LibreOffice-headless enters only for fidelity-critical .docx round-trips.
 
 ---
 
@@ -536,8 +536,8 @@ This appendix records a seriously-considered alternative to the Linux/Sway appro
 
 | | **Linux / Sway (chosen)** | **macOS full-screen wrapper (alternative)** |
 |---|---|---|
-| What Aurora *is* | **The desktop itself** — owns the compositor, surface lifecycle, input routing | **An app on someone else's desktop** — macOS remains the real OS; Aurora is a full-screen skin over it |
-| Surface/window control | Total — apps can be fully hidden; nothing renders that Aurora didn't route | Shallow — WindowServer is closed; macOS chrome (menu bar, notifications, gestures, system modals) leaks through and reasserts its paradigm |
+| What Bridge *is* | **The desktop itself** — owns the compositor, surface lifecycle, input routing | **An app on someone else's desktop** — macOS remains the real OS; Bridge is a full-screen skin over it |
+| Surface/window control | Total — apps can be fully hidden; nothing renders that Bridge didn't route | Shallow — WindowServer is closed; macOS chrome (menu bar, notifications, gestures, system modals) leaks through and reasserts its paradigm |
 | Reaches depth-3 ("reimagine the OS")? | **Yes** — the only option that can | **No** — structurally capped at "a very different app on macOS," not a reimagined OS |
 | App-driving (the 50/50 spine) | T1 fork-and-instrument (moat) + T2 AT-SPI (patchy) + T3 vision | **T2 is stronger** — mature AXUIElement accessibility API + AppleScript/Apple Events; **but T1 evaporates** (closed/commercial app ecosystem, nothing to fork) |
 | Input (joystick + mic) | Raw access (evdev, full HID, USB/BLE) | More constrained (GameController framework, HID restrictions) **but** gains macOS **Switch Control** + best-in-class built-in accessibility (VoiceOver) for free |
@@ -587,11 +587,11 @@ Records Android as a *possible future direction*, the strategic reasoning, and w
 
 ### B.1 The hard constraint
 
-Aurora-as-specified is a **desktop-Linux artifact.** Its foundations — Sway, Wayland, i3 IPC, the chromeless CEF browser via CDP, AT-SPI, and the headless CLI backends (§13.7) — are desktop-Linux-specific and **do not exist on Android.** Android is not "Linux with a different UI"; for application purposes it is a different OS with a sandboxed app model. An Android version is therefore a **substantial rebuild of the perception/action layer**, not a retarget — similar in scope to the macOS-wrapper analysis (Appendix A).
+Bridge-as-specified is a **desktop-Linux artifact.** Its foundations — Sway, Wayland, i3 IPC, the chromeless CEF browser via CDP, AT-SPI, and the headless CLI backends (§13.7) — are desktop-Linux-specific and **do not exist on Android.** Android is not "Linux with a different UI"; for application purposes it is a different OS with a sandboxed app model. An Android version is therefore a **substantial rebuild of the perception/action layer**, not a retarget — similar in scope to the macOS-wrapper analysis (Appendix A).
 
 ### B.2 What changes on Android
 
-| Aurora layer | Android equivalent | Viability |
+| Bridge layer | Android equivalent | Viability |
 |---|---|---|
 | App-driving T1 (fork & instrument open-source apps) | **Largely collapses** — mobile app ecosystem is closed/packaged | Lost, as on macOS |
 | App-driving T2 (AT-SPI) | **Android Accessibility Service API** (powerful — basis of screen readers/automation) + intents/deep links | Strong, but the primary tier |
@@ -603,12 +603,12 @@ Aurora-as-specified is a **desktop-Linux artifact.** Its foundations — Sway, W
 ### B.3 Strategic view — is the AI-first OS future mobile or desktop?
 
 - **Mobile is where the mass market is** — the phone is the default (often only) computer for most people; it has the always-on sensors an ambient AI wants; and a voice-first, one-surface-at-a-time model fits a phone *more* naturally than a desktop (phones already can't show overlapping windows).
-- **Desktop is where it's most *possible* and *powerful*** — complex multi-step work lives there, and **desktop Linux is the last place a builder can own the whole stack.** Mobile OSes are deliberately locked down to prevent exactly what Aurora's "hide and drive apps" paradigm requires.
+- **Desktop is where it's most *possible* and *powerful*** — complex multi-step work lives there, and **desktop Linux is the last place a builder can own the whole stack.** Mobile OSes are deliberately locked down to prevent exactly what Bridge's "hide and drive apps" paradigm requires.
 - **Assessment:** the mass-market mobile AI-first OS will most likely be built by the **platform owners (Apple, Google)**, because on mobile only the platform owner has the necessary access. A third-party Android interface layer fights the platform owner on their turf with its strongest tier (T1) removed and subject to policy — real but capped, like the macOS wrapper. The **independent, depth-3 AI-first OS is buildable on desktop Linux precisely because it is open.**
 
 ### B.4 Why desktop remains right for *this* project
 
-Aurora is **accessibility-first** (§1.2), not mass-market. For that mission the calculus favors desktop: openness enables the deep, reliable, fully-controllable assistive environment a disabled user needs, and the hardware (Adaptive Joystick, mounted switches, a dedicated mic) integrates far more easily over USB/Bluetooth on Linux than within Android's restrictions. The user who most needs "the OS adapts completely to me" is exactly the user for whom owning the whole stack matters most. Mobile's reach advantage is less decisive when the goal is *depth of adaptation for a specific user* rather than breadth.
+Bridge is **accessibility-first** (§1.2), not mass-market. For that mission the calculus favors desktop: openness enables the deep, reliable, fully-controllable assistive environment a disabled user needs, and the hardware (Adaptive Joystick, mounted switches, a dedicated mic) integrates far more easily over USB/Bluetooth on Linux than within Android's restrictions. The user who most needs "the OS adapts completely to me" is exactly the user for whom owning the whole stack matters most. Mobile's reach advantage is less decisive when the goal is *depth of adaptation for a specific user* rather than breadth.
 
 ### B.5 Recommended posture
 
@@ -616,7 +616,7 @@ Treat Android like the macOS wrapper: a **documented alternative with a known po
 
 ### B.6 What would change this assessment
 
-Platform trajectories are genuinely uncertain. Re-evaluate if: mobile platform owners meaningfully open up automation/accessibility access to third parties; a **Linux-phone ecosystem** (true Wayland/desktop-Linux stack on a phone) matures enough to run Aurora's actual stack on mobile hardware; or the project's goal shifts from depth-of-adaptation to maximum reach. Worth a periodic check of Android automation capabilities and Linux-phone maturity.
+Platform trajectories are genuinely uncertain. Re-evaluate if: mobile platform owners meaningfully open up automation/accessibility access to third parties; a **Linux-phone ecosystem** (true Wayland/desktop-Linux stack on a phone) matures enough to run Bridge's actual stack on mobile hardware; or the project's goal shifts from depth-of-adaptation to maximum reach. Worth a periodic check of Android automation capabilities and Linux-phone maturity.
 
 ---
 

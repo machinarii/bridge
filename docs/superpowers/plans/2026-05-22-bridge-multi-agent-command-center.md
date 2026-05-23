@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Turn Aurora's single 4×2 grid of 8 hardcoded agents into Bridge — a multi-project workspace where each project is a hand-picked, role-typed team with its own folder, customized role charters, file explorer, and a lead-delegated team voice on top of the existing single-agent prompt UI.
+**Goal:** Turn Bridge's single 4×2 grid of 8 hardcoded agents into Bridge — a multi-project workspace where each project is a hand-picked, role-typed team with its own folder, customized role charters, file explorer, and a lead-delegated team voice on top of the existing single-agent prompt UI.
 
 **Architecture:** Three-level UI (project picker → project grid → agent zoom) layered on the existing Node/Express server + vanilla-JS renderer. Server owns projects.json (one record per project), per-project folders under `app/state/<projectId>/` containing role charters and notes, and an orchestrator that injects each agent's project-customized charter into every system prompt. Team voice runs router → parallel fan-out (cap 5) → synthesizer through the lead agent. Renderer adds three modes above the existing zoom view; file explorer is a togglable left drawer; history is a Triangle-summoned drawer at L2.
 
@@ -120,8 +120,8 @@ app.use(express.static(RENDERER_DIR));
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
-  console.log(`[aurora] orchestrator listening on http://localhost:${PORT}`);
-  console.log(`[aurora] renderer at http://localhost:${PORT}/`);
+  console.log(`[bridge] orchestrator listening on http://localhost:${PORT}`);
+  console.log(`[bridge] renderer at http://localhost:${PORT}/`);
 });
 ```
 
@@ -739,8 +739,8 @@ async function callOpenRouter({ apiKey, model, prompt }) {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'http://localhost/aurora-bridge',
-        'X-Title': 'Aurora Bridge — charter',
+        'HTTP-Referer': 'http://localhost/bridge',
+        'X-Title': 'Bridge — charter',
       },
       body: JSON.stringify({
         model,
@@ -1121,7 +1121,7 @@ import { getRole } from './roles.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-/* Tile-spec contract is unchanged from Aurora MVP — see prior README. */
+/* Tile-spec contract is unchanged from Bridge MVP — see prior README. */
 
 function systemPrompt({ project, agent, sharedFrom }) {
   const role = getRole(agent.role);
@@ -1192,7 +1192,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom }) 
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'http://localhost/aurora-bridge',
+      'HTTP-Referer': 'http://localhost/bridge',
       'X-Title': `Bridge - ${agent.name}`,
     },
     body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages }),
@@ -2237,7 +2237,7 @@ End-state: pressing Cross on a tile opens the agent's prompt view; PTT or typed 
 
 - [ ] **Step 1: Implement renderZoom**
 
-Replace the `renderZoom` stub with a port of the original Aurora version that uses `activeProject`:
+Replace the `renderZoom` stub with a port of the original Bridge version that uses `activeProject`:
 
 ```js
 function enterZoom(specOverride) {
@@ -3122,7 +3122,7 @@ async function callOpenRouterJSON({ apiKey, model, prompt, timeoutMs }) {
     const r = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json',
-                 'HTTP-Referer': 'http://localhost/aurora-bridge', 'X-Title': 'Bridge - team' },
+                 'HTTP-Referer': 'http://localhost/bridge', 'X-Title': 'Bridge - team' },
       body: JSON.stringify({ model, response_format: { type: 'json_object' },
                              messages: [{ role: 'user', content: prompt }] }),
       signal: ctrl.signal,

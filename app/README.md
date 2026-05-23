@@ -1,8 +1,8 @@
-# Aurora — 3-Day Prototype
+# Bridge — 3-Day Prototype
 
 The closed loop: **voice or joystick → intent → AI-composed tile surface → navigate → action → spoken result.**
 
-See `../MVP-aurora-3day-prototype.md` for scope and `../PRD-aurora-ai-first-os.md` for the long-form vision.
+See `../MVP-bridge-3day-prototype.md` for scope and `../PRD-bridge-ai-first-os.md` for the long-form vision.
 
 ## What's here (Day 1 scaffold)
 
