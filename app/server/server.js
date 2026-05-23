@@ -2,8 +2,6 @@ import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
-import { interpretIntent } from './orchestrator.js';
-import { listNotes, readNote, appendNote } from './backends/notes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -21,35 +19,6 @@ const RENDERER_DIR = resolve(__dirname, '..', 'renderer');
 const app = express();
 app.use(express.json({ limit: '64kb' }));
 app.use(express.static(RENDERER_DIR));
-
-app.post('/interpret', async (req, res) => {
-  const text = String(req.body?.text || '').trim();
-  if (!text) return res.status(400).json({ error: 'empty intent' });
-  try {
-    const spec = await interpretIntent(text);
-    res.json(spec);
-  } catch (err) {
-    console.error('[interpret] error:', err);
-    res.status(500).json({ error: String(err?.message || err) });
-  }
-});
-
-app.get('/notes', (req, res) => {
-  res.json({ items: listNotes() });
-});
-
-app.get('/notes/:id', (req, res) => {
-  const body = readNote(req.params.id);
-  if (body == null) return res.status(404).json({ error: 'not found' });
-  res.json({ id: req.params.id, body });
-});
-
-app.post('/notes', (req, res) => {
-  const body = String(req.body?.body || '').trim();
-  if (!body) return res.status(400).json({ error: 'empty note' });
-  const saved = appendNote(body);
-  res.json(saved);
-});
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
