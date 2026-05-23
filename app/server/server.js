@@ -54,6 +54,6 @@ app.post('/notes', (req, res) => {
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
-  console.log(`[aurora] orchestrator listening on http://localhost:${PORT}`);
-  console.log(`[aurora] renderer at http://localhost:${PORT}/`);
+  console.log(`[bridge] orchestrator listening on http://localhost:${PORT}`);
+  console.log(`[bridge] renderer at http://localhost:${PORT}/`);
 });

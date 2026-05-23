@@ -1,6 +1,6 @@
-# MVP PRD — Aurora 3-Day Prototype
+# MVP PRD — Bridge 3-Day Prototype
 
-> **Status:** MVP scope · **Author:** Jin · **Timebox:** 3 days · **Companion to:** PRD-aurora-ai-first-os.md (v0.4)
+> **Status:** MVP scope · **Author:** Jin · **Timebox:** 3 days · **Companion to:** PRD-bridge-ai-first-os.md (v0.4)
 > This is a deliberately ruthless subset. Where it diverges from the full PRD, it says so. Divergences are *prototype shortcuts*, not design changes.
 
 ---
@@ -11,7 +11,7 @@
 
 If that loop feels alive and works end-to-end on **2–3 intents**, the prototype is a success. Nothing else matters for 3 days. This is the §10 "spike the riskiest thing first" reduced to its core.
 
-**Explicit non-goal:** this is not a small Aurora. It is a *proof of the interaction loop*. Breadth, polish, and the full feature bundle are out.
+**Explicit non-goal:** this is not a small Bridge. It is a *proof of the interaction loop*. Breadth, polish, and the full feature bundle are out.
 
 ---
 
@@ -147,7 +147,7 @@ If all five hold, the core thesis is demonstrated.
 
 ---
 
-*This MVP PRD is intentionally narrow. The full vision, tooling, and platform analysis live in PRD-aurora-ai-first-os.md (v0.4). After the prototype validates the loop, the build sequence in that doc's §10 picks up.*
+*This MVP PRD is intentionally narrow. The full vision, tooling, and platform analysis live in PRD-bridge-ai-first-os.md (v0.4). After the prototype validates the loop, the build sequence in that doc's §10 picks up.*
 
 ---
 
@@ -161,7 +161,7 @@ Use this folder as the reading library for building customized solutions: read t
 
 | Repo | Purpose | Status |
 |---|---|---|
-| **sway** (https://github.com/swaywm/sway) | Wayland compositor — Aurora's substrate in v1 | ✅ cloned |
+| **sway** (https://github.com/swaywm/sway) | Wayland compositor — Bridge's substrate in v1 | ✅ cloned |
 | **wlroots** (https://gitlab.freedesktop.org/wlroots/wlroots) | Compositor library Sway is built on; needed to understand/extend surface routing | clone |
 | **Smithay** (https://github.com/Smithay/smithay) | Rust compositor framework — the §11 future custom compositor target | clone |
 | **Astal / AGS** (https://github.com/Aylur/astal) | Programmable shell / widget system for wlroots — candidate renderer host (§6.2) | clone |
@@ -208,4 +208,4 @@ Chromium / CEF is the rendering surface driven via CDP. **Not cloned** — the s
 
 - These repos are **read-only reference** unless explicitly forked for T1 instrumentation (§4.3). Don't edit in place; fork into a sibling folder when modifying.
 - When a piece moves from reference to fork, note it in this section (mark "forked → `source-forks/<name>`").
-- Keep `source/` out of any future Aurora repo — vendor by submodule or document-clone instructions, not by checking in millions of lines.
+- Keep `source/` out of any future Bridge repo — vendor by submodule or document-clone instructions, not by checking in millions of lines.
