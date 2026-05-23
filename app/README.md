@@ -1,61 +1,77 @@
-# Bridge — 3-Day Prototype
+# Bridge — Multi-Agent Command Center
 
-The closed loop: **voice or joystick → intent → AI-composed tile surface → navigate → action → spoken result.**
+A voice/joystick command surface for running multiple projects, each with a
+crew of role-typed AI agents. Built on Node + Express and a vanilla-JS
+fullscreen Chrome renderer driven by a Gamepad / Web Speech / keyboard.
 
-See `../MVP-bridge-3day-prototype.md` for scope and `../PRD-bridge-ai-first-os.md` for the long-form vision.
+Three-level navigation:
 
-## What's here (Day 1 scaffold)
+- **L0 Project picker** — pick an existing project or `+ New`.
+- **L1 Project grid** — reflow grid of role agents; lead pulses during
+  team voice; Square enables/disables a member (lead is protected).
+- **L2 Agent zoom** — push-to-talk an individual agent; tile spec renders
+  the response and TTS speaks the body.
+
+See `../docs/superpowers/specs/2026-05-22-projects-and-roles-design.md`
+for the architecture.
+
+## What's here
 
 ```
 app/
-├── server/                  # Node orchestrator
-│   ├── server.js            # Express: /interpret, /notes, static renderer
-│   ├── orchestrator.js      # OpenRouter call → tile spec
-│   ├── backends/notes.js    # Markdown notes read/append
-│   ├── .env.example         # copy to .env and fill in
-│   └── package.json
-├── renderer/                # Fullscreen Chrome web app
-│   ├── index.html
+├── server/                          # Node orchestrator
+│   ├── server.js                    # Express: /roles, /projects, /team, /files
+│   ├── orchestrator.js              # Per-agent interpret with charter
+│   ├── projects.js                  # Projects store + folder scaffold
+│   ├── roles.js                     # 14-role catalog
+│   ├── charters.js                  # Role-charter generation
+│   ├── team.js                      # Router → fan-out → synthesizer
+│   ├── scratchpad.js                # Per-agent conversation context
+│   ├── backends/notes.js            # Project-scoped markdown notes
+│   └── *.test.js                    # node:test runners
+├── renderer/                        # Fullscreen Chrome web app
+│   ├── index.html                   # surface + history/file drawers
 │   ├── style.css
-│   ├── main.js              # boot + state + action exec
-│   ├── gamepad.js           # Gamepad API → semantic press / ptt events
-│   ├── speech.js            # Web Speech API STT + TTS
-│   ├── focus.js             # focus ring across tile + action bar
-│   └── tiles.js             # deterministic renderer for the 4-template spec
-└── notes/                   # local .md notes (one file per note)
+│   ├── main.js                      # nav modes, dispatch, action exec
+│   ├── gamepad.js                   # Gamepad API → semantic events
+│   ├── speech.js                    # Web Speech STT + TTS
+│   ├── focus.js                     # focus ring
+│   └── tiles.js                     # 4-template renderer
+└── state/                           # runtime — gitignored
+    ├── projects.json
+    ├── scratchpad.json
+    └── <projectId>/                 # per-project: project.md, roles/, notes/
 ```
 
 ## Run it
 
-Requires Node 20+ and Chrome (Web Speech API and Gamepad API).
+Requires Node 20+ and Chrome (Web Speech and Gamepad APIs).
 
 ```bash
 cd app/server
-cp .env.example .env          # then put your OpenRouter key in .env
+cp .env.example .env          # put your OPENROUTER_API_KEY here
 npm install
 npm run dev                   # http://localhost:4317
 ```
 
 Open Chrome → http://localhost:4317 → press **F11** for true fullscreen.
 
-If you don't have an OpenRouter key yet, the orchestrator falls back to a tiny local classifier so the loop still demos (`take a note`, `show my notes`, anything else → "I'm offline").
+Without an OpenRouter key, single-agent prompts fall back to a tiny local
+classifier and team voice is blocked with a clear message.
 
 ## Inputs
 
-| Action | Keyboard | Xbox controller |
+| Action            | Keyboard            | DualSense           |
 |---|---|---|
-| Push-to-talk | hold **Space** | hold **RT** |
-| Navigate | arrows | D-pad / left stick |
-| Select / confirm | **Enter** | **A** |
-| Back / cancel | **Esc** | **B** |
-| Home | (reload) | **Start** |
-| Typed fallback | **/** to open | — |
-
-## The three intents (per MVP §5)
-
-1. **"Take a note: <text>"** → `compose` tile → A saves → spoken confirmation.
-2. **"Show my notes"** → `list` tile → A opens → `reader` tile reads aloud.
-3. **Any question** → `reader` tile with the LLM's answer, spoken.
+| Push-to-talk      | hold **Space**      | hold **R2**         |
+| Navigate          | arrows              | D-pad / left stick  |
+| Select / confirm  | **Enter**           | **Cross**           |
+| Back              | **Esc**             | **Circle**          |
+| Enable/disable    | (n/a)               | **Square** (at L1)  |
+| History drawer    | **t**               | **Triangle** (at L2)|
+| File explorer     | **\\**              | **Options**         |
+| Switch agent      | **[** / **]**       | **L1** / **R1**     |
+| Typed fallback    | **/**               | —                   |
 
 ## Tile spec contract (the model's only output)
 
@@ -66,9 +82,15 @@ If you don't have an OpenRouter key yet, the orchestrator falls back to a tiny l
   "context": "string shown at top",
   "title":   "string",
   "body":    "string (compose/reader)",
-  "items":   [{ "id": "...", "label": "..." }],   // list
-  "actions": [{ "verb": "Save", "glyph": "A", "action": { "type": "save_note" } }]
+  "items":   [{ "id": "...", "label": "..." }],
+  "actions": [{ "verb": "Save", "glyph": "cross", "action": { "type": "save_note" } }]
 }
 ```
 
-Action types currently handled by the renderer: `save_note`, `open_note`, `cancel`. Adding a new action = add a case in `main.js#executeAction`.
+Adding a new action = add a case in `main.js#executeAction`.
+
+## Tests
+
+```bash
+cd app/server && npm test
+```
