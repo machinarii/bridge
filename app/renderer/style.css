@@ -354,3 +354,25 @@ kbd {
 .role-label  { font-weight: 600; }
 .role-sample { font-size: 0.85rem; opacity: 0.7; margin-top: 0.2rem; }
 .role-toggle { font-size: 1.4rem; margin-top: 0.5rem; }
+
+/* ===== Capture tile (name + goal steps) ===== */
+.capture-tile {
+  padding: 2rem;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.capture-tile h2 { margin: 0 0 0.5rem; font-size: 1.6rem; }
+.capture-tile .hint { opacity: 0.6; margin-bottom: 1.5rem; }
+.capture-tile .capture-value {
+  font-size: 1.4rem;
+  min-height: 2.5em;
+  padding: 1rem;
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+}
+.capture-tile .placeholder { opacity: 0.4; }
+.capture-tile .lead-badge {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
