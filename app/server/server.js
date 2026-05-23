@@ -2,7 +2,7 @@ import express from 'express';
 import { migrateLegacyOnce } from './scratchpad.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { listRoles } from './roles.js';
 import { listProjects, getProject, createProject, setAgentEnabled } from './projects.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
@@ -21,6 +21,7 @@ if (existsSync(envPath)) {
 
 const PORT = Number(process.env.PORT || 4317);
 const RENDERER_DIR = resolve(__dirname, '..', 'renderer');
+const STATE_DIR = resolve(__dirname, '..', 'state');
 
 const app = express();
 app.use(express.json({ limit: '64kb' }));
@@ -107,6 +108,38 @@ app.get('/projects/:pid/agents/:aid/history', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err?.message || err) });
   }
+});
+
+app.get('/projects/:pid/files', (req, res) => {
+  const p = getProject(req.params.pid);
+  if (!p) return res.status(404).json({ error: 'unknown project' });
+  const projDir = resolve(STATE_DIR, p.id);
+  function fileEntry(absPath, kind) {
+    const stat = statSync(absPath);
+    return { path: absPath.replace(projDir + '/', ''), kind, mtime: stat.mtimeMs };
+  }
+  const charters = readdirSync(resolve(projDir, 'roles'))
+    .filter(f => f.endsWith('.md'))
+    .map(f => {
+      const roleId = f.replace(/\.md$/, '');
+      const agent = p.agents.find(a => a.role === roleId);
+      return { ...fileEntry(resolve(projDir, 'roles', f), 'charter'), roleId, agentName: agent?.name || '' };
+    });
+  const notes = readdirSync(resolve(projDir, 'notes'))
+    .filter(f => f.endsWith('.md'))
+    .sort().reverse()
+    .map(f => ({ ...fileEntry(resolve(projDir, 'notes', f), 'note') }));
+  res.json({ projectMd: 'project.md', charters, notes });
+});
+
+app.get('/projects/:pid/file/*', (req, res) => {
+  const p = getProject(req.params.pid);
+  if (!p) return res.status(404).json({ error: 'unknown project' });
+  const rel = req.params[0];
+  if (rel.includes('..')) return res.status(400).json({ error: 'bad path' });
+  const path = resolve(STATE_DIR, p.id, rel);
+  if (!existsSync(path)) return res.status(404).json({ error: 'not found' });
+  res.json({ path: rel, body: readFileSync(path, 'utf8') });
 });
 
 migrateLegacyOnce();
