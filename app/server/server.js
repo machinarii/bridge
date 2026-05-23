@@ -7,7 +7,7 @@ import { listRoles } from './roles.js';
 import { listProjects, getProject, createProject, setAgentEnabled } from './projects.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
-import { setLastSpec } from './scratchpad.js';
+import { setLastSpec, getContext } from './scratchpad.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -98,6 +98,15 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
 app.post('/projects/:pid/agents/:aid/spec', (req, res) => {
   setLastSpec(req.params.aid, req.body?.spec || null);
   res.json({ ok: true });
+});
+
+app.get('/projects/:pid/agents/:aid/history', (req, res) => {
+  try {
+    const ctx = getContext(req.params.aid);
+    res.json({ messages: ctx.messages || [] });
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
 });
 
 migrateLegacyOnce();
