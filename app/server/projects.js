@@ -13,6 +13,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRole, listRoles } from './roles.js';
+import { generateProjectCharters } from './charters.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE_DIR = resolve(__dirname, '..', 'state');
@@ -119,6 +120,9 @@ export async function createProject({ name, goal, roleIds }) {
   const data = load();
   data.projects.push(project);
   save();
+
+  // Generate per-project charters (falls back to base verbatim on failure).
+  await generateProjectCharters(project);
   return project;
 }
 
