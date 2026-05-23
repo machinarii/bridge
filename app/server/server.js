@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
 import { listRoles } from './roles.js';
 import { listProjects, getProject, createProject, setAgentEnabled } from './projects.js';
+import { listNotes, readNote, appendNote } from './backends/notes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -57,6 +58,25 @@ app.patch('/projects/:pid/agents/:aid', (req, res) => {
   } catch (err) {
     res.status(400).json({ error: String(err?.message || err) });
   }
+});
+
+app.get('/projects/:pid/notes', (req, res) => {
+  if (!getProject(req.params.pid)) return res.status(404).json({ error: 'unknown project' });
+  res.json({ items: listNotes(req.params.pid) });
+});
+
+app.get('/projects/:pid/notes/:nid', (req, res) => {
+  if (!getProject(req.params.pid)) return res.status(404).json({ error: 'unknown project' });
+  const body = readNote(req.params.pid, req.params.nid);
+  if (body == null) return res.status(404).json({ error: 'not found' });
+  res.json({ id: req.params.nid, body });
+});
+
+app.post('/projects/:pid/notes', (req, res) => {
+  if (!getProject(req.params.pid)) return res.status(404).json({ error: 'unknown project' });
+  const body = String(req.body?.body || '').trim();
+  if (!body) return res.status(400).json({ error: 'empty note' });
+  res.json(appendNote(req.params.pid, body));
 });
 
 migrateLegacyOnce();
