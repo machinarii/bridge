@@ -646,8 +646,107 @@ function openHistoryEntry(entry) {
   });
 }
 
-function toggleFileExplorer()        { /* Phase 7 */ }
-function closeFileExplorer()         { /* Phase 7 */ }
+const fileDrawerEl = document.getElementById('file-drawer');
+const fileTreeEl   = fileDrawerEl.querySelector('.file-tree');
+let fileTree = null;
+let fileFocus = 0;
+let fileEntries = [];
+
+async function toggleFileExplorer() {
+  if (mode === MODE_PROJECTS) return;
+  if (!activeProject) return;
+  if (fileExplorerOpen) { closeFileExplorer(); return; }
+  await openFileExplorer();
+}
+
+async function openFileExplorer() {
+  try {
+    const r = await fetch(`/projects/${activeProject.id}/files`);
+    if (!r.ok) throw new Error(await r.text());
+    fileTree = await r.json();
+  } catch (err) {
+    setIndicator('error', 'Files failed');
+    console.error(err);
+    return;
+  }
+  fileTreeEl.innerHTML = '';
+  fileEntries = [];
+
+  if (fileTree.charters.length) {
+    const h = document.createElement('div'); h.className = 'file-section'; h.textContent = '▾ Charters';
+    fileTreeEl.appendChild(h);
+    for (const c of fileTree.charters) {
+      const li = document.createElement('div');
+      li.className = 'file-entry';
+      li.innerHTML = `<span>${escapeHtml(c.roleId)}.md</span><span class="who">${escapeHtml(c.agentName)}</span>`;
+      li.dataset.path = c.path;
+      fileTreeEl.appendChild(li);
+      fileEntries.push(li);
+    }
+  }
+  if (fileTree.notes.length) {
+    const h = document.createElement('div'); h.className = 'file-section'; h.textContent = '▾ Notes';
+    fileTreeEl.appendChild(h);
+    for (const n of fileTree.notes) {
+      const li = document.createElement('div');
+      li.className = 'file-entry';
+      li.textContent = n.path.replace(/^notes\//,'').replace(/\.md$/,'');
+      li.dataset.path = n.path;
+      fileTreeEl.appendChild(li);
+      fileEntries.push(li);
+    }
+  }
+  const pm = document.createElement('div');
+  pm.className = 'file-entry';
+  pm.textContent = 'project.md';
+  pm.dataset.path = 'project.md';
+  fileTreeEl.appendChild(pm);
+  fileEntries.push(pm);
+
+  fileDrawerEl.hidden = false;
+  fileExplorerOpen = true;
+  fileFocus = 0;
+  paintFileFocus();
+  document.body.dataset.fileDrawer = 'open';
+  if (drawerOpen) closeHistoryDrawer();
+}
+
+function closeFileExplorer() {
+  fileDrawerEl.hidden = true;
+  fileExplorerOpen = false;
+  document.body.dataset.fileDrawer = 'closed';
+}
+
+function paintFileFocus() {
+  fileEntries.forEach((el, i) => el.classList.toggle('focused', i === fileFocus));
+}
+
+async function openFocusedFile() {
+  const e = fileEntries[fileFocus];
+  if (!e) return;
+  const path = e.dataset.path;
+  try {
+    const r = await fetch(`/projects/${activeProject.id}/file/${path}`);
+    if (!r.ok) throw new Error(await r.text());
+    const { body } = await r.json();
+    const spec = {
+      intent: 'answer', template: 'reader',
+      context: 'File', title: path,
+      body,
+      actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+      _silent: true,
+    };
+    if (mode === MODE_ZOOM) renderZoom(spec);
+    else {
+      zoomedIndex = activeProject.agents.findIndex(a => a.id === activeProject.leadAgentId);
+      mode = MODE_ZOOM;
+      renderZoom(spec);
+    }
+    closeFileExplorer();
+  } catch (err) {
+    setIndicator('error', 'File read failed');
+  }
+}
 function currentAgent() { return activeProject?.agents?.[zoomedIndex] || null; }
 
 /* ---------- Button dispatch ---------- */
@@ -708,6 +807,12 @@ gp.addEventListener('press', (e) => {
   }
 
   if (mode === MODE_GRID) {
+    if (fileExplorerOpen) {
+      if (b === 'up' || b === 'left')   { fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
+      if (b === 'down' || b === 'right'){ fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+      if (b === 'cross')                { openFocusedFile(); return; }
+      if (b === 'circle')               { closeFileExplorer(); return; }
+    }
     if (b === 'up' || b === 'down' || b === 'left' || b === 'right') gridMove(b);
     else if (b === 'cross')   enterZoom();
     else if (b === 'circle')  exitToProjects();
@@ -716,6 +821,12 @@ gp.addEventListener('press', (e) => {
   }
 
   if (mode === MODE_ZOOM) {
+    if (fileExplorerOpen) {
+      if (b === 'up' || b === 'left')   { fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
+      if (b === 'down' || b === 'right'){ fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+      if (b === 'cross')                { openFocusedFile(); return; }
+      if (b === 'circle')               { closeFileExplorer(); return; }
+    }
     if (drawerOpen) {
       if (b === 'up' || b === 'left')   { drawerFocus = Math.max(0, drawerFocus - 1); paintDrawerFocus(); return; }
       if (b === 'down' || b === 'right'){ drawerFocus = Math.min(drawerEntries.length - 1, drawerFocus + 1); paintDrawerFocus(); return; }
