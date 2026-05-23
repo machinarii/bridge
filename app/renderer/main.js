@@ -558,7 +558,30 @@ function exitToProjects() {
   activeProject = null;
   renderProjects();
 }
-function toggleFocusedAgentEnabled() { /* Phase 5 */ }
+async function toggleFocusedAgentEnabled() {
+  if (mode !== MODE_GRID || !activeProject) return;
+  const agent = activeProject.agents[gridIndex];
+  if (!agent) return;
+  if (agent.id === activeProject.leadAgentId) {
+    setIndicator('error', "Lead can't be disabled");
+    setTimeout(() => setIndicator('idle', 'Ready'), 1500);
+    return;
+  }
+  const next = !agent.enabled;
+  try {
+    const r = await fetch(`/projects/${activeProject.id}/agents/${agent.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: next }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    agent.enabled = next;
+    renderGrid();
+  } catch (err) {
+    setIndicator('error', 'Toggle failed');
+    console.error(err);
+  }
+}
 function toggleHistoryDrawer()       { /* Phase 6 */ }
 function toggleFileExplorer()        { /* Phase 7 */ }
 function currentAgent() { return activeProject?.agents?.[zoomedIndex] || null; }
