@@ -3,10 +3,13 @@ import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+// Anchor relative paths to app/server/ (one level above this file's backends/ dir),
+// so NOTES_DIR=../notes resolves to app/notes regardless of where node was launched.
+const SERVER_ROOT = resolve(__dirname, '..');
 
 function notesDir() {
-  const configured = process.env.NOTES_DIR || '../../notes';
-  const dir = resolve(__dirname, configured);
+  const configured = process.env.NOTES_DIR || '../notes';
+  const dir = resolve(SERVER_ROOT, configured);
   mkdirSync(dir, { recursive: true });
   return dir;
 }
