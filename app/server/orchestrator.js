@@ -1,8 +1,21 @@
 import { listNotes } from './backends/notes.js';
+import { appendTurn, getContext } from './scratchpad.js';
+import { getAgent } from './agents.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-const SYSTEM_PROMPT = `You are Bridge's intent interpreter. The user speaks or types one short instruction. Your job: classify the intent and return a single JSON object describing the tile surface to render. No prose. No code fences. JSON only.
+/* The model emits PlayStation-style glyphs. The renderer maps these to ✕/○/□/△.
+ * Glyph semantics across all tiles:
+ *   cross    — primary action (save, open, confirm)
+ *   circle   — back / cancel
+ *   square   — alternate (rare; reserved for future)
+ *   triangle — alternate (rare; reserved for future)
+ */
+
+function systemPrompt(agent) {
+  return `You are ${agent.name}, one of eight assistants on the Bridge surface. Your personality is ${agent.persona}. Speak briefly, in first person when relevant. The user is talking to you specifically — not the other seven — so it's fine to remember things across turns within this conversation.
+
+Your job: classify the user's intent and return a single JSON object describing the tile surface to render. No prose, no markdown, no code fences. JSON only.
 
 There are exactly three intent kinds:
 
@@ -15,8 +28,8 @@ There are exactly three intent kinds:
      "title": "Save this note?",
      "body": "<the extracted note text, cleaned of the leading verb>",
      "actions": [
-       { "verb": "Save", "glyph": "A", "action": { "type": "save_note" } },
-       { "verb": "Cancel", "glyph": "B", "action": { "type": "cancel" } }
+       { "verb": "Save",   "glyph": "cross",  "action": { "type": "save_note" } },
+       { "verb": "Cancel", "glyph": "circle", "action": { "type": "cancel" } }
      ]
    }
 
@@ -28,22 +41,22 @@ There are exactly three intent kinds:
      "context": "Your notes",
      "title": "Pick a note to read",
      "actions": [
-       { "verb": "Open", "glyph": "A", "action": { "type": "open_note" } },
-       { "verb": "Back", "glyph": "B", "action": { "type": "cancel" } }
+       { "verb": "Open", "glyph": "cross",  "action": { "type": "open_note" } },
+       { "verb": "Back", "glyph": "circle", "action": { "type": "cancel" } }
      ]
    }
    (Do NOT invent items — the orchestrator fills them.)
 
-3. answer — anything that's a question or a quick utility ask. Example: "what's the capital of France", "convert 50 miles to km", "who wrote Dune".
+3. answer — anything that's a question, lookup, or quick utility ask. Example: "what's the capital of France", "convert 50 miles to km".
    Output:
    {
      "intent": "answer",
      "template": "reader",
      "context": "Answer",
-     "title": "<a short title for the answer, max 6 words>",
-     "body": "<a concise, spoken-friendly answer, 1-3 sentences>",
+     "title": "<short title, max 6 words>",
+     "body": "<concise, spoken-friendly answer, 1-3 sentences>",
      "actions": [
-       { "verb": "Back", "glyph": "B", "action": { "type": "cancel" } }
+       { "verb": "Back", "glyph": "circle", "action": { "type": "cancel" } }
      ]
    }
 
@@ -51,15 +64,30 @@ If the intent is unclear or doesn't fit, treat it as "answer" and respond helpfu
 
 Rules:
 - Output a single JSON object. No markdown, no commentary.
-- Keep "body" speakable — Bridge reads it aloud via TTS.
-- Never include controller affordances inside body text; they live in "actions".`;
+- "body" is read aloud via TTS — keep it speakable.
+- Never include controller affordances inside body text; they live in "actions".
+- Allowed glyph values: "cross", "circle", "square", "triangle".`;
+}
 
-export async function interpretIntent(text) {
+export async function interpretIntent(agentId, text) {
+  const agent = getAgent(agentId);
+  if (!agent) throw new Error(`unknown agent: ${agentId}`);
+
   const apiKey = process.env.OPENROUTER_API_KEY;
+  appendTurn(agentId, 'user', text);
+
   if (!apiKey || apiKey.includes('replace-me')) {
-    return fallbackSpec(text, 'OPENROUTER_API_KEY missing — using local classifier.');
+    const spec = fallbackSpec(text, 'OPENROUTER_API_KEY missing — using local classifier.');
+    return hydrateSpec(spec, text);
   }
   const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4.5';
+
+  const history = getContext(agentId).messages.slice(0, -1); // exclude the just-appended user turn; we'll add it last
+  const messages = [
+    { role: 'system', content: systemPrompt(agent) },
+    ...history,
+    { role: 'user', content: text },
+  ];
 
   const resp = await fetch(OPENROUTER_URL, {
     method: 'POST',
@@ -67,15 +95,12 @@ export async function interpretIntent(text) {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': 'http://localhost/bridge-prototype',
-      'X-Title': 'Bridge Prototype',
+      'X-Title': `Bridge - ${agent.name}`,
     },
     body: JSON.stringify({
       model,
       response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: text },
-      ],
+      messages,
     }),
   });
 
@@ -86,6 +111,7 @@ export async function interpretIntent(text) {
 
   const data = await resp.json();
   const raw = data?.choices?.[0]?.message?.content || '';
+  appendTurn(agentId, 'assistant', raw);
   const spec = parseSpec(raw);
   return hydrateSpec(spec, text);
 }
@@ -111,7 +137,7 @@ function hydrateSpec(spec, originalText) {
         context: 'Your notes',
         title: 'No notes yet',
         body: "You haven't saved any notes yet. Try saying: take a note, followed by what you want to remember.",
-        actions: [{ verb: 'Back', glyph: 'B', action: { type: 'cancel' } }],
+        actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
       };
     }
   }
@@ -130,24 +156,24 @@ function fallbackSpec(text, note) {
       title: 'Save this note?',
       body,
       actions: [
-        { verb: 'Save', glyph: 'A', action: { type: 'save_note' } },
-        { verb: 'Cancel', glyph: 'B', action: { type: 'cancel' } },
+        { verb: 'Save',   glyph: 'cross',  action: { type: 'save_note' } },
+        { verb: 'Cancel', glyph: 'circle', action: { type: 'cancel' } },
       ],
       _intentText: text,
       _note: note,
     };
   }
   if (/(show|read|list|see).*(note|notes)/.test(t) || /^notes$/.test(t)) {
-    return hydrateSpec({
+    return {
       intent: 'list_notes',
       template: 'list',
       context: 'Your notes',
       title: 'Pick a note to read',
       actions: [
-        { verb: 'Open', glyph: 'A', action: { type: 'open_note' } },
-        { verb: 'Back', glyph: 'B', action: { type: 'cancel' } },
+        { verb: 'Open', glyph: 'cross',  action: { type: 'open_note' } },
+        { verb: 'Back', glyph: 'circle', action: { type: 'cancel' } },
       ],
-    }, text);
+    };
   }
   return {
     intent: 'answer',
@@ -155,7 +181,7 @@ function fallbackSpec(text, note) {
     context: 'Answer',
     title: 'Bridge is offline',
     body: note + ' I need an API key to answer free-form questions. Try: "take a note" or "show my notes".',
-    actions: [{ verb: 'Back', glyph: 'B', action: { type: 'cancel' } }],
+    actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
     _intentText: text,
     _note: note,
   };

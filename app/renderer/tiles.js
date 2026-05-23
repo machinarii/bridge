@@ -1,12 +1,15 @@
-/* Deterministic tile renderer. Input: tile spec (see PRD §6.5 / MVP §4).
- * Output: { surfaceEl, focusables, autoSpeak } — the host wires focus + actions.
+/* Deterministic tile renderer. Spec → DOM + focus list.
  *
- * Templates:
- *   list    — items[] of {id,label}; focus rows; A opens.
- *   reader  — body text; TTS-spoken; B closes.
- *   compose — body shows captured text; A saves, B cancels.
- *   confirm — explicit yes/no gate (PRD §8 safety gate).
+ * Templates: list | reader | compose | confirm.
+ * Glyphs (PS5): cross ✕ · circle ○ · square □ · triangle △.
  */
+
+const GLYPH_SHAPES = {
+  cross:    '✕',
+  circle:   '○',
+  square:   '□',
+  triangle: '△',
+};
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -54,15 +57,14 @@ function renderList(spec) {
 
 function renderReader(spec) {
   const body = el('div', { class: 'body' });
-  const paragraphs = String(spec.body || '').split(/\n\s*\n/);
-  for (const p of paragraphs) body.appendChild(el('p', {}, p));
+  for (const p of String(spec.body || '').split(/\n\s*\n/)) body.appendChild(el('p', {}, p));
   const surface = el('section', { class: 'reader-tile' }, ...header(spec), body);
   return { surface, focusables: [], autoSpeak: spec.body || '' };
 }
 
 function renderCompose(spec) {
   const body = el('div', { class: 'body' }, spec.body || '');
-  const hint = el('div', { class: 'compose-hint' }, 'Press A to save, B to cancel.');
+  const hint = el('div', { class: 'compose-hint' }, 'Cross to save · Circle to cancel.');
   const surface = el('section', { class: 'compose-tile' }, ...header(spec), body, hint);
   return { surface, focusables: [], autoSpeak: `Save this note? ${spec.body || ''}` };
 }
@@ -80,8 +82,9 @@ export function renderActionBar(actions = []) {
   bar.innerHTML = '';
   const buttons = [];
   for (const a of actions) {
+    const glyphChar = GLYPH_SHAPES[a.glyph] || '';
     const btn = el('button', { class: 'action', type: 'button', dataset: { verb: a.verb, glyph: a.glyph || '' } },
-      a.glyph ? el('span', { class: 'glyph', dataset: { glyph: a.glyph } }, a.glyph) : null,
+      glyphChar ? el('span', { class: 'glyph', dataset: { glyph: a.glyph } }, glyphChar) : null,
       el('span', {}, a.verb),
     );
     btn._action = a;
@@ -90,3 +93,5 @@ export function renderActionBar(actions = []) {
   }
   return buttons;
 }
+
+export { GLYPH_SHAPES };
