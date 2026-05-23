@@ -118,7 +118,106 @@ function openFocused() {
 
 function tileCount() { return projects.length + 1; }
 
-function renderNewProjectRoles() { surfaceEl.innerHTML = '<p style="padding:2rem">Role picker — Phase 3.</p>'; mode = MODE_NEW_PROJ_ROLES; }
+async function renderNewProjectRoles() {
+  mode = MODE_NEW_PROJ_ROLES;
+  setContextLabel('New project — pick roles');
+  surfaceEl.innerHTML = '';
+
+  // Lazy-load role catalog
+  if (!window._roles) {
+    const r = await fetch('/roles');
+    const data = await r.json();
+    window._roles = data.roles;
+  }
+  const roles = window._roles;
+
+  const wrap = document.createElement('section');
+  wrap.className = 'role-picker';
+  const grid = document.createElement('div');
+  grid.className = 'role-grid';
+
+  const tileEls = [];
+  for (const role of roles) {
+    const sample = role.namePool[0];
+    const t = document.createElement('div');
+    t.className = 'role-tile';
+    t.dataset.roleId = role.id;
+    t.style.setProperty('--tile-color', role.color);
+    t.innerHTML = `
+      <div class="role-label">${role.label}</div>
+      <div class="role-sample">${sample}</div>
+      <div class="role-toggle">${newProjRoleIds.includes(role.id) ? '◉' : '○'}</div>`;
+    t.addEventListener('click', () => { ring.moveTo(el => el === t); toggleFocusedRole(); });
+    grid.appendChild(t);
+    tileEls.push(t);
+  }
+  wrap.appendChild(grid);
+  surfaceEl.appendChild(wrap);
+
+  ring.set(tileEls);
+  ring.index = 0;
+  ring.paint();
+
+  renderActionBar([
+    { verb: 'Toggle', glyph: 'cross',    action: { type: '_role_toggle' } },
+    { verb: 'Next',   glyph: 'triangle', action: { type: '_role_next' } },
+    { verb: 'Back',   glyph: 'circle',   action: { type: '_role_back' } },
+  ]);
+}
+
+function toggleFocusedRole() {
+  const cur = ring.current();
+  if (!cur) return;
+  const id = cur.dataset.roleId;
+  if (!id) return;
+  const idx = newProjRoleIds.indexOf(id);
+  if (idx >= 0) newProjRoleIds.splice(idx, 1);
+  else newProjRoleIds.push(id);
+  cur.querySelector('.role-toggle').textContent = newProjRoleIds.includes(id) ? '◉' : '○';
+}
+
+function roleGridMove(dir) {
+  const cols = 4;
+  const n = ring.elements.length;
+  if (n === 0) return;
+  const i = ring.index;
+  const r = Math.floor(i / cols), c = i % cols;
+  const rows = Math.ceil(n / cols);
+  let nr = r, nc = c;
+  if (dir === 'left')  nc = (c + cols - 1) % cols;
+  if (dir === 'right') nc = (c + 1) % cols;
+  if (dir === 'up')    nr = (r + rows - 1) % rows;
+  if (dir === 'down')  nr = (r + 1) % rows;
+  let next = nr * cols + nc;
+  if (next >= n) next = n - 1;
+  ring.index = next;
+  ring.paint();
+}
+
+function advanceFromRolePicker() {
+  if (newProjRoleIds.length === 0) {
+    setIndicator('error', 'Pick at least one role');
+    setTimeout(() => setIndicator('idle', 'Ready'), 1500);
+    return;
+  }
+  renderNewProjectName();
+}
+
+function goBackInCreateFlow() {
+  if (mode === MODE_NEW_PROJ_GOAL) renderNewProjectName();
+  else if (mode === MODE_NEW_PROJ_NAME) renderNewProjectRoles();
+  else renderProjects();
+}
+
+function confirmCapture() {
+  if (mode === MODE_NEW_PROJ_NAME) {
+    if (!newProjName.trim()) { setIndicator('error', 'Speak or type a name'); return; }
+    renderNewProjectGoal();
+  } else if (mode === MODE_NEW_PROJ_GOAL) {
+    if (!newProjGoal.trim()) { setIndicator('error', 'Speak or type a goal'); return; }
+    finalizeNewProject();
+  }
+}
 function renderNewProjectName()  { surfaceEl.innerHTML = '<p style="padding:2rem">Name capture — Phase 3.</p>'; mode = MODE_NEW_PROJ_NAME; }
 function renderNewProjectGoal()  { surfaceEl.innerHTML = '<p style="padding:2rem">Goal capture — Phase 3.</p>'; mode = MODE_NEW_PROJ_GOAL; }
 
@@ -411,7 +510,19 @@ gp.addEventListener('press', (e) => {
     return;
   }
 
-  // Create-flow modes wired in Phase 3
+  if (mode === MODE_NEW_PROJ_ROLES) {
+    if (b === 'up' || b === 'down' || b === 'left' || b === 'right') {
+      roleGridMove(b);
+    } else if (b === 'cross')    toggleFocusedRole();
+    else if (b === 'triangle')   advanceFromRolePicker();
+    else if (b === 'circle')     renderProjects();
+    return;
+  }
+  if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
+    if (b === 'cross')   confirmCapture();
+    else if (b === 'circle') goBackInCreateFlow();
+    return;
+  }
 });
 
 gp.addEventListener('press', (e) => {
