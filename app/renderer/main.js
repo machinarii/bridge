@@ -953,7 +953,72 @@ async function submitIntent(text) {
     if (myCtl === inflightController) inflightController = null;
   }
 }
-function submitTeamIntent(text) { /* Phase 8 */ }
+async function submitTeamIntent(text) {
+  if (mode !== MODE_GRID || !activeProject) return;
+  if (inflightController) inflightController.abort();
+  inflightController = new AbortController();
+  const myCtl = inflightController;
+
+  const leadId = activeProject.leadAgentId;
+  agentBusy[leadId] = true;
+  setIndicator('thinking', 'Lead is delegating…');
+  renderGrid();
+
+  try {
+    const r = await fetch(`/projects/${activeProject.id}/team/interpret`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+      signal: myCtl.signal,
+    });
+    if (!r.ok) throw new Error(`server ${r.status}`);
+    const result = await r.json();
+
+    if (result.blocked) {
+      setIndicator('error', 'Team voice blocked');
+      speak(result.summary.body || '');
+      showTeamSummary(result.summary);
+      return;
+    }
+
+    for (const asg of (result.routing?.assignments || [])) {
+      agentBusy[asg.agentId] = true;
+    }
+    renderGrid();
+
+    for (const [aid, spec] of Object.entries(result.perAgent || {})) {
+      const a = activeProject.agents.find(x => x.id === aid);
+      if (a && spec) a.lastSpec = spec;
+      agentBusy[aid] = false;
+    }
+    agentBusy[leadId] = false;
+    renderGrid();
+    showTeamSummary(result.summary);
+    if (result.summary?.body) speak(result.summary.body);
+    setIndicator('idle', 'Ready');
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    setIndicator('error', 'Team voice failed');
+    console.error(err);
+  } finally {
+    for (const a of activeProject.agents) agentBusy[a.id] = false;
+    if (myCtl === inflightController) inflightController = null;
+  }
+}
+
+function showTeamSummary(spec) {
+  if (!spec) return;
+  document.querySelectorAll('.team-summary').forEach(el => el.remove());
+  const banner = document.createElement('section');
+  banner.className = 'team-summary';
+  banner.innerHTML = `
+    <div class="ts-title">${escapeHtml(spec.title || 'Team')}</div>
+    <div class="ts-body">${escapeHtml(spec.body || '')}</div>
+    <button class="ts-close" type="button">Dismiss</button>`;
+  banner.querySelector('.ts-close').addEventListener('click', () => banner.remove());
+  document.body.appendChild(banner);
+  setTimeout(() => banner.remove(), 25_000);
+}
 
 async function finalizeNewProject() {
   setIndicator('thinking', 'Customizing team charters…');
