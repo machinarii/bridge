@@ -41,17 +41,21 @@ test('createProject without pm or tpm auto-adds TPM as lead', async () => {
   assert.equal(p.agents.find(a => a.id === p.leadAgentId).role, 'tpm');
 });
 
-test('createProject creates the project folder with roles/ and notes/', async () => {
-  const p = await createProject({ name: 'Test Alpha', goal: 'collision', roleIds: ['pm'] });
+test('createProject writes charter markdown for each role', async () => {
+  const p = await createProject({ name: 'Test Charters', goal: 'verify charter pipeline', roleIds: ['pm','engineer'] });
   const projDir = resolve(STATE_DIR, p.id);
-  assert.ok(existsSync(resolve(projDir, 'project.md')));
-  assert.ok(existsSync(resolve(projDir, 'roles')));
-  assert.ok(existsSync(resolve(projDir, 'notes')));
-  // project.md mentions goal
-  assert.match(readFileSync(resolve(projDir, 'project.md'), 'utf8'), /collision/);
+  for (const a of p.agents) {
+    const charterPath = resolve(projDir, 'roles', `${a.role}.md`);
+    assert.ok(existsSync(charterPath), `charter exists for ${a.role}`);
+    const md = readFileSync(charterPath, 'utf8');
+    assert.match(md, /## Role/);
+    assert.match(md, /## Typical tasks/);
+    assert.match(md, /## Areas of expertise/);
+  }
 });
 
 test('slug collision adds _2 suffix', async () => {
+  await createProject({ name: 'Test Alpha', goal: 'collision', roleIds: ['pm'] });
   const list = listProjects().filter(p => p.name === 'Test Alpha');
   assert.ok(list.length >= 2);
   assert.ok(list.some(p => p.id.endsWith('_2')));
