@@ -315,3 +315,23 @@ kbd {
   width: 100%; background: transparent; border: none; color: var(--fg);
   font-size: 1.1em; outline: none; font-family: inherit;
 }
+
+/* ===== L0 Project picker ===== */
+.project-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+}
+.project-tile {
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 1.25rem;
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: transform 80ms ease, background 80ms ease;
+}
+.project-tile.new-project { border-style: dashed; opacity: 0.85; }
+.project-tile .name { font-size: 1.4rem; margin: 0 0 0.5rem 0; }
+.project-tile .meta { opacity: 0.6; font-size: 0.9rem; }
+.project-tile.focused { background: rgba(110,168,255,0.16); transform: translateY(-2px); }
