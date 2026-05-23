@@ -100,77 +100,43 @@ kbd {
   position: relative;
 }
 
-/* ===== Agent grid (home state) ===== */
+/* ===== Agent grid (L1 — reflow layout) ===== */
 
 .agent-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-  gap: 18px;
-  flex: 1;
-  min-height: 0;
+  grid-template-columns: repeat(var(--grid-cols, 4), 1fr);
+  grid-template-rows: repeat(var(--grid-rows, 2), 1fr);
+  gap: 0.75rem;
+  padding: 1rem;
+  height: calc(100vh - 8rem);
 }
-
 .agent-tile {
   position: relative;
-  border-radius: 18px;
-  background: linear-gradient(155deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
-  border: 2px solid rgba(255,255,255,0.06);
-  padding: 22px;
+  border-top: 4px solid var(--tile-color, #6ea8ff);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  padding: 1rem;
   display: flex; flex-direction: column; justify-content: space-between;
   cursor: pointer;
-  overflow: hidden;
-  transition: transform 180ms cubic-bezier(.2,.8,.2,1), border-color 160ms, box-shadow 180ms;
-  --tile-color: #6ea8ff;
-}
-.agent-tile::before {
-  content: ''; position: absolute; inset: 0;
-  background: radial-gradient(ellipse at top left, var(--tile-color), transparent 65%);
-  opacity: 0.18;
-  transition: opacity 180ms;
-  pointer-events: none;
+  transition: transform 180ms cubic-bezier(.2,.8,.2,1), background 160ms;
 }
 .agent-tile.focused {
-  border-color: var(--tile-color);
-  transform: translateY(-3px) scale(1.02);
-  box-shadow: 0 12px 32px -8px rgba(0,0,0,0.5), 0 0 0 2px rgba(255,255,255,0.04);
+  background: rgba(110,168,255,0.16);
+  transform: translateY(-2px);
 }
-.agent-tile.focused::before { opacity: 0.32; }
-
-.agent-tile .name {
-  font-size: 1.55em;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--fg);
-  margin: 0;
-  position: relative;
-}
-.agent-tile .name::after {
-  content: ''; display: block;
-  width: 28px; height: 3px;
-  background: var(--tile-color); border-radius: 2px;
-  margin-top: 10px;
-  box-shadow: 0 0 12px var(--tile-color);
-}
-
-.agent-tile .footer {
-  display: flex; justify-content: space-between; align-items: flex-end;
-  font-size: 0.78em; color: var(--fg-dim);
-  position: relative;
-}
-.agent-tile .summary {
-  max-width: 80%;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden; line-height: 1.3;
-}
-.agent-tile .status {
-  display: inline-flex; align-items: center; gap: 6px;
-  color: var(--fg-dim);
-}
+.agent-tile .name { margin: 0; font-size: 1.4rem; }
+.agent-tile .role { opacity: 0.65; font-size: 0.9rem; }
+.agent-tile .status { font-size: 0.8rem; opacity: 0.6; display: inline-flex; align-items: center; gap: 6px; }
 .agent-tile .status .dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--fg-dim);
 }
+.agent-tile[data-disabled="true"] { opacity: 0.4; }
+.agent-tile[data-disabled="true"]::after {
+  content: "off"; position: absolute; top: 0.4rem; right: 0.6rem;
+  font-size: 0.7rem; opacity: 0.6; text-transform: uppercase;
+}
+.agent-tile[data-lead="true"] { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.20); }
 .agent-tile[data-busy="true"] .status .dot {
   background: var(--tile-color);
   animation: pulse 1.2s ease-out infinite;

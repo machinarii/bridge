@@ -39,9 +39,9 @@ let newProjGoal    = '';          // captured during step 3
 
 /* ---------- Bootstrap ---------- */
 async function loadProjects() {
-  const r = await fetch('/projects');
-  const data = await r.json();
-  projects = data.projects || [];
+  const [pj, rj] = await Promise.all([fetch('/projects'), fetch('/roles')]);
+  projects = (await pj.json()).projects || [];
+  window._roles = (await rj.json()).roles || [];
 }
 
 /* ---------- UI helpers ---------- */
@@ -257,7 +257,63 @@ function renderNewProjectGoal() {
   ring.set([]);
 }
 
-function renderGrid() { surfaceEl.innerHTML = '<p style="padding:2rem">Project grid — Phase 3.</p>'; }
+function gridLayout(n) {
+  if (n <= 1) return { cols: 1, rows: 1 };
+  if (n === 2) return { cols: 2, rows: 1 };
+  if (n <= 4) return { cols: 2, rows: 2 };
+  if (n <= 6) return { cols: 3, rows: 2 };
+  if (n <= 8) return { cols: 4, rows: 2 };
+  if (n <= 12) return { cols: 4, rows: 3 };
+  return { cols: 4, rows: 4 };
+}
+
+function roleLabel(roleId) {
+  return (window._roles || []).find(r => r.id === roleId)?.label || roleId;
+}
+
+function renderGrid() {
+  if (!activeProject) return renderProjects();
+  mode = MODE_GRID;
+  document.documentElement.style.setProperty('--agent-color', '#6ea8ff');
+  setContextLabel(activeProject.name);
+  surfaceEl.innerHTML = '';
+
+  const { cols, rows } = gridLayout(activeProject.agents.length);
+  const grid = document.createElement('div');
+  grid.className = 'agent-grid';
+  grid.style.setProperty('--grid-cols', cols);
+  grid.style.setProperty('--grid-rows', rows);
+  grid._cols = cols;
+  grid._rows = rows;
+
+  const tileEls = activeProject.agents.map((a, i) => {
+    const tile = document.createElement('div');
+    tile.className = 'agent-tile';
+    if (!a.enabled) tile.dataset.disabled = 'true';
+    if (a.id === activeProject.leadAgentId) tile.dataset.lead = 'true';
+    tile.style.setProperty('--tile-color', a.color);
+    tile.dataset.agentId = a.id;
+    tile.dataset.busy = agentBusy[a.id] ? 'true' : 'false';
+    tile.innerHTML = `
+      <h2 class="name">${escapeHtml(a.name)}</h2>
+      <div class="role">${escapeHtml(roleLabel(a.role))}</div>
+      <div class="status"><span class="dot"></span><span>${agentBusy[a.id] ? 'thinking…' : 'idle'}</span></div>`;
+    tile.addEventListener('click', () => { gridIndex = i; ring.set(tileEls); ring.index = i; ring.paint(); enterZoom(); });
+    grid.appendChild(tile);
+    return tile;
+  });
+
+  surfaceEl.appendChild(grid);
+  ring.set(tileEls);
+  ring.index = clamp(gridIndex, 0, tileEls.length - 1);
+  ring.paint();
+
+  renderActionBar([
+    { verb: 'Open',     glyph: 'cross',  action: { type: '_grid_open' } },
+    { verb: 'Disable',  glyph: 'square', action: { type: '_grid_toggle_enabled' } },
+    { verb: 'Projects', glyph: 'circle', action: { type: '_grid_back' } },
+  ]);
+}
 
 function summarizeLastSpec(spec) {
   if (!spec) return '';
@@ -272,27 +328,27 @@ function escapeHtml(s) {
   }[c]));
 }
 
-function paintGridFocus() {
-  ring.paint();
-  gridIndex = ring.index;
-}
-
 function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
-/* Grid navigation: 4 columns × 2 rows. */
+/* Grid navigation: reflow layout — read cols/rows from the rendered grid. */
 function gridMove(dir) {
   if (mode !== MODE_GRID) return;
-  const cols = 4, rows = 2;
-  const i = gridIndex;
+  const grid = surfaceEl.querySelector('.agent-grid');
+  if (!grid) return;
+  const cols = grid._cols, rows = grid._rows;
+  const n = ring.elements.length;
+  const i = ring.index;
   const r = Math.floor(i / cols), c = i % cols;
   let nr = r, nc = c;
   if (dir === 'left')  nc = (c + cols - 1) % cols;
   if (dir === 'right') nc = (c + 1) % cols;
   if (dir === 'up')    nr = (r + rows - 1) % rows;
   if (dir === 'down')  nr = (r + 1) % rows;
-  gridIndex = nr * cols + nc;
-  ring.index = gridIndex;
-  paintGridFocus();
+  let next = nr * cols + nc;
+  if (next >= n) next = n - 1;
+  ring.index = next;
+  gridIndex = next;
+  ring.paint();
 }
 
 /* ---------- ZOOM view ---------- */
