@@ -218,8 +218,44 @@ function confirmCapture() {
     finalizeNewProject();
   }
 }
-function renderNewProjectName()  { surfaceEl.innerHTML = '<p style="padding:2rem">Name capture — Phase 3.</p>'; mode = MODE_NEW_PROJ_NAME; }
-function renderNewProjectGoal()  { surfaceEl.innerHTML = '<p style="padding:2rem">Goal capture — Phase 3.</p>'; mode = MODE_NEW_PROJ_GOAL; }
+function renderNewProjectName() {
+  mode = MODE_NEW_PROJ_NAME;
+  setContextLabel('New project — name');
+  surfaceEl.innerHTML = '';
+  const t = document.createElement('section');
+  t.className = 'capture-tile';
+  t.innerHTML = `
+    <h2>Name this project</h2>
+    <p class="hint">Hold <kbd>R2</kbd> and speak — or press <kbd>/</kbd> to type.</p>
+    <div class="capture-value">${escapeHtml(newProjName) || '<span class="placeholder">(speak now)</span>'}</div>
+    ${newProjRoleIds.includes('pm') || newProjRoleIds.includes('tpm')
+      ? ''
+      : '<div class="lead-badge">Cadence will lead this team.</div>'}`;
+  surfaceEl.appendChild(t);
+  renderActionBar([
+    { verb: 'Confirm', glyph: 'cross',  action: { type: '_capture_confirm' } },
+    { verb: 'Back',    glyph: 'circle', action: { type: '_capture_back' } },
+  ]);
+  ring.set([]);
+}
+
+function renderNewProjectGoal() {
+  mode = MODE_NEW_PROJ_GOAL;
+  setContextLabel('New project — goal');
+  surfaceEl.innerHTML = '';
+  const t = document.createElement('section');
+  t.className = 'capture-tile';
+  t.innerHTML = `
+    <h2>What is this project's goal?</h2>
+    <p class="hint">Hold <kbd>R2</kbd> and describe it — or press <kbd>/</kbd> to type.</p>
+    <div class="capture-value">${escapeHtml(newProjGoal) || '<span class="placeholder">(speak now)</span>'}</div>`;
+  surfaceEl.appendChild(t);
+  renderActionBar([
+    { verb: 'Confirm', glyph: 'cross',  action: { type: '_capture_confirm' } },
+    { verb: 'Back',    glyph: 'circle', action: { type: '_capture_back' } },
+  ]);
+  ring.set([]);
+}
 
 function renderGrid() { surfaceEl.innerHTML = '<p style="padding:2rem">Project grid — Phase 3.</p>'; }
 
@@ -375,8 +411,9 @@ async function persistSpec(agentId, spec) {
 }
 
 /* ---------- PTT + intent submission ---------- */
+const PTT_MODES = new Set([MODE_ZOOM, MODE_GRID, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL]);
 function startPTT() {
-  if (pttActive || mode !== MODE_ZOOM) return;
+  if (pttActive || !PTT_MODES.has(mode)) return;
   pttActive = true;
   stopSpeaking();
   if (!speech.supported) {
@@ -406,7 +443,20 @@ speech.addEventListener('end', (e) => {
     setTimeout(() => setIndicator('idle', 'Ready'), 1500);
     return;
   }
-  submitIntent(text);
+  if (mode === MODE_NEW_PROJ_NAME) {
+    newProjName = text;
+    renderNewProjectName();
+    setIndicator('idle', 'Ready');
+    return;
+  }
+  if (mode === MODE_NEW_PROJ_GOAL) {
+    newProjGoal = text;
+    renderNewProjectGoal();
+    setIndicator('idle', 'Ready');
+    return;
+  }
+  if (mode === MODE_ZOOM) { submitIntent(text); return; }
+  if (mode === MODE_GRID) { submitTeamIntent(text); return; }
 });
 speech.addEventListener('error', (e) => {
   setIndicator('error', `Speech error: ${e.detail}`);
@@ -586,9 +636,30 @@ function submitTypedText(text) {
 }
 
 // Placeholders — wired in later phases
-function submitIntent(text) { /* Phase 3 */ }
+function submitIntent(text) { /* Phase 4 */ }
 function submitTeamIntent(text) { /* Phase 8 */ }
-function finalizeNewProject() { /* Phase 3 */ }
+
+async function finalizeNewProject() {
+  setIndicator('thinking', 'Customizing team charters…');
+  try {
+    const r = await fetch('/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newProjName.trim(), goal: newProjGoal.trim(), roleIds: newProjRoleIds }),
+    });
+    if (!r.ok) throw new Error(`server ${r.status}: ${await r.text()}`);
+    const project = await r.json();
+    await loadProjects();
+    activeProject = project;
+    pickerIndex = projects.findIndex(p => p.id === project.id);
+    gridIndex = 0; zoomedIndex = 0;
+    setIndicator('idle', 'Ready');
+    renderGrid();
+  } catch (err) {
+    setIndicator('error', 'Create failed');
+    console.error(err);
+  }
+}
 window.addEventListener('keyup', (e) => {
   if (e.code === 'Space') { e.preventDefault(); endPTT(); }
 });
