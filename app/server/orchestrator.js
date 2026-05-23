@@ -1,6 +1,6 @@
 import { listNotes } from './backends/notes.js';
 import { appendTurn, getContext } from './scratchpad.js';
-import { getAgent } from './agents.js';
+// agent identity now comes from projects.js (added in Phase 1)
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
