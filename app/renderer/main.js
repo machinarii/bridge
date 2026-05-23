@@ -351,12 +351,61 @@ function gridMove(dir) {
   ring.paint();
 }
 
-/* ---------- ZOOM view ---------- */
+
 function enterZoom(specOverride) {
+  if (!activeProject) return;
   const idx = mode === MODE_ZOOM ? zoomedIndex : gridIndex;
   zoomedIndex = idx;
   mode = MODE_ZOOM;
   renderZoom(specOverride);
+}
+
+function renderZoom(specOverride) {
+  const agent = currentAgent();
+  if (!agent) return renderGrid();
+  document.documentElement.style.setProperty('--agent-color', agent.color);
+  setContextLabel(`${agent.name} — ${roleLabel(agent.role)}`, agent.color);
+  surfaceEl.innerHTML = '';
+
+  const view = document.createElement('section');
+  view.className = 'agent-view';
+  view.innerHTML = `
+    <div class="agent-header">
+      <div class="name-large">${escapeHtml(agent.name)}</div>
+      <div class="nav-hint">
+        <span class="shoulder"><span>L1</span> prev</span>
+        <span class="shoulder"><span>R1</span> next</span>
+        <span class="shoulder"><span>△</span> history</span>
+        <span class="shoulder"><span>○</span> grid</span>
+      </div>
+    </div>
+    <div class="tile-surface"></div>`;
+  surfaceEl.appendChild(view);
+  const surfaceWrap = view.querySelector('.tile-surface');
+
+  const spec = specOverride ?? agent.lastSpec;
+  if (!spec) {
+    surfaceWrap.innerHTML = `
+      <div class="idle">
+        <h3>${escapeHtml(agent.name)}</h3>
+        <p>Hold <kbd>R2</kbd> or <kbd>Space</kbd> and speak.</p>
+      </div>`;
+    renderActionBar([{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }]);
+    ring.set([]);
+    return;
+  }
+
+  const { surface, focusables, autoSpeak } = renderTile(spec);
+  surfaceWrap.appendChild(surface);
+  const actionButtons = renderActionBar(spec.actions || []);
+  ring.set([...focusables, ...actionButtons]);
+  for (const btn of actionButtons) {
+    btn.addEventListener('click', () => executeAction(btn._action, spec));
+  }
+  for (const f of focusables) {
+    f.addEventListener('click', () => { ring.moveTo(el => el === f); pressCross(); });
+  }
+  if (autoSpeak && !specOverride?._silent) speak(autoSpeak);
 }
 
 function exitZoom() {
@@ -366,13 +415,17 @@ function exitZoom() {
   renderGrid();
 }
 
-function renderZoom() { surfaceEl.innerHTML = '<p style="padding:2rem">Agent zoom — Phase 3.</p>'; }
-
 function cycleAgent(delta) {
-  if (mode !== MODE_ZOOM || !activeProject?.agents?.length) return;
+  if (mode !== MODE_ZOOM || !activeProject) return;
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
-  zoomedIndex = (zoomedIndex + delta + activeProject.agents.length) % activeProject.agents.length;
+  const n = activeProject.agents.length;
+  let i = zoomedIndex;
+  for (let k = 0; k < n; k++) {
+    i = (i + delta + n) % n;
+    if (activeProject.agents[i].enabled) break;
+  }
+  zoomedIndex = i;
   renderZoom();
 }
 
@@ -380,90 +433,60 @@ function cycleAgent(delta) {
 async function executeAction(action, sourceSpec) {
   if (!action) return;
   const type = action.action?.type || action.type;
-
-  // Grid-mode synthetic actions
   if (type === '_grid_open')   { enterZoom(); return; }
-  if (type === '_grid_cancel') { stopSpeaking(); return; }
+  if (type === '_grid_back')   { exitToProjects(); return; }
+  if (type === '_grid_toggle_enabled') { toggleFocusedAgentEnabled(); return; }
 
   const agent = currentAgent();
-  if (!agent) return;
-  switch (type) {
-    case 'cancel':
-      exitZoom();
-      return;
+  if (!agent || !activeProject) return;
+  if (type === 'cancel') { exitZoom(); return; }
 
-    case 'save_note': {
-      const body = sourceSpec?.body || agent.lastSpec?.body;
-      if (!body) return;
-      setIndicator('thinking', 'Saving…');
-      try {
-        const r = await fetch('/notes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ body }),
-        });
-        if (!r.ok) throw new Error(await r.text());
-        const summary = body.length > 60 ? body.slice(0, 60) + '…' : body;
-        const ackSpec = {
-          intent: 'answer', template: 'reader',
-          context: 'Note saved', title: 'Saved',
-          body: `Saved your note: ${summary}`,
-          actions: [{ verb: 'Done', glyph: 'circle', action: { type: 'cancel' } }],
-        };
-        agent.lastSpec = ackSpec;
-        await persistSpec(agent.id, ackSpec);
-        setIndicator('idle', 'Ready');
-        renderZoom(ackSpec);
-      } catch (err) {
-        setIndicator('error', 'Save failed');
-        renderZoom({
-          intent: 'answer', template: 'reader',
-          context: 'Error', title: "I couldn't save that",
-          body: 'Something went wrong saving the note. ' + (err.message || ''),
-          actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
-        });
-      }
-      return;
+  if (type === 'save_note') {
+    const body = sourceSpec?.body || agent.lastSpec?.body;
+    if (!body) return;
+    setIndicator('thinking', 'Saving…');
+    try {
+      const r = await fetch(`/projects/${activeProject.id}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const summary = body.length > 60 ? body.slice(0, 60) + '…' : body;
+      const ack = {
+        intent: 'answer', template: 'reader',
+        context: 'Note saved', title: 'Saved',
+        body: `Saved your note: ${summary}`,
+        actions: [{ verb: 'Done', glyph: 'circle', action: { type: 'cancel' } }],
+      };
+      agent.lastSpec = ack;
+      setIndicator('idle', 'Ready');
+      renderZoom(ack);
+    } catch (err) {
+      setIndicator('error', 'Save failed');
+      console.error(err);
     }
-
-    case 'open_note': {
-      const focused = ring.current();
-      const id = focused?.dataset?.id;
-      if (!id) return;
-      setIndicator('thinking', 'Loading…');
-      try {
-        const r = await fetch(`/notes/${encodeURIComponent(id)}`);
-        if (!r.ok) throw new Error(await r.text());
-        const { body } = await r.json();
-        const readerSpec = {
-          intent: 'answer', template: 'reader',
-          context: 'Note', title: id.replace(/T/, ' ').slice(0, 16),
-          body,
-          actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
-        };
-        agent.lastSpec = readerSpec;
-        await persistSpec(agent.id, readerSpec);
-        setIndicator('idle', 'Ready');
-        renderZoom(readerSpec);
-      } catch (err) {
-        setIndicator('error', 'Load failed');
-      }
-      return;
-    }
-
-    default:
-      console.warn('[action] unknown type:', type, action);
+    return;
   }
-}
 
-async function persistSpec(agentId, spec) {
-  try {
-    await fetch(`/agents/${agentId}/spec`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spec }),
-    });
-  } catch (e) { /* non-fatal */ }
+  if (type === 'open_note') {
+    const focused = ring.current();
+    const id = focused?.dataset?.id;
+    if (!id) return;
+    try {
+      const r = await fetch(`/projects/${activeProject.id}/notes/${encodeURIComponent(id)}`);
+      if (!r.ok) throw new Error(await r.text());
+      const { body } = await r.json();
+      renderZoom({
+        intent: 'answer', template: 'reader',
+        context: 'Note', title: id.replace(/T/, ' ').slice(0, 16),
+        body,
+        actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+      });
+    } catch (err) { console.error(err); }
+    return;
+  }
+  console.warn('[action] unknown type:', type, action);
 }
 
 /* ---------- PTT + intent submission ---------- */
@@ -691,8 +714,40 @@ function submitTypedText(text) {
   if (mode === MODE_GRID) { submitTeamIntent(text); return; }
 }
 
-// Placeholders — wired in later phases
-function submitIntent(text) { /* Phase 4 */ }
+async function submitIntent(text) {
+  const agent = currentAgent();
+  if (!agent || mode !== MODE_ZOOM) return;
+  if (inflightController) inflightController.abort();
+  inflightController = new AbortController();
+  const myCtl = inflightController;
+  const targetId = agent.id;
+
+  agentBusy[targetId] = true;
+  setIndicator('thinking', `${agent.name} is thinking…`);
+  try {
+    const r = await fetch(`/projects/${activeProject.id}/agents/${targetId}/interpret`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+      signal: myCtl.signal,
+    });
+    if (!r.ok) throw new Error(`server ${r.status}`);
+    const spec = await r.json();
+    const a = activeProject.agents.find(x => x.id === targetId);
+    if (a) a.lastSpec = spec;
+    if (mode === MODE_ZOOM && currentAgent()?.id === targetId) {
+      setIndicator('idle', 'Ready');
+      renderZoom(spec);
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    console.error(err);
+    setIndicator('error', 'Request failed');
+  } finally {
+    agentBusy[targetId] = false;
+    if (myCtl === inflightController) inflightController = null;
+  }
+}
 function submitTeamIntent(text) { /* Phase 8 */ }
 
 async function finalizeNewProject() {
