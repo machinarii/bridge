@@ -1,4 +1,5 @@
 import express from 'express';
+import { migrateLegacyOnce } from './scratchpad.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
@@ -21,6 +22,8 @@ app.use(express.json({ limit: '64kb' }));
 app.use(express.static(RENDERER_DIR));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+migrateLegacyOnce();
 
 app.listen(PORT, () => {
   console.log(`[bridge] orchestrator listening on http://localhost:${PORT}`);

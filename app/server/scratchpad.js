@@ -85,3 +85,19 @@ export function reset(agentId) {
 }
 
 export function all() { return { ...load() }; }
+
+const LEGACY_KEYS = new Set(['nova','atlas','sage','echo','vesper','halo','lyra','ember']);
+
+/** Wipe legacy 8-agent records on first boot under the new schema. */
+export function migrateLegacyOnce() {
+  const data = load();
+  let touched = false;
+  for (const key of Object.keys(data)) {
+    if (LEGACY_KEYS.has(key)) { delete data[key]; touched = true; }
+  }
+  if (touched) {
+    cache = data;
+    save();
+    console.log('[migrate] wiped legacy scratchpad keys');
+  }
+}
