@@ -8,6 +8,7 @@ import { listProjects, getProject, createProject, setAgentEnabled } from './proj
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, getContext } from './scratchpad.js';
+import { runTeamVoice } from './team.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -130,6 +131,18 @@ app.get('/projects/:pid/files', (req, res) => {
     .sort().reverse()
     .map(f => ({ ...fileEntry(resolve(projDir, 'notes', f), 'note') }));
   res.json({ projectMd: 'project.md', charters, notes });
+});
+
+app.post('/projects/:pid/team/interpret', async (req, res) => {
+  const text = String(req.body?.text || '').trim();
+  if (!text) return res.status(400).json({ error: 'empty intent' });
+  try {
+    const result = await runTeamVoice({ projectId: req.params.pid, text });
+    res.json(result);
+  } catch (err) {
+    console.error(`[team:${req.params.pid}]`, err);
+    res.status(500).json({ error: String(err?.message || err) });
+  }
 });
 
 app.get('/projects/:pid/file/*', (req, res) => {
