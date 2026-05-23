@@ -582,8 +582,72 @@ async function toggleFocusedAgentEnabled() {
     console.error(err);
   }
 }
-function toggleHistoryDrawer()       { /* Phase 6 */ }
+const drawerEl = document.getElementById('history-drawer');
+const drawerListEl = drawerEl.querySelector('.history-list');
+
+let drawerOpen = false;
+let drawerFocus = 0;
+let drawerEntries = [];
+let fileExplorerOpen = false; // wired in Phase 7
+
+async function toggleHistoryDrawer() {
+  if (mode !== MODE_ZOOM) return;
+  if (drawerOpen) { closeHistoryDrawer(); return; }
+  await openHistoryDrawer();
+}
+
+async function openHistoryDrawer() {
+  const agent = currentAgent();
+  if (!agent) return;
+  try {
+    const r = await fetch(`/projects/${activeProject.id}/agents/${agent.id}/history`);
+    if (!r.ok) throw new Error(await r.text());
+    const { messages } = await r.json();
+    drawerEntries = messages.slice().reverse();
+    drawerListEl.innerHTML = '';
+    drawerEntries.forEach((m, i) => {
+      const li = document.createElement('li');
+      li.className = 'history-entry';
+      li.dataset.idx = String(i);
+      li.innerHTML = `<div class="role">${m.role}</div><div class="snippet">${escapeHtml(String(m.content).slice(0, 120))}</div>`;
+      drawerListEl.appendChild(li);
+    });
+    drawerEl.hidden = false;
+    drawerOpen = true;
+    drawerFocus = 0;
+    paintDrawerFocus();
+    if (fileExplorerOpen) closeFileExplorer();
+  } catch (err) {
+    setIndicator('error', 'History failed');
+    console.error(err);
+  }
+}
+
+function closeHistoryDrawer() {
+  drawerEl.hidden = true;
+  drawerOpen = false;
+}
+
+function paintDrawerFocus() {
+  const entries = drawerListEl.querySelectorAll('.history-entry');
+  entries.forEach((el, i) => el.classList.toggle('focused', i === drawerFocus));
+}
+
+function openHistoryEntry(entry) {
+  if (!entry) return;
+  closeHistoryDrawer();
+  renderZoom({
+    intent: 'answer', template: 'reader',
+    context: `${entry.role} turn`,
+    title: entry.role === 'user' ? 'You said' : `${currentAgent()?.name || 'Agent'} said`,
+    body: String(entry.content),
+    actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+    _silent: true,
+  });
+}
+
 function toggleFileExplorer()        { /* Phase 7 */ }
+function closeFileExplorer()         { /* Phase 7 */ }
 function currentAgent() { return activeProject?.agents?.[zoomedIndex] || null; }
 
 /* ---------- Button dispatch ---------- */
@@ -652,6 +716,13 @@ gp.addEventListener('press', (e) => {
   }
 
   if (mode === MODE_ZOOM) {
+    if (drawerOpen) {
+      if (b === 'up' || b === 'left')   { drawerFocus = Math.max(0, drawerFocus - 1); paintDrawerFocus(); return; }
+      if (b === 'down' || b === 'right'){ drawerFocus = Math.min(drawerEntries.length - 1, drawerFocus + 1); paintDrawerFocus(); return; }
+      if (b === 'cross')                { openHistoryEntry(drawerEntries[drawerFocus]); return; }
+      if (b === 'circle')               { closeHistoryDrawer(); return; }
+      if (b === 'triangle')             { closeHistoryDrawer(); return; }
+    }
     if (b === 'up' || b === 'left')      ring.move(-1);
     else if (b === 'down' || b === 'right') ring.move(+1);
     else if (b === 'cross')              pressCross();

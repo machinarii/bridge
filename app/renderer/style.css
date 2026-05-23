@@ -342,3 +342,23 @@ kbd {
   font-size: 0.9rem;
   opacity: 0.75;
 }
+
+/* ===== History drawer (L2 right side) ===== */
+#history-drawer.drawer {
+  position: fixed; top: 4rem; right: 0; bottom: 4rem;
+  width: 360px; background: rgba(20,22,28,0.96);
+  border-left: 1px solid rgba(255,255,255,0.12);
+  overflow-y: auto; padding: 0;
+  z-index: 60;
+}
+#history-drawer header {
+  display: flex; justify-content: space-between;
+  padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+  font-weight: 600;
+}
+#history-drawer header .hint { opacity: 0.5; font-weight: 400; font-size: 0.85rem; }
+.history-list { list-style: none; margin: 0; padding: 0; }
+.history-entry { padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; }
+.history-entry.focused { background: rgba(110,168,255,0.16); }
+.history-entry .role { font-size: 0.75rem; text-transform: uppercase; opacity: 0.5; }
+.history-entry .snippet { font-size: 0.9rem; margin-top: 0.2rem; }
