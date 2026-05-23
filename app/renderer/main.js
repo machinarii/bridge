@@ -15,22 +15,33 @@ const gp = new GamepadInput();
 const speech = new Speech();
 
 /* ---------- App state ---------- */
-const MODE_GRID = 'grid';
-const MODE_ZOOM = 'zoom';
+const MODE_PROJECTS         = 'projects';          // L0
+const MODE_NEW_PROJ_ROLES   = 'new_project_roles'; // create-flow step 1
+const MODE_NEW_PROJ_NAME    = 'new_project_name';  // create-flow step 2
+const MODE_NEW_PROJ_GOAL    = 'new_project_goal';  // create-flow step 3
+const MODE_GRID             = 'grid';              // L1 (project grid)
+const MODE_ZOOM             = 'zoom';              // L2 (agent zoom)
 
-let mode = MODE_GRID;
-let agents = [];                 // [{ id, name, color, persona, lastSpec, ... }]
-let zoomedIndex = 0;             // index into agents[] when zoomed
-let gridIndex = 0;               // focus position on grid
-let agentBusy = {};              // agentId -> bool ("thinking" indicator on tile)
-let inflightController = null;   // AbortController for the in-flight LLM call
+let mode = MODE_PROJECTS;
+let projects = [];                // [{ id, name, agents, ... }]
+let pickerIndex = 0;              // focus index on project picker (0..N where N = "+ New")
+let activeProject = null;         // project record at L1/L2
+let zoomedIndex = 0;
+let gridIndex = 0;
+let agentBusy = {};
+let inflightController = null;
 let pttActive = false;
 
+// Create-project flow state
+let newProjRoleIds = [];          // toggled during step 1
+let newProjName    = '';          // captured during step 2
+let newProjGoal    = '';          // captured during step 3
+
 /* ---------- Bootstrap ---------- */
-async function loadAgents() {
-  const r = await fetch('/agents');
+async function loadProjects() {
+  const r = await fetch('/projects');
   const data = await r.json();
-  agents = data.agents;
+  projects = data.projects || [];
 }
 
 /* ---------- UI helpers ---------- */
@@ -50,46 +61,10 @@ function setContextLabel(text, color) {
   contextLabelEl.appendChild(document.createTextNode(text || 'Bridge'));
 }
 
-function currentAgent() { return agents[zoomedIndex] || null; }
+function currentAgent() { return (activeProject?.agents?.[zoomedIndex]) || null; }
 
-/* ---------- GRID view ---------- */
-function renderGrid() {
-  mode = MODE_GRID;
-  surfaceEl.innerHTML = '';
-  renderActionBar([
-    { verb: 'Open',   glyph: 'cross',  action: { type: '_grid_open' } },
-    { verb: 'Cancel', glyph: 'circle', action: { type: '_grid_cancel' } },
-  ]);
-  setContextLabel('Bridge — choose an agent');
-  document.documentElement.style.setProperty('--agent-color', '#6ea8ff');
-
-  const grid = document.createElement('div');
-  grid.className = 'agent-grid';
-
-  const tileEls = agents.map((a, i) => {
-    const tile = document.createElement('div');
-    tile.className = 'agent-tile';
-    tile.style.setProperty('--tile-color', a.color);
-    tile.dataset.agentId = a.id;
-    tile.dataset.busy = agentBusy[a.id] ? 'true' : 'false';
-
-    const summary = summarizeLastSpec(a.lastSpec);
-    tile.innerHTML = `
-      <h2 class="name">${a.name}</h2>
-      <div class="footer">
-        <div class="summary">${summary || '<span style="opacity:0.5">no conversation yet</span>'}</div>
-        <div class="status"><span class="dot"></span><span>${agentBusy[a.id] ? 'thinking…' : 'idle'}</span></div>
-      </div>`;
-    tile.addEventListener('click', () => { gridIndex = i; ring.set(tileEls); paintGridFocus(); enterZoom(); });
-    grid.appendChild(tile);
-    return tile;
-  });
-
-  surfaceEl.appendChild(grid);
-  ring.set(tileEls);
-  ring.index = clamp(gridIndex, 0, tileEls.length - 1);
-  paintGridFocus();
-}
+function renderProjects() { surfaceEl.innerHTML = '<p style="padding:2rem">Project picker — populated next task.</p>'; }
+function renderGrid() { surfaceEl.innerHTML = '<p style="padding:2rem">Project grid — Phase 3.</p>'; }
 
 function summarizeLastSpec(spec) {
   if (!spec) return '';
@@ -142,62 +117,13 @@ function exitZoom() {
   renderGrid();
 }
 
-function renderZoom(specOverride) {
-  const agent = currentAgent();
-  if (!agent) return renderGrid();
-  document.documentElement.style.setProperty('--agent-color', agent.color);
-  setContextLabel(agent.name, agent.color);
-  surfaceEl.innerHTML = '';
-
-  const view = document.createElement('section');
-  view.className = 'agent-view';
-  view.innerHTML = `
-    <div class="agent-header">
-      <div class="name-large">${agent.name}</div>
-      <div class="nav-hint">
-        <span class="shoulder"><span>L1</span> prev</span>
-        <span class="shoulder"><span>R1</span> next</span>
-        <span class="shoulder"><span>○</span> grid</span>
-      </div>
-    </div>
-    <div class="tile-surface"></div>`;
-  surfaceEl.appendChild(view);
-  const surfaceWrap = view.querySelector('.tile-surface');
-
-  const spec = specOverride ?? agent.lastSpec;
-  if (!spec) {
-    surfaceWrap.innerHTML = `
-      <div class="idle">
-        <h3>${agent.name}</h3>
-        <p>Hold <kbd>R2</kbd> or <kbd>Space</kbd> and speak.</p>
-        <p style="opacity:0.7">Try: <em>take a note</em>, <em>show my notes</em>, or any question.</p>
-      </div>`;
-    renderActionBar([{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }]);
-    ring.set([]);
-    return;
-  }
-
-  const { surface, focusables, autoSpeak } = renderTile(spec);
-  surfaceWrap.appendChild(surface);
-
-  const actionButtons = renderActionBar(spec.actions || []);
-  ring.set([...focusables, ...actionButtons]);
-
-  for (const btn of actionButtons) {
-    btn.addEventListener('click', () => executeAction(btn._action, spec));
-  }
-  for (const f of focusables) {
-    f.addEventListener('click', () => { ring.moveTo(el => el === f); pressCross(); });
-  }
-
-  if (autoSpeak && !specOverride?._silent) speak(autoSpeak);
-}
+function renderZoom() { surfaceEl.innerHTML = '<p style="padding:2rem">Agent zoom — Phase 3.</p>'; }
 
 function cycleAgent(delta) {
-  if (mode !== MODE_ZOOM || agents.length === 0) return;
+  if (mode !== MODE_ZOOM || !activeProject?.agents?.length) return;
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
-  zoomedIndex = (zoomedIndex + delta + agents.length) % agents.length;
+  zoomedIndex = (zoomedIndex + delta + activeProject.agents.length) % activeProject.agents.length;
   renderZoom();
 }
 
@@ -442,7 +368,7 @@ gp.addEventListener('press', (e) => {
 /* L2: speak the currently-focused agent's name. Works in both grid and zoom
  * so the user can audibly confirm "which agent am I on" without looking. */
 function speakFocusedAgentName() {
-  const agent = mode === MODE_ZOOM ? currentAgent() : agents[gridIndex];
+  const agent = mode === MODE_ZOOM ? currentAgent() : activeProject?.agents?.[gridIndex];
   if (!agent) return;
   stopSpeaking();
   speak(agent.name);
@@ -483,8 +409,8 @@ window.addEventListener('keyup', (e) => {
 
 /* ---------- Boot ---------- */
 (async () => {
-  await loadAgents();
-  renderGrid();
+  await loadProjects();
+  renderProjects();
   setIndicator('idle', 'Ready');
-  console.log('[bridge] PS5 mode. Cross=open, Circle=back, L1/R1=switch agent, R2=PTT. Keyboard: arrows/Enter/Esc/[/]//space.');
+  console.log('[bridge] L0 ready. ✕ open project, "+ New" to create.');
 })();
