@@ -256,7 +256,6 @@ body[data-mode="zoom"] #surface {
   background:
     radial-gradient(ellipse 140% 90% at 50% -10%, color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%, transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
-  animation: zoomIn 220ms cubic-bezier(.2,.8,.2,1);
 }
 .agent-view::before {
   content: '';
