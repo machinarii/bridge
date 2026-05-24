@@ -564,11 +564,27 @@ kbd {
 .role-sample { font-size: 0.85rem; opacity: 0.7; margin-top: 0.2rem; position: relative; }
 .role-toggle {
   position: absolute;
-  top: 0.55rem;
+  top: 0.6rem;
   right: 0.7rem;
-  font-size: 1.25rem;
-  line-height: 1;
-  opacity: 0.75;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 5px;
+  border: 1.5px solid rgba(255,255,255,0.55);
+  background: transparent;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.role-toggle[data-checked="true"] {
+  background: var(--focus, #ffffff);
+  border-color: var(--focus, #ffffff);
+}
+.role-toggle[data-checked="true"]::after {
+  content: '';
+  width: 0.42rem;
+  height: 0.7rem;
+  border-right: 2px solid #0b0f14;
+  border-bottom: 2px solid #0b0f14;
+  transform: rotate(45deg) translate(-1px, -1px);
 }
 
 /* ===== Capture tile (name + goal steps) ===== */
