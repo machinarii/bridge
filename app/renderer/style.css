@@ -156,8 +156,26 @@ kbd {
 #listening-indicator[data-state="thinking"] .dot {
   background: var(--accent-2); animation: thinking 1s linear infinite;
 }
-#listening-indicator[data-state="error"] { border-color: var(--danger); }
+#listening-indicator[data-state="error"] { border-color: var(--danger); color: var(--danger); }
 #listening-indicator[data-state="error"] .dot { background: var(--danger); }
+
+/* Connected (idle) — green; Disconnected — red. */
+#listening-indicator[data-state="idle"] {
+  border-color: #34c759;
+  color: #34c759;
+}
+#listening-indicator[data-state="idle"] .dot {
+  background: #34c759;
+  box-shadow: 0 0 10px rgba(52,199,89,0.55);
+}
+#listening-indicator[data-state="disconnected"] {
+  border-color: #ff3b30;
+  color: #ff3b30;
+}
+#listening-indicator[data-state="disconnected"] .dot {
+  background: #ff3b30;
+  box-shadow: 0 0 10px rgba(255,59,48,0.55);
+}
 
 @keyframes pulse {
   0%   { box-shadow: 0 0 0 0 rgba(110,168,255,0.55); }

@@ -1563,5 +1563,27 @@ window.addEventListener('keyup', (e) => {
   staggerInCards();
   staggerInFooter();
   setIndicator('idle', 'Connected');
+  startConnectionPing();
   console.log('[bridge] L0 ready. ✕ open project, "+ New" to create.');
 })();
+
+/* Ping /health every 5 s — flip the indicator to red on failure, back to
+ * green on success. Skip while listening / thinking so we don't clobber
+ * those transient states. */
+function startConnectionPing() {
+  let lastOK = true;
+  const tick = async () => {
+    const cur = indicatorEl.dataset.state;
+    if (cur !== 'idle' && cur !== 'disconnected') return; // don't disturb live states
+    try {
+      const r = await fetch('/health', { cache: 'no-store' });
+      if (!r.ok) throw new Error('not ok');
+      if (!lastOK) setIndicator('idle', 'Connected');
+      lastOK = true;
+    } catch {
+      if (lastOK) setIndicator('disconnected', 'Disconnected');
+      lastOK = false;
+    }
+  };
+  setInterval(tick, 5000);
+}
