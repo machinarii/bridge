@@ -289,10 +289,45 @@ kbd {
   color: var(--fg);
 }
 
+.agent-view .chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem 0.25rem 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  scroll-behavior: smooth;
+}
+.agent-view .bubble {
+  max-width: 70%;
+  padding: 0.6rem 0.9rem;
+  border-radius: 14px;
+  font-weight: 300;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.agent-view .bubble.user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--agent-color, #6ea8ff) 75%, #4b6fc0), color-mix(in oklab, var(--agent-color, #6ea8ff) 55%, #2c4a8a));
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+}
+.agent-view .bubble.agent {
+  align-self: flex-start;
+  background: rgba(255,255,255,0.10);
+  color: var(--fg);
+  border-bottom-left-radius: 4px;
+}
+
 .agent-view .tile-surface {
-  flex: 1; min-height: 0; overflow-y: auto;
+  flex: 0 0 auto;
+  max-height: 40%;
+  overflow-y: auto;
   padding-right: 4px;
 }
+.agent-view .tile-surface:empty { display: none; }
 
 .agent-view .idle {
   margin: auto; text-align: center; color: var(--fg-dim);
