@@ -108,14 +108,26 @@ function staggerInFooter() {
     ...document.querySelectorAll('#shortcuts-rail .sc'),
     ...document.querySelectorAll('#action-bar .action'),
   ];
+  if (items.length === 0) return;
+  // Snap to the start state synchronously, force a reflow so the
+  // browser commits it before the animation, then animate each chip in.
+  for (const el of items) {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(28px)';
+  }
+  void items[0].offsetWidth; // commit
   items.forEach((el, i) => {
-    el.animate(
+    const a = el.animate(
       [
-        { transform: 'translateX(28px)', opacity: 0 },
-        { transform: 'translateX(0)',    opacity: 1 },
+        { opacity: 0, transform: 'translateX(28px)' },
+        { opacity: 1, transform: 'translateX(0)'    },
       ],
-      { duration: 260, delay: 60 * i, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }
+      { duration: 300, delay: 70 * i, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' }
     );
+    a.finished.then(() => {
+      el.style.opacity = '';
+      el.style.transform = '';
+    }).catch(() => {});
   });
 }
 
