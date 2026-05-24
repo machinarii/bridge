@@ -67,8 +67,8 @@ function renderProjects() {
   setContextLabel('Bridge — projects');
   surfaceEl.innerHTML = '';
 
-  const n = projects.length + 1; // include "+ New" tile
-  const { cols, rows } = gridLayout(n);
+  // Fixed 4×2 layout — "+ New" is always one of the 8 cells.
+  const cols = 4, rows = 2;
   const grid = document.createElement('div');
   grid.className = 'project-picker';
   grid.style.setProperty('--grid-cols', cols);
