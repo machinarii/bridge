@@ -40,12 +40,14 @@ function _zoomFrame(target, rect) {
 
 function playZoomIn(target, rect) {
   if (!rect || !target) return;
+  // No fade — the element physically grows from the source rect to full size,
+  // staying fully opaque so it reads as "this thing is enlarging."
   target.animate(
     [
-      { transform: _zoomFrame(target, rect), opacity: 0 },
-      { transform: 'translate(0,0) scale(1)', opacity: 1 },
+      { transform: _zoomFrame(target, rect), opacity: 1 },
+      { transform: 'translate(0,0) scale(1)',  opacity: 1 },
     ],
-    { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' }
+    { duration: 340, easing: 'cubic-bezier(.2,.8,.2,1)' }
   );
 }
 
@@ -93,12 +95,16 @@ function backZoomWithSnapshot(toRect, renderNewView) {
   const s  = Math.max(0.05, Math.min(sx, sy, 0.7));
   const tx = (toRect.left + toRect.width / 2) - (tRect.left + tRect.width / 2);
   const ty = (toRect.top + toRect.height / 2) - (tRect.top + tRect.height / 2);
+  // Stay fully opaque through most of the shrink so the element reads as
+  // physically collapsing; fade only in the last beat to hide the seam
+  // when it's removed.
   const a = overlay.animate(
     [
-      { transform: 'translate(0,0) scale(1)', opacity: 1 },
-      { transform: `translate(${tx}px,${ty}px) scale(${s})`, opacity: 0 },
+      { offset: 0,    transform: 'translate(0,0) scale(1)', opacity: 1 },
+      { offset: 0.85, transform: `translate(${tx*0.92}px,${ty*0.92}px) scale(${s*1.15})`, opacity: 1 },
+      { offset: 1,    transform: `translate(${tx}px,${ty}px) scale(${s})`, opacity: 0 },
     ],
-    { duration: 280, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }
+    { duration: 320, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }
   );
   return a.finished.catch(() => {}).then(() => { overlay.remove(); });
 }
