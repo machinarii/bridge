@@ -63,20 +63,19 @@ classifier and team voice is blocked with a clear message.
 
 | Action            | Keyboard            | DualSense           |
 |---|---|---|
-| Push-to-talk      | hold **Space**      | hold **R2**         |
+| Push-to-talk      | hold **v**          | hold **R2**         |
 | Navigate          | arrows              | D-pad / left stick  |
 | Select / confirm  | **Enter**           | **Cross**           |
 | Back              | **Esc**             | **Circle**          |
-| Enable/disable    | **s** or **d**      | **Square** (at L1)  |
-| Next (role picker)| **Tab**             | **Triangle**        |
+| Toggle on/off     | **Space**           | **Square**          |
 | History drawer    | **t**               | **Triangle** (at L2)|
 | File explorer     | **\\**              | **Options**         |
 | Switch agent      | **[** / **]**       | **L1** / **R1**     |
 | Typed fallback    | **/**               | —                   |
 
-Keyboard navigation works at every level — project picker, role picker
-(arrows toggle with Enter, Tab to advance), name/goal capture (Enter
-confirms, Esc steps back), L1 grid, L2 zoom, and inside both drawers.
+Keyboard model: **Enter** selects/advances, **Esc** goes back, **Space**
+toggles the focused thing on/off — toggles a role in the role picker,
+toggles an agent's enabled flag at L1. Voice is on **v** (hold).
 
 ## Tile spec contract (the model's only output)
 

@@ -234,7 +234,7 @@ function renderNewProjectName() {
   t.className = 'capture-tile';
   t.innerHTML = `
     <h2>Name this project</h2>
-    <p class="hint">Hold <kbd>R2</kbd> and speak — or press <kbd>/</kbd> to type.</p>
+    <p class="hint">Hold <kbd>R2</kbd> or <kbd>v</kbd> and speak — or press <kbd>/</kbd> to type.</p>
     <div class="capture-value">${escapeHtml(newProjName) || '<span class="placeholder">(speak now)</span>'}</div>
     ${newProjRoleIds.includes('pm') || newProjRoleIds.includes('tpm')
       ? ''
@@ -255,7 +255,7 @@ function renderNewProjectGoal() {
   t.className = 'capture-tile';
   t.innerHTML = `
     <h2>What is this project's goal?</h2>
-    <p class="hint">Hold <kbd>R2</kbd> and describe it — or press <kbd>/</kbd> to type.</p>
+    <p class="hint">Hold <kbd>R2</kbd> or <kbd>v</kbd> and describe it — or press <kbd>/</kbd> to type.</p>
     <div class="capture-value">${escapeHtml(newProjGoal) || '<span class="placeholder">(speak now)</span>'}</div>`;
   surfaceEl.appendChild(t);
   renderActionBar([
@@ -396,7 +396,7 @@ function renderZoom(specOverride) {
     surfaceWrap.innerHTML = `
       <div class="idle">
         <h3>${escapeHtml(agent.name)}</h3>
-        <p>Hold <kbd>R2</kbd> or <kbd>Space</kbd> and speak.</p>
+        <p>Hold <kbd>R2</kbd> or <kbd>v</kbd> and speak.</p>
       </div>`;
     renderActionBar([{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }]);
     ring.set([]);
@@ -903,7 +903,8 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
-  if (e.code === 'Space' && !e.repeat) { e.preventDefault(); startPTT(); return; }
+  // Hold 'v' for push-to-talk (voice).
+  if (e.key === 'v' && !e.repeat) { e.preventDefault(); startPTT(); return; }
 
   if (e.key === '\\') { e.preventDefault(); toggleFileExplorer(); return; }
   if (e.key === '/')  { e.preventDefault(); typedWrap.hidden = false; typedInput.focus(); return; }
@@ -931,8 +932,8 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'Enter') { e.preventDefault(); openFocused(); }
   } else if (mode === MODE_NEW_PROJ_ROLES) {
     if (dir) { e.preventDefault(); roleGridMove(dir); }
-    else if (e.key === 'Enter')   { e.preventDefault(); toggleFocusedRole(); }
-    else if (e.key === 'Tab')     { e.preventDefault(); advanceFromRolePicker(); }
+    else if (e.code === 'Space')  { e.preventDefault(); toggleFocusedRole(); }
+    else if (e.key === 'Enter')   { e.preventDefault(); advanceFromRolePicker(); }
     else if (e.key === 'Escape')  { e.preventDefault(); renderProjects(); }
   } else if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
     if (e.key === 'Enter')        { e.preventDefault(); confirmCapture(); }
@@ -941,7 +942,7 @@ window.addEventListener('keydown', (e) => {
     if (dir) { e.preventDefault(); gridMove(dir); }
     else if (e.key === 'Enter') { e.preventDefault(); enterZoom(); }
     else if (e.key === 'Escape') { e.preventDefault(); exitToProjects(); }
-    else if (e.key === 's' || e.key === 'd') { e.preventDefault(); toggleFocusedAgentEnabled(); }
+    else if (e.code === 'Space') { e.preventDefault(); toggleFocusedAgentEnabled(); }
   } else if (mode === MODE_ZOOM) {
     if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')      { e.preventDefault(); ring.move(-1); }
     else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); ring.move(+1); }
@@ -1083,7 +1084,7 @@ async function finalizeNewProject() {
   }
 }
 window.addEventListener('keyup', (e) => {
-  if (e.code === 'Space') { e.preventDefault(); endPTT(); }
+  if (e.key === 'v') { e.preventDefault(); endPTT(); }
 });
 
 /* ---------- Boot ---------- */
