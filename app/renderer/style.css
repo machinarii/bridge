@@ -784,6 +784,13 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide { left: 280px; }
   background: rgba(255,255,255,0.08);
   border-color: rgba(255,255,255,0.36);
 }
+#file-viewer .file-viewer-close:focus,
+#file-viewer .file-viewer-close:focus-visible {
+  outline: 1px solid var(--focus, #ffffff);
+  outline-offset: 2px;
+  border-color: rgba(255,255,255,0.36);
+  background: rgba(255,255,255,0.08);
+}
 #file-viewer .file-viewer-body {
   flex: 1; min-height: 0;
   margin: 0; padding: 1rem 1.25rem;
