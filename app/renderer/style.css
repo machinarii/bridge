@@ -471,15 +471,13 @@ body[data-mode="zoom"] #surface {
 /* ===== Typed fallback ===== */
 
 #ptt-typed {
-  position: fixed; left: 50%; top: 5rem; transform: translateX(-50%);
-  width: min(640px, 80vw);
+  display: block;
   background: rgba(20,22,28,0.97);
   border: 1px solid rgba(255,255,255,0.22);
   border-radius: 10px;
   padding: 10px 14px;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.55);
-  z-index: 70;
 }
+#ptt-typed[hidden] { display: none !important; }
 #typed-input {
   width: 100%; background: transparent; border: none; color: var(--fg);
   font-size: 1.1em; outline: none; font-family: inherit;
