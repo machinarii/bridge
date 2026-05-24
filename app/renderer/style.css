@@ -54,21 +54,52 @@ kbd {
 
 #context-strip {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 1.25rem;
   font-size: 0.85em;
   color: var(--fg-dim);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
-#context-label {
-  font-weight: 600;
+
+#brand {
   display: inline-flex; align-items: center; gap: 10px;
+  text-decoration: none;
+  color: var(--fg);
+  flex: 0 0 auto;
 }
-#context-label .agent-chip {
-  width: 10px; height: 10px; border-radius: 50%;
-  background: var(--agent-color);
-  box-shadow: 0 0 12px var(--agent-color);
+#brand-mark { width: 26px; height: 26px; display: block; filter: drop-shadow(0 0 8px rgba(110,168,255,0.45)); }
+#brand .brand-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  background: linear-gradient(120deg, #9cf2c1, #6ea8ff 55%, #c08bff);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+#breadcrumbs {
+  flex: 1 1 auto;
+  display: inline-flex; justify-content: flex-end;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--fg-dim);
+  font-size: 0.8em;
+  gap: 0.5em;
+  overflow: hidden;
+}
+#breadcrumbs .crumb { white-space: nowrap; }
+#breadcrumbs .crumb.current { color: var(--fg); }
+#breadcrumbs .sep {
+  opacity: 0.35;
+  font-weight: 300;
+  font-size: 1.1em;
+  margin: 0 0.15em;
+  transform: translateY(-1px);
+  display: inline-block;
+}
+#breadcrumbs .agent-chip {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--agent-color); box-shadow: 0 0 8px var(--agent-color);
+  margin-right: 6px; vertical-align: middle;
 }
 
 #listening-indicator {
