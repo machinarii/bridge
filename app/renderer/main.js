@@ -1035,6 +1035,7 @@ const fileTreeEl   = fileDrawerEl.querySelector('.file-tree');
 let fileTree = null;
 let fileFocus = 0;
 let fileEntries = [];
+let explorerFocused = false; // true while keyboard nav is inside the explorer
 
 async function toggleFileExplorer() {
   if (mode === MODE_PROJECTS) return;
@@ -1089,6 +1090,7 @@ async function openFileExplorer() {
 
   fileDrawerEl.hidden = false;
   fileExplorerOpen = true;
+  explorerFocused = true;
   fileFocus = 0;
   paintFileFocus();
   document.body.dataset.fileDrawer = 'open';
@@ -1098,6 +1100,7 @@ async function openFileExplorer() {
 function closeFileExplorer() {
   fileDrawerEl.hidden = true;
   fileExplorerOpen = false;
+  explorerFocused = false;
   document.body.dataset.fileDrawer = 'closed';
   // The viewer is tied to the file manager — never appears on its own.
   closeFileViewer();
@@ -1297,10 +1300,25 @@ window.addEventListener('keydown', (e) => {
   const dirMap = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
   const dir = dirMap[e.key];
 
-  // File explorer (overlay at L1/L2) intercepts navigation
-  if (fileExplorerOpen) {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')      { e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
-    if (e.key === 'ArrowDown' || e.key === 'ArrowRight')   { e.preventDefault(); fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+  // File explorer (overlay at L1/L2) intercepts navigation while the
+  // explorer holds focus. Right-arrow exits the explorer to the right.
+  if (fileExplorerOpen && explorerFocused) {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')       { e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
+    if (e.key === 'ArrowDown')                               { e.preventDefault(); fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      explorerFocused = false;
+      fileEntries.forEach(el => el.classList.remove('focused'));
+      if (fileViewerOpen && fileViewerCloseEl) {
+        // Land on the viewer's × close button.
+        fileViewerCloseEl.focus();
+      } else {
+        // No viewer — give focus back to the main surface (agent grid /
+        // agent zoom). Re-paint the ring so the user sees their cursor.
+        ring.paint();
+      }
+      return;
+    }
     if (e.key === 'Enter')                                  { e.preventDefault(); openFocusedFile(); return; }
     if (e.key === 'Escape')                                 { e.preventDefault(); closeFileExplorer(); return; }
   }
