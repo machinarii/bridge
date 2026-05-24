@@ -14,6 +14,53 @@ const ring = new FocusRing();
 const gp = new GamepadInput();
 const speech = new Speech();
 
+/* ---------- Zoom transitions (FLIP-style) ----------
+ * Forward navigation captures the source tile's rect; the destination
+ * surface animates from "matches source rect" → identity. Back navigation
+ * pops the stored rect and animates the current surface to it.
+ */
+const zoomStack = [];
+
+function pushZoomFromFocused() {
+  const el = ring.current();
+  if (el) zoomStack.push(el.getBoundingClientRect());
+}
+
+function popZoomRect() { return zoomStack.pop() || null; }
+
+function _zoomFrame(target, rect) {
+  const t = target.getBoundingClientRect();
+  const sx = rect.width / t.width;
+  const sy = rect.height / t.height;
+  const s  = Math.max(0.05, Math.min(sx, sy, 0.7));
+  const tx = (rect.left + rect.width / 2) - (t.left + t.width / 2);
+  const ty = (rect.top + rect.height / 2) - (t.top + t.height / 2);
+  return `translate(${tx}px, ${ty}px) scale(${s})`;
+}
+
+function playZoomIn(target, rect) {
+  if (!rect || !target) return;
+  target.animate(
+    [
+      { transform: _zoomFrame(target, rect), opacity: 0 },
+      { transform: 'translate(0,0) scale(1)', opacity: 1 },
+    ],
+    { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' }
+  );
+}
+
+function playZoomOutTo(target, rect) {
+  if (!rect || !target) return Promise.resolve();
+  const a = target.animate(
+    [
+      { transform: 'translate(0,0) scale(1)', opacity: 1 },
+      { transform: _zoomFrame(target, rect), opacity: 0 },
+    ],
+    { duration: 260, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }
+  );
+  return a.finished.catch(() => {});
+}
+
 /* ---------- Input-mode tracker ---------- */
 function setInputMode(m) {
   if (document.body.dataset.inputMode !== m) document.body.dataset.inputMode = m;
@@ -125,10 +172,13 @@ function openFocused() {
     newProjGoal = '';
     renderNewProjectRoles();
   } else {
+    pushZoomFromFocused();
     activeProject = projects[idx];
     gridIndex = 0;
     zoomedIndex = 0;
+    const fromRect = zoomStack[zoomStack.length - 1];
     renderGrid();
+    playZoomIn(surfaceEl, fromRect);
   }
 }
 
@@ -372,10 +422,14 @@ function gridMove(dir) {
 
 function enterZoom(specOverride) {
   if (!activeProject) return;
+  const wasAtGrid = mode !== MODE_ZOOM;
+  if (wasAtGrid) pushZoomFromFocused();
   const idx = mode === MODE_ZOOM ? zoomedIndex : gridIndex;
   zoomedIndex = idx;
   mode = MODE_ZOOM;
+  const fromRect = wasAtGrid ? zoomStack[zoomStack.length - 1] : null;
   renderZoom(specOverride);
+  if (fromRect) playZoomIn(surfaceEl, fromRect);
 }
 
 function renderZoom(specOverride) {
@@ -431,9 +485,11 @@ function renderZoom(specOverride) {
   if (autoSpeak && !specOverride?._silent) speak(autoSpeak);
 }
 
-function exitZoom() {
+async function exitZoom() {
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
+  const toRect = popZoomRect();
+  if (toRect) await playZoomOutTo(surfaceEl, toRect);
   mode = MODE_GRID;
   renderGrid();
 }
@@ -617,9 +673,11 @@ function pickerMove(dir) {
   pickerIndex = next;
   ring.paint();
 }
-function exitToProjects() {
+async function exitToProjects() {
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
+  const toRect = popZoomRect();
+  if (toRect) await playZoomOutTo(surfaceEl, toRect);
   activeProject = null;
   renderProjects();
 }
