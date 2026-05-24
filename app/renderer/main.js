@@ -12,14 +12,25 @@ const typedInput      = document.getElementById('typed-input');
 const shortcutsRailEl = document.getElementById('shortcuts-rail');
 
 /** Set the persistent shortcuts rail at bottom-right. Pass an array of
- *  { gamepad, keyboard, label } — both glyphs render and CSS hides the
- *  inactive one based on body[data-input-mode]. */
+ *  { gamepad, keyboard, label, action } — both glyphs render and CSS
+ *  hides the inactive one based on body[data-input-mode]. Each chip is
+ *  clickable; if `action` is provided, it's invoked on click and when
+ *  the chip is focused-and-Entered via keyboard navigation. */
+let shortcutItems = [];
+let shortcutFocusIdx = -1; // -1 means focus is not in the rail
 function setShortcuts(items) {
   shortcutsRailEl.innerHTML = '';
+  shortcutItems = items || [];
+  shortcutFocusIdx = -1;
   const GAMEPAD = { cross: '✕', circle: '○', square: '□', triangle: '△' };
-  for (const it of items) {
+  shortcutItems.forEach((it, i) => {
     const wrap = document.createElement('span');
     wrap.className = 'sc';
+    wrap.dataset.idx = String(i);
+    if (it.action) {
+      wrap.style.cursor = 'pointer';
+      wrap.addEventListener('click', () => it.action());
+    }
     if (it.gamepad) {
       const g = document.createElement('span');
       g.className = 'glyph for-gamepad';
@@ -39,8 +50,34 @@ function setShortcuts(items) {
     l.textContent = it.label;
     wrap.appendChild(l);
     shortcutsRailEl.appendChild(wrap);
-  }
+  });
 }
+
+function paintShortcutFocus() {
+  shortcutsRailEl.querySelectorAll('.sc').forEach((el, i) =>
+    el.classList.toggle('focused', i === shortcutFocusIdx));
+}
+function enterShortcuts() {
+  if (shortcutItems.length === 0) return false;
+  shortcutFocusIdx = 0;
+  paintShortcutFocus();
+  return true;
+}
+function leaveShortcuts() {
+  shortcutFocusIdx = -1;
+  paintShortcutFocus();
+}
+function moveShortcutFocus(delta) {
+  const n = shortcutItems.length;
+  if (n === 0) return;
+  shortcutFocusIdx = (shortcutFocusIdx + delta + n) % n;
+  paintShortcutFocus();
+}
+function activateFocusedShortcut() {
+  const it = shortcutItems[shortcutFocusIdx];
+  if (it?.action) it.action();
+}
+function isShortcutsFocused() { return shortcutFocusIdx >= 0; }
 
 const ring = new FocusRing();
 const gp = new GamepadInput();
@@ -493,9 +530,9 @@ async function renderNewProjectRoles() {
     { verb: 'Back',   glyph: 'circle',   action: { type: '_role_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'cross',    keyboard: 'Space', label: 'Toggle' },
-    { gamepad: 'triangle', keyboard: 'Enter', label: 'Next' },
-    { gamepad: 'circle',   keyboard: 'Esc',   label: 'Back' },
+    { gamepad: 'cross',    keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedRole() },
+    { gamepad: 'triangle', keyboard: 'Enter', label: 'Next',   action: () => advanceFromRolePicker() },
+    { gamepad: 'circle',   keyboard: 'Esc',   label: 'Back',   action: () => renderProjects() },
   ]);
 }
 
@@ -572,8 +609,8 @@ function renderNewProjectName() {
     { verb: 'Back',    glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'cross',  keyboard: 'Enter', label: 'Confirm' },
-    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back' },
+    { gamepad: 'cross',  keyboard: 'Enter', label: 'Confirm', action: () => confirmCapture() },
+    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',    action: () => goBackInCreateFlow() },
   ]);
   ring.set([]);
 }
@@ -595,8 +632,8 @@ function renderNewProjectGoal() {
     { verb: 'Back',    glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'cross',  keyboard: 'Enter', label: 'Confirm' },
-    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back' },
+    { gamepad: 'cross',  keyboard: 'Enter', label: 'Confirm', action: () => confirmCapture() },
+    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',    action: () => goBackInCreateFlow() },
   ]);
   ring.set([]);
 }
@@ -657,8 +694,8 @@ function renderGrid() {
     { verb: 'Back', glyph: 'circle', action: { type: '_grid_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'square',  keyboard: 'Space', label: 'Agent On / Off' },
-    { gamepad: 'options', keyboard: 'F',     label: 'Explorer' },
+    { gamepad: 'square',  keyboard: 'Space', label: 'Agent On / Off', action: () => toggleFocusedAgentEnabled() },
+    { gamepad: 'options', keyboard: 'F',     label: 'Explorer',       action: () => toggleFileExplorer() },
   ]);
 }
 
@@ -816,9 +853,9 @@ async function renderChatHistory(container, agent) {
 
 function _setL2Shortcuts() {
   setShortcuts([
-    { gamepad: 'l1',      keyboard: '[', label: 'Prev' },
-    { gamepad: 'r1',      keyboard: ']', label: 'Next' },
-    { gamepad: 'options', keyboard: 'F', label: 'Explorer' },
+    { gamepad: 'l1',      keyboard: '[', label: 'Prev',     action: () => cycleAgent(-1) },
+    { gamepad: 'r1',      keyboard: ']', label: 'Next',     action: () => cycleAgent(+1) },
+    { gamepad: 'options', keyboard: 'F', label: 'Explorer', action: () => toggleFileExplorer() },
   ]);
 }
 
@@ -1401,10 +1438,29 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'Enter')                                  { e.preventDefault(); openFocusedFile(); return; }
     if (e.key === 'Escape')                                 { e.preventDefault(); closeFileExplorer(); return; }
   }
+  // Shortcuts rail (bottom-left) is part of the focus order: arrow-down
+  // from the main surface enters it; arrow-up exits back to the grid.
+  if (isShortcutsFocused()) {
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); moveShortcutFocus(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); moveShortcutFocus(+1); return; }
+    if (e.key === 'ArrowUp')    { e.preventDefault(); leaveShortcuts(); ring.paint(); return; }
+    if (e.key === 'Enter')      { e.preventDefault(); activateFocusedShortcut(); return; }
+    if (e.key === 'Escape')     { e.preventDefault(); leaveShortcuts(); ring.paint(); return; }
+  }
+
   if (mode === MODE_PROJECTS) {
     if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
       e.preventDefault();
       slideToAdjacentProject(e.key === 'ArrowRight' ? +1 : -1);
+    } else if (e.key === 'ArrowDown') {
+      // Only descend into the rail when the cursor is on the bottom row.
+      const grid = surfaceEl.querySelector('.project-picker');
+      if (grid) {
+        const cols = grid._cols, rows = grid._rows;
+        const r = Math.floor(ring.index / cols);
+        if (r === rows - 1 && enterShortcuts()) { e.preventDefault(); return; }
+      }
+      e.preventDefault(); pickerMove(dir);
     } else if (dir) { e.preventDefault(); pickerMove(dir); }
     else if (e.key === 'Enter') { e.preventDefault(); openFocused(); }
   } else if (mode === MODE_NEW_PROJ_ROLES) {

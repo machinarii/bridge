@@ -423,8 +423,17 @@ body[data-mode="zoom"] #surface {
 #shortcuts-rail .sc {
   display: inline-flex; align-items: center; gap: 0.4rem;
   white-space: nowrap;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition: background 120ms, outline-color 120ms;
 }
 #shortcuts-rail .sc .label { font-weight: 300; opacity: 0.7; }
+#shortcuts-rail .sc.focused {
+  outline: 1px solid var(--focus, #ffffff);
+  outline-offset: 2px;
+  background: rgba(255,255,255,0.08);
+}
+#shortcuts-rail .sc.focused .label { opacity: 1; color: var(--fg); }
 #action-bar {
   display: inline-flex; justify-content: flex-end; align-items: center; gap: 12px;
   flex: 0 0 auto;
