@@ -1481,7 +1481,15 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (mode === MODE_GRID) {
-    if (dir) { e.preventDefault(); gridMove(dir); }
+    if (e.key === 'ArrowDown') {
+      const grid = surfaceEl.querySelector('.agent-grid');
+      if (grid) {
+        const cols = grid._cols, rows = grid._rows;
+        const r = Math.floor(ring.index / cols);
+        if (r === rows - 1 && enterShortcuts()) { e.preventDefault(); return; }
+      }
+      e.preventDefault(); gridMove('down');
+    } else if (dir) { e.preventDefault(); gridMove(dir); }
     else if (e.key === 'Enter') { e.preventDefault(); enterZoom(); }
     else if (e.key === 'Escape') { e.preventDefault(); exitToProjects(); }
     else if (e.code === 'Space') { e.preventDefault(); toggleFocusedAgentEnabled(); }
