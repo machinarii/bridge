@@ -123,17 +123,15 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
   // Hide all of the clone's content instantly — only the shell animates.
   hideContent(clone);
 
-  // Fade out sibling tiles so only the lifted one shows.
-  const dimming = [];
-  for (const el of ring.elements) {
-    if (el === sourceEl) {
-      el.style.opacity = '0';
-    } else {
-      el.style.transition = 'opacity 180ms';
-      el.style.opacity = '0';
-    }
-    dimming.push(el);
-  }
+  // Fade the entire outgoing surface (the L0 / L1 backdrop and all its
+  // tiles) so only the morphing clone is on screen during the zoom.
+  const surfaceFade = surfaceEl.animate(
+    [{ opacity: 1 }, { opacity: 0 }],
+    { duration: 260, easing: 'ease-out', fill: 'forwards' }
+  );
+
+  // Track sibling tiles so we can restore their inline opacity after.
+  const dimming = Array.from(ring.elements);
 
   // Animate via width/height/left/top instead of transform-scale. Avoids
   // counter-scaled borders/radius artifacts (border-radius stays naturally
@@ -149,9 +147,11 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
   );
 
   return grow.finished.catch(() => {}).then(() => {
-    // Destination view renders behind the empty clone shape.
+    // Destination view renders into the now-empty surface.
+    try { surfaceFade.cancel(); } catch {}
+    surfaceEl.style.opacity = '';
     renderDest();
-    fadeInDestination(160);
+    fadeInDestination(180);
     return clone.animate(
       [{ opacity: 1 }, { opacity: 0 }],
       { duration: 120, easing: 'ease-out', fill: 'forwards' }
@@ -203,9 +203,12 @@ function backZoomWithSnapshot(toRect, renderNewView) {
   // colored backdrop) animates.
   hideContent(overlay);
 
-  // Render the destination view underneath; it'll fade in after morph.
+  // Render the destination view underneath. Its content (the L0 grid /
+  // L1 grid backdrop) fades in fresh.
   renderNewView();
-  fadeInDestination(160);
+  surfaceEl.animate([{ opacity: 0 }, { opacity: 1 }],
+    { duration: 220, easing: 'ease-out', fill: 'backwards' });
+  fadeInDestination(180);
   // Animate the overlay via width/height/left/top so the corner radius
   // stays naturally constant (no transform-scale artifacts).
   const a = overlay.animate(
