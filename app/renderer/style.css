@@ -121,8 +121,11 @@ kbd {
   transition: transform 180ms cubic-bezier(.2,.8,.2,1), background 160ms;
 }
 .agent-tile.focused {
-  background: rgba(110,168,255,0.16);
-  transform: translateY(-2px);
+  background: rgba(110,168,255,0.22);
+  outline: 3px solid var(--focus, #ffd35a);
+  outline-offset: -3px;
+  box-shadow: 0 12px 32px -8px rgba(0,0,0,0.55), 0 0 0 6px rgba(255,211,90,0.18);
+  transform: translateY(-3px);
 }
 .agent-tile .name { margin: 0; font-size: 1.4rem; }
 .agent-tile .role { opacity: 0.65; font-size: 0.9rem; }
@@ -303,7 +306,13 @@ kbd {
 .project-tile.new-project { border-top-style: dashed; opacity: 0.85; }
 .project-tile .name { font-size: 1.4rem; margin: 0; }
 .project-tile .meta { opacity: 0.6; font-size: 0.9rem; }
-.project-tile.focused { background: rgba(110,168,255,0.16); transform: translateY(-2px); }
+.project-tile.focused {
+  background: rgba(110,168,255,0.22);
+  outline: 3px solid var(--focus, #ffd35a);
+  outline-offset: -3px;
+  box-shadow: 0 12px 32px -8px rgba(0,0,0,0.55), 0 0 0 6px rgba(255,211,90,0.18);
+  transform: translateY(-3px);
+}
 
 @keyframes slideInFromRight {
   from { transform: translateX(48px) translateY(0); opacity: 0.4; }
@@ -330,7 +339,13 @@ kbd {
   background: rgba(255,255,255,0.03);
   cursor: pointer;
 }
-.role-tile.focused { background: rgba(255,255,255,0.10); transform: translateY(-2px); }
+.role-tile.focused {
+  background: rgba(255,255,255,0.14);
+  outline: 3px solid var(--focus, #ffd35a);
+  outline-offset: -3px;
+  box-shadow: 0 8px 24px -6px rgba(0,0,0,0.5);
+  transform: translateY(-3px);
+}
 .role-label  { font-weight: 600; }
 .role-sample { font-size: 0.85rem; opacity: 0.7; margin-top: 0.2rem; }
 .role-toggle { font-size: 1.4rem; margin-top: 0.5rem; }
@@ -373,7 +388,10 @@ kbd {
 #history-drawer header .hint { opacity: 0.5; font-weight: 400; font-size: 0.85rem; }
 .history-list { list-style: none; margin: 0; padding: 0; }
 .history-entry { padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; }
-.history-entry.focused { background: rgba(110,168,255,0.16); }
+.history-entry.focused {
+  background: rgba(110,168,255,0.22);
+  box-shadow: inset 3px 0 0 var(--focus, #ffd35a);
+}
 .history-entry .role { font-size: 0.75rem; text-transform: uppercase; opacity: 0.5; }
 .history-entry .snippet { font-size: 0.9rem; margin-top: 0.2rem; }
 
@@ -397,7 +415,11 @@ kbd {
   border-left: 3px solid transparent;
 }
 .file-entry .who { opacity: 0.5; font-size: 0.85rem; }
-.file-entry.focused { background: rgba(110,168,255,0.16); border-left-color: var(--agent-color, #6ea8ff); }
+.file-entry.focused {
+  background: rgba(110,168,255,0.22);
+  border-left-color: var(--focus, #ffd35a);
+  border-left-width: 4px;
+}
 body[data-file-drawer="open"] #surface { margin-left: 280px; }
 
 /* ===== Team summary banner (L1 PTT result) ===== */
