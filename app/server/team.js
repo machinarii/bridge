@@ -100,7 +100,7 @@ export async function runTeamVoice({ projectId, text }) {
   ).join('\n');
   const routingPrompt =
     `You are ${lead.name}, lead of project "${project.name}". The project goal is: "${project.goal}".\n\n` +
-    `Active team:\n${rosterWithDigest || '(no other members)'}\n\n` +
+    `Active team:\n${rosterWithDigest || '(no other agents)'}\n\n` +
     `The user said: "${text}".\n\n` +
     `Return a single JSON object: ` +
     `{"assignments":[{"agentId":"...","task":"...","sharedFrom":[{"fromAgentName":"...","fromRole":"...","snippet":"..."}]}],"summary_intent":"..."}. ` +
