@@ -275,12 +275,13 @@ function backZoomWithSnapshot(toRect, renderNewView) {
     inner.style.boxShadow = 'none';
   }
 
-  // Render the destination view underneath. Its content (the L0 grid /
-  // L1 grid backdrop) fades in fresh.
+  // Render the destination view underneath. Its content fades in
+  // gently; we deliberately do NOT animate #surface itself — the
+  // overlay above already covers it, so animating surface opacity
+  // produced a flicker when it transitioned from 0 to 1 in sync with
+  // the body/chrome swap.
   renderNewView();
-  surfaceEl.animate([{ opacity: 0 }, { opacity: 1 }],
-    { duration: 220, easing: 'ease-out', fill: 'backwards' });
-  fadeInDestination(180);
+  fadeInDestination(220);
   // Animate the overlay via width/height/left/top so the corner radius
   // stays naturally constant (no transform-scale artifacts).
   const a = overlay.animate(
