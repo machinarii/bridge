@@ -113,7 +113,6 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
   clone.style.margin = '0';
   clone.style.pointerEvents = 'none';
   clone.style.zIndex = '50';
-  clone.style.transformOrigin = 'top left';
   document.body.appendChild(clone);
 
   // Hide all of the clone's content instantly — only the shell animates.
@@ -123,7 +122,7 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
   const dimming = [];
   for (const el of ring.elements) {
     if (el === sourceEl) {
-      el.style.opacity = '0'; // hide the original so the clone reads as it
+      el.style.opacity = '0';
     } else {
       el.style.transition = 'opacity 180ms';
       el.style.opacity = '0';
@@ -131,24 +130,15 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
     dimming.push(el);
   }
 
-  // Scale + translate so the source rect tweens into the target rect.
-  const sx = targetRect.width / sourceRect.width;
-  const sy = targetRect.height / sourceRect.height;
-  const tx = targetRect.left - sourceRect.left;
-  const ty = targetRect.top - sourceRect.top;
-
-  // Counter-scale the corner radius and border so the visible radius stays
-  // constant while the element grows (12px stays 12px on screen).
-  const baseRadius = parseFloat(getComputedStyle(clone).borderTopLeftRadius) || 12;
-  const baseBorder = parseFloat(getComputedStyle(clone).borderTopWidth) || 1;
+  // Animate via width/height/left/top instead of transform-scale. Avoids
+  // counter-scaled borders/radius artifacts (border-radius stays naturally
+  // constant in pixels regardless of the size).
   const grow = clone.animate(
     [
-      { transform: 'translate(0,0) scale(1,1)',
-        borderRadius: `${baseRadius}px`,
-        borderWidth: `${baseBorder}px` },
-      { transform: `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`,
-        borderRadius: `${baseRadius / Math.min(sx, sy)}px`,
-        borderWidth: `${baseBorder / Math.min(sx, sy)}px` },
+      { left: `${sourceRect.left}px`, top: `${sourceRect.top}px`,
+        width: `${sourceRect.width}px`, height: `${sourceRect.height}px` },
+      { left: `${targetRect.left}px`, top: `${targetRect.top}px`,
+        width: `${targetRect.width}px`, height: `${targetRect.height}px` },
     ],
     { duration: 340, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }
   );
@@ -202,7 +192,6 @@ function backZoomWithSnapshot(toRect, renderNewView) {
   overlay.style.padding = getComputedStyle(surfaceEl).padding;
   overlay.style.pointerEvents = 'none';
   overlay.style.zIndex = '50';
-  overlay.style.transformOrigin = 'center center';
   document.body.appendChild(overlay);
 
   // Hide the overlay's content instantly — only the shell (with its
@@ -212,25 +201,16 @@ function backZoomWithSnapshot(toRect, renderNewView) {
   // Render the destination view underneath; it'll fade in after morph.
   renderNewView();
   fadeInDestination(160);
-  // Now animate the overlay (still showing the old view) shrinking into
-  // the destination tile rect.
-  const tRect = overlay.getBoundingClientRect();
-  const sx = toRect.width / tRect.width;
-  const sy = toRect.height / tRect.height;
-  const s  = Math.max(0.05, Math.min(sx, sy, 0.7));
-  const tx = (toRect.left + toRect.width / 2) - (tRect.left + tRect.width / 2);
-  const ty = (toRect.top + toRect.height / 2) - (tRect.top + tRect.height / 2);
-  // Counter-scale corner radius so it stays visually constant while shrinking.
-  const baseRadius = parseFloat(getComputedStyle(overlay).borderTopLeftRadius) || 12;
-  const baseBorder = parseFloat(getComputedStyle(overlay).borderTopWidth) || 1;
+  // Animate the overlay via width/height/left/top so the corner radius
+  // stays naturally constant (no transform-scale artifacts).
   const a = overlay.animate(
     [
-      { offset: 0,    transform: 'translate(0,0) scale(1)', opacity: 1,
-        borderRadius: `${baseRadius}px`, borderWidth: `${baseBorder}px` },
-      { offset: 0.85, transform: `translate(${tx*0.92}px,${ty*0.92}px) scale(${s*1.15})`, opacity: 1,
-        borderRadius: `${baseRadius / Math.max(s*1.15, 0.05)}px`, borderWidth: `${baseBorder / Math.max(s*1.15, 0.05)}px` },
-      { offset: 1,    transform: `translate(${tx}px,${ty}px) scale(${s})`, opacity: 0,
-        borderRadius: `${baseRadius / Math.max(s, 0.05)}px`, borderWidth: `${baseBorder / Math.max(s, 0.05)}px` },
+      { offset: 0,    left: `${sRect.left}px`, top: `${sRect.top}px`,
+        width: `${sRect.width}px`, height: `${sRect.height}px`, opacity: 1 },
+      { offset: 0.85, left: `${toRect.left}px`, top: `${toRect.top}px`,
+        width: `${toRect.width}px`, height: `${toRect.height}px`, opacity: 1 },
+      { offset: 1,    left: `${toRect.left}px`, top: `${toRect.top}px`,
+        width: `${toRect.width}px`, height: `${toRect.height}px`, opacity: 0 },
     ],
     { duration: 320, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }
   );
