@@ -580,7 +580,7 @@ function renderGrid() {
   ]);
   setShortcuts([
     { gamepad: 'square',  keyboard: 'Space', label: 'On / Off' },
-    { gamepad: 'options', keyboard: 'T',     label: 'Text viewer' },
+    { gamepad: 'options', keyboard: 'F',     label: 'Explorer' },
   ]);
 }
 
@@ -739,7 +739,7 @@ function _setL2Shortcuts() {
   setShortcuts([
     { gamepad: 'l1',      keyboard: '[', label: 'Prev' },
     { gamepad: 'r1',      keyboard: ']', label: 'Next' },
-    { gamepad: 'options', keyboard: 'T', label: 'Text viewer' },
+    { gamepad: 'options', keyboard: 'F', label: 'Explorer' },
   ]);
 }
 
@@ -1285,9 +1285,9 @@ window.addEventListener('keydown', (e) => {
   // Hold 'v' for push-to-talk (voice).
   if (e.key === 'v' && !e.repeat) { e.preventDefault(); startPTT(); return; }
 
-  if (e.key === '\\' || e.key === 't' || e.key === 'T') {
-    // Only L1 / L2 actually have the text viewer; toggleFileExplorer
-    // is a no-op outside those modes.
+  if (e.key === '\\' || e.key === 'f' || e.key === 'F') {
+    // Only L1 / L2 actually have the explorer; toggleFileExplorer is a
+    // no-op outside those modes.
     e.preventDefault();
     toggleFileExplorer();
     return;
