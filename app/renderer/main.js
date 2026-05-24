@@ -462,6 +462,15 @@ function renderProjects() {
   ]);
 }
 
+/** Move the lead agent to index 0 so it always renders top-left on L1. */
+function withLeadFirst(project) {
+  if (!project?.leadAgentId) return project;
+  const lead = project.agents.find(a => a.id === project.leadAgentId);
+  if (!lead) return project;
+  const others = project.agents.filter(a => a.id !== project.leadAgentId);
+  return { ...project, agents: [lead, ...others] };
+}
+
 async function openFocused() {
   const idx = ring.index;
   if (idx === tileCount() - 1) {
@@ -476,7 +485,7 @@ async function openFocused() {
   const sourceRect = sourceTile?.getBoundingClientRect();
   const targetRect = surfaceEl.getBoundingClientRect();
   zoomStack.push(sourceRect);
-  activeProject = projects[idx];
+  activeProject = withLeadFirst(projects[idx]);
   gridIndex = 0;
   zoomedIndex = 0;
   await forwardMorph(sourceTile, sourceRect, targetRect, () => renderGrid());
@@ -693,9 +702,12 @@ function renderGrid() {
   renderActionBar([
     { verb: 'Back', glyph: 'circle', action: { type: '_grid_back' } },
   ]);
+  const lead = activeProject.agents.find(a => a.id === activeProject.leadAgentId);
+  const leadName = lead?.name || 'Lead';
   setShortcuts([
-    { gamepad: 'square',  keyboard: 'Space', label: 'Agent On / Off', action: () => toggleFocusedAgentEnabled() },
-    { gamepad: 'options', keyboard: 'F',     label: 'Explorer',       action: () => toggleFileExplorer() },
+    { gamepad: 'r2',      keyboard: 'V',     label: `Talk to ${leadName}`, action: () => startPTT() },
+    { gamepad: 'square',  keyboard: 'Space', label: 'Agent On / Off',      action: () => toggleFocusedAgentEnabled() },
+    { gamepad: 'options', keyboard: 'F',     label: 'Explorer',            action: () => toggleFileExplorer() },
   ]);
 }
 
@@ -1622,7 +1634,7 @@ async function finalizeNewProject() {
     if (!r.ok) throw new Error(`server ${r.status}: ${await r.text()}`);
     const project = await r.json();
     await loadProjects();
-    activeProject = project;
+    activeProject = withLeadFirst(project);
     pickerIndex = projects.findIndex(p => p.id === project.id);
     gridIndex = 0; zoomedIndex = 0;
     setIndicator('idle', 'Connected');
