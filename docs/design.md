@@ -68,27 +68,48 @@ to white).
 | Slot | Content |
 |---|---|
 | Top-left (always) | **Bridge** logo + wordmark in plain white. |
-| Top-center / fill | — |
-| Top-right | Breadcrumbs |
-| Far right | Connection indicator |
+| Fill | Breadcrumbs (right-aligned, no center content). |
+| Far right | Connection indicator. |
 
 **Logo.** Inline SVG of two filled nodes joined by an arc — a visual
 shorthand for "bridge between things." Stroke and fills are plain `#ffffff`.
 No gradient. The brand link is clickable and returns to L0.
 
-**Wordmark.** "Bridge" in Barlow Condensed Medium (500), plain white,
-slightly tracked (`letter-spacing: 0.04em`).
+**Wordmark.** "Bridge" in **Source Sans 3** SemiBold (600), plain white,
+slightly tracked (`letter-spacing: 0.02em`).
 
-**Breadcrumbs.** `PROJECTS › FALCON › CASSIDY · PRODUCT MANAGER`
-- Separator between levels: chevron `›` (U+203A), 0.4 opacity, ~1.1 em.
-- Separator between agent name and role: middle-dot `·` (U+00B7).
-- Agent leaf includes a small color chip (`.agent-chip`) for the role color.
+**Breadcrumbs.** Trail back to the project, but **omit the agent leaf at
+L2** — the agent name and role are already in the L2 page header
+(`Cassidy   Product Manager`). So:
+
+- L0: `PROJECTS`
+- L1: `PROJECTS › FALCON`
+- L2: `PROJECTS › FALCON`
+- Create flow: `PROJECTS › NEW PROJECT › ROLES / NAME / GOAL`
+
+- Separator between levels: chevron `›` (U+203A), 0.35 opacity, ~1.1 em.
 - Current crumb is full-strength white; ancestors are dimmed.
 - Uppercase, tracked, 0.8 em.
 
 **Connection indicator.** Pill at far right with a colored dot. Text reads
 **Connected** at rest (replaces older "Ready"), **Listening…** during PTT,
 **Thinking…** during model calls, **<error reason>** in error.
+
+### 2.4 Footer rail (always visible)
+
+The bottom rail has two regions sharing a flex row:
+
+- **Left — `#shortcuts-rail`.** Persistent navigation reference for the
+  current screen: chips like `✕ Open`, `○ Back`, `△ History`. Each chip
+  renders both gamepad and keyboard forms; CSS hides the inactive one
+  via `body[data-input-mode]`. Updated on every screen change via
+  `setShortcuts(items)`.
+- **Right — `#action-bar`.** Tile-specific action verbs (`Save`,
+  `Cancel`, `Open`, `Done`, etc.) returned by the orchestrator or by
+  the current view. Focusable, included in the FocusRing.
+
+This is the **only persistent surface** for showing user shortcuts, so
+the user always knows what's pressable.
 
 ---
 
@@ -108,6 +129,19 @@ No Medium, SemiBold, or Bold anywhere.
 |---|---|
 | Body text, hints, metadata | 300 (Light) |
 | Headings, tile names, brand, breadcrumbs, key chips | 400 (Regular) |
+
+### 3.1 Type per screen
+
+- **L0 project tile.** Name 1.4 rem / 400; meta "N agents" 0.9 rem / 300
+  with 0.25 rem gap below the name.
+- **L1 agent tile.** Name 1.4 rem / 400; role label directly under name
+  0.9 rem / 300 with 0.25 rem gap; status row (Idle / Thinking…) bottom
+  of tile.
+- **L2 agent header.** Name 1.4 em / 400 in plain white (no gradient);
+  role label to the **right** of the name with 0.75 rem gap,
+  1 em / 300, dim color.
+- **Status indicator** (top-right of header): "Connected" at rest,
+  "Listening…", "Thinking…", error string.
 
 Sentence case across the UI. Status labels: `Idle`, `Thinking…`, `Off`,
 `Connected` — never lowercase, never ALL CAPS in JS (breadcrumbs are
@@ -203,34 +237,61 @@ on/off toggle.
 
 ## 6. Motion
 
-### 6.1 Forward zoom (L0 → L1, L1 → L2)
+Bridge's nav transitions are modeled after the **markdown-cards
+StackTile → FlashCard** pattern: a real DOM element flies and grows
+through space; siblings dim; the destination view appears beneath at
+the exact size and position the element lands at. There are no
+free-floating overlay snapshots that fade through each other.
 
-Driven by `playZoomIn(target, sourceRect)`:
+### 6.1 Forward zoom (L0 → L1, L1 → L2) — `forwardMorph`
 
-1. Before the navigation, the focused tile's bounding rect is pushed onto a
-   `zoomStack` (stack supports nested forward navigation).
-2. The new view renders normally at full surface.
-3. `target.animate(...)` runs from a transform that maps source-rect → target,
-   `opacity: 0` → `opacity: 1`, over 320 ms with
-   `cubic-bezier(.2,.8,.2,1)`.
+1. Capture the focused source tile's bounding rect; push onto `zoomStack`.
+2. **Clone the source tile** into `document.body` as `position: fixed`
+   at the source rect.
+3. **Fade out** the clone's content (its children) over ~110 ms — only
+   the tile's shape/backdrop will animate, so text doesn't distort with
+   the container scale.
+4. **Fade other sibling tiles to 0** so the lifted clone is alone on
+   screen; the original source tile is hidden so the clone reads as it.
+5. Animate the clone's `transform` from identity → translate + scale
+   such that the source rect tweens into the **target surface rect**;
+   320 ms with `cubic-bezier(.2,.8,.2,1)`.
+6. **Counter-scale `border-radius` and `border-width`** in the same
+   keyframes so the visible corner radius (~12 px) stays constant
+   instead of stretching with the scale.
+7. Once the morph settles, the destination view renders **beneath** the
+   empty clone shell at full surface size.
+8. Fade in the destination content (~160 ms) and simultaneously fade
+   the clone out (~120 ms); remove the clone and restore the dimmed
+   siblings' inline styles.
 
-Visually: "I clicked that tile, and that tile zoomed up to fill the screen
-with the next level."
+Total wall-clock: ~480 ms.
 
-### 6.2 Back zoom (L1 → L0, L2 → L1)
+### 6.2 Back zoom (L1 → L0, L2 → L1) — `backZoomWithSnapshot`
 
-Driven by `playZoomOutTo(current, targetRect)`:
+1. Pop the destination rect off `zoomStack` (where the originating tile
+   sat when we went forward).
+2. **Clone the current `#surface`** as a `position: fixed` overlay at
+   the surface's exact rect.
+3. **Fade out the overlay's inner content** (children of its first
+   inner container) over ~110 ms, leaving its colored container
+   visible. Same reason as forward: no text distortion.
+4. Render the destination view inside `#surface` immediately — the user
+   sees it underneath the overlay.
+5. Fade in the freshly rendered destination content over ~160 ms.
+6. Animate the overlay shrinking toward the destination rect over
+   320 ms with `cubic-bezier(.4,0,.6,1)`. Holds opacity 1 for the first
+   85 % of the animation so the shape collapses visibly; the last 15 %
+   fades to 0 to hide the seam on removal.
+7. Counter-scale `border-radius` and `border-width` so visible corners
+   stay constant during the shrink.
+8. Remove the overlay.
 
-1. The destination rect is popped off `zoomStack` — it's where the originating
-   tile was when we navigated forward.
-2. The **current** surface animates from identity → source-rect transform,
-   fading out, over 260 ms with `cubic-bezier(.4,0,.6,1)`.
-3. After the animation, the new view renders.
+Visually: the user sees the previous view physically collapsing into
+the destination tile while the destination view is alive underneath.
 
-Visually: "I'm zooming back into the tile I came from."
-
-Brand link (top-left) also triggers this — clicking from L2 chains
-`exitZoom()` then `exitToProjects()`.
+The brand link (top-left) clicking from L2 chains `exitZoom()` →
+`exitToProjects()`.
 
 ### 6.3 Carousel slide on L0 (Opt + ←/→)
 
@@ -314,7 +375,27 @@ the other).
 
 ---
 
-## 10. Things that were considered and rejected
+## 10. Role picker specifics
+
+The create-flow role picker (step 1 of 3) is its own screen, but its
+tiles use the same visual treatment as L0 and L1 tiles plus a small
+checkbox in the top-right corner.
+
+- **Grid.** `.role-grid` is a 4-column CSS grid with `grid-auto-rows:
+  1fr` inside a flex container, so the 14 role tiles fill the available
+  vertical space. Each tile has `min-height: 110px` so the name + sample
+  never clip when rows are short.
+- **Checkbox.** Top-right of each tile, absolutely positioned. It's a
+  CSS-drawn rounded square (5 px corners, 1.5 px outline at 55 % white)
+  that **fills to white with a dark angled checkmark** when checked.
+  Replaces the earlier Unicode `☐ / ☑` glyphs which depend on system
+  font for shape consistency.
+- **Activation.** **Enter** advances (Triangle on gamepad); **Space**
+  toggles the focused role (Cross on gamepad). The label "Roles" lives
+  in the breadcrumb; the bottom-right shortcuts rail lists the
+  available actions.
+
+## 11. Things that were considered and rejected
 
 - **Yellow focus outline (`#ffd35a`).** Replaced with white — felt cheap
   next to the muted backdrop.
@@ -325,6 +406,26 @@ the other).
 - **Gradient on logo and wordmark** (green→blue→purple). Replaced with plain
   white.
 - **Thick body weights (Bold 700, ExtraBold 800).** Dropped — Bridge uses
-  Light (300) by default and tops out at Medium (500).
+  Light (300) by default and tops out at Regular (400).
 - **Dosis font family.** Loaded briefly from `app/assets/fonts/dosis/`,
   then replaced with Barlow Condensed from Google Fonts.
+- **Role roster on L0 tiles.** Briefly showed "Product Manager ·
+  Engineer · QA" instead of "N agents"; reverted — agent count is more
+  scannable on the home grid.
+- **`fill: 'forwards'` left on zoom-out animation.** Caused the screen
+  to go blank on Esc because the cancelled animation kept its end
+  transform/opacity stuck on `surfaceEl`. Fixed by `a.cancel()` after
+  `a.finished` resolves.
+- **Plain overlay-snapshot zoom (no content fade).** Felt "transparent
+  overlay floating on top" rather than physical motion. Solved by
+  fading the source content before the transform and fading
+  destination content in after, so only container shapes morph.
+- **`◉ ○` radio glyph for role toggle.** Replaced with checkbox
+  semantics (☐ ☑) and then with a CSS-drawn rounded checkbox for
+  consistent rendering.
+- **Agent · role crumb on L2.** Was redundant with the page header;
+  trimmed.
+- **`#action-bar` as the only persistent footer surface.** Action
+  verbs were the only shortcuts shown; added `#shortcuts-rail` to its
+  left so navigation references (Esc Back, [ Prev, etc.) are always
+  visible.
