@@ -516,9 +516,12 @@ body[data-mode="zoom"] #surface {
 }
 .project-tile.focused::before { opacity: 0; }
 .project-tile.new-project {
-  border-style: dashed;
+  border: none;
   opacity: 0.85;
-  background: transparent;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' fill='none'><rect width='100%25' height='100%25' rx='12' ry='12' stroke='white' stroke-width='3' stroke-dasharray='18 14' stroke-linecap='round' stroke-opacity='0.5'/></svg>")
+      no-repeat
+      0 0 / 100% 100%;
 }
 .project-tile.new-project::before { background: none; }
 .project-tile .name { font-size: 1.4rem; margin: 0; }
