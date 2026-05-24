@@ -83,9 +83,14 @@ function playZoomIn(target, rect) {
 
 /** Hide all descendants synchronously (via CSS class) so only the
  *  element's own shape/backdrop animates during a zoom. No fade — content
- *  disappears instantly before the transform begins. */
+ *  disappears instantly before the transform begins. Also strips the
+ *  .focused class from the element + descendants so the white outline
+ *  and outer glow don't morph with the resize. */
 function hideContent(el) {
-  if (el) el.classList.add('zoom-shell-only');
+  if (!el) return;
+  el.classList.add('zoom-shell-only');
+  el.classList.remove('focused');
+  el.querySelectorAll('.focused').forEach(d => d.classList.remove('focused'));
 }
 
 /** Fade in fresh destination content after a zoom completes. */
