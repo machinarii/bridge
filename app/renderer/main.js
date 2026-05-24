@@ -513,7 +513,10 @@ function renderZoom(specOverride) {
   view.className = 'agent-view';
   view.innerHTML = `
     <div class="agent-header">
-      <div class="name-large">${escapeHtml(agent.name)}</div>
+      <div class="agent-title">
+        <span class="name-large">${escapeHtml(agent.name)}</span>
+        <span class="role-large">${escapeHtml(roleLabel(agent.role))}</span>
+      </div>
       <div class="nav-hint">
         <span class="shoulder for-gamepad"><span>L1</span> prev</span>
         <span class="shoulder for-gamepad"><span>R1</span> next</span>
