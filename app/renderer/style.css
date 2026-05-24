@@ -2,8 +2,15 @@
 
 /* When an element is in mid-zoom, hide all its descendant content so
  * only the shell (its own background/border) animates. The outer
- * element itself is not selected, so its backdrop stays visible. */
+ * element itself is not selected, so its backdrop stays visible.
+ * Also strip the focus outline and outer glow — those would distort
+ * with the resize. */
 .zoom-shell-only * { opacity: 0 !important; }
+.zoom-shell-only,
+.zoom-shell-only * {
+  outline: none !important;
+  box-shadow: none !important;
+}
 
 /* Input-mode swap: render both keyboard and gamepad hints, show only one. */
 body[data-input-mode="keyboard"] .for-gamepad { display: none !important; }
