@@ -119,10 +119,18 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
   const tx = targetRect.left - sourceRect.left;
   const ty = targetRect.top - sourceRect.top;
 
+  // Counter-scale the corner radius and border so the visible radius stays
+  // constant while the element grows (12px stays 12px on screen).
+  const baseRadius = parseFloat(getComputedStyle(clone).borderTopLeftRadius) || 12;
+  const baseBorder = parseFloat(getComputedStyle(clone).borderTopWidth) || 1;
   const grow = clone.animate(
     [
-      { transform: 'translate(0,0) scale(1,1)' },
-      { transform: `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})` },
+      { transform: 'translate(0,0) scale(1,1)',
+        borderRadius: `${baseRadius}px`,
+        borderWidth: `${baseBorder}px` },
+      { transform: `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`,
+        borderRadius: `${baseRadius / Math.min(sx, sy)}px`,
+        borderWidth: `${baseBorder / Math.min(sx, sy)}px` },
     ],
     { duration: 340, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }
   );
@@ -188,14 +196,17 @@ function backZoomWithSnapshot(toRect, renderNewView) {
   const s  = Math.max(0.05, Math.min(sx, sy, 0.7));
   const tx = (toRect.left + toRect.width / 2) - (tRect.left + tRect.width / 2);
   const ty = (toRect.top + toRect.height / 2) - (tRect.top + tRect.height / 2);
-  // Stay fully opaque through most of the shrink so the element reads as
-  // physically collapsing; fade only in the last beat to hide the seam
-  // when it's removed.
+  // Counter-scale corner radius so it stays visually constant while shrinking.
+  const baseRadius = parseFloat(getComputedStyle(overlay).borderTopLeftRadius) || 12;
+  const baseBorder = parseFloat(getComputedStyle(overlay).borderTopWidth) || 1;
   const a = overlay.animate(
     [
-      { offset: 0,    transform: 'translate(0,0) scale(1)', opacity: 1 },
-      { offset: 0.85, transform: `translate(${tx*0.92}px,${ty*0.92}px) scale(${s*1.15})`, opacity: 1 },
-      { offset: 1,    transform: `translate(${tx}px,${ty}px) scale(${s})`, opacity: 0 },
+      { offset: 0,    transform: 'translate(0,0) scale(1)', opacity: 1,
+        borderRadius: `${baseRadius}px`, borderWidth: `${baseBorder}px` },
+      { offset: 0.85, transform: `translate(${tx*0.92}px,${ty*0.92}px) scale(${s*1.15})`, opacity: 1,
+        borderRadius: `${baseRadius / Math.max(s*1.15, 0.05)}px`, borderWidth: `${baseBorder / Math.max(s*1.15, 0.05)}px` },
+      { offset: 1,    transform: `translate(${tx}px,${ty}px) scale(${s})`, opacity: 0,
+        borderRadius: `${baseRadius / Math.max(s, 0.05)}px`, borderWidth: `${baseBorder / Math.max(s, 0.05)}px` },
     ],
     { duration: 320, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }
   );
@@ -378,7 +389,7 @@ async function renderNewProjectRoles() {
     t.innerHTML = `
       <div class="role-label">${role.label}</div>
       <div class="role-sample">${sample}</div>
-      <div class="role-toggle">${newProjRoleIds.includes(role.id) ? '◉' : '○'}</div>`;
+      <div class="role-toggle">${newProjRoleIds.includes(role.id) ? '☑' : '☐'}</div>`;
     t.addEventListener('click', () => { ring.moveTo(el => el === t); toggleFocusedRole(); });
     grid.appendChild(t);
     tileEls.push(t);
@@ -410,7 +421,7 @@ function toggleFocusedRole() {
   const idx = newProjRoleIds.indexOf(id);
   if (idx >= 0) newProjRoleIds.splice(idx, 1);
   else newProjRoleIds.push(id);
-  cur.querySelector('.role-toggle').textContent = newProjRoleIds.includes(id) ? '◉' : '○';
+  cur.querySelector('.role-toggle').textContent = newProjRoleIds.includes(id) ? '☑' : '☐';
 }
 
 function roleGridMove(dir) {
