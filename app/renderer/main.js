@@ -58,7 +58,9 @@ function playZoomOutTo(target, rect) {
     ],
     { duration: 260, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }
   );
-  return a.finished.catch(() => {});
+  return a.finished
+    .then(() => { try { a.cancel(); } catch {} })
+    .catch(() => {});
 }
 
 /* ---------- Input-mode tracker ---------- */
