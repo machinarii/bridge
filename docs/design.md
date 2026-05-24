@@ -395,7 +395,128 @@ checkbox in the top-right corner.
   in the breadcrumb; the bottom-right shortcuts rail lists the
   available actions.
 
-## 11. Things that were considered and rejected
+## 11. Smart-TV HCI compliance
+
+Bridge is designed for couch / 10-foot operation with a gamepad as the
+primary input. The interaction model deliberately mirrors **Apple
+tvOS Human Interface Guidelines** and **Google TV design principles**
+so the product is comfortable on a TV-class device. The non-negotiable
+TV-HCI rules and how Bridge satisfies each:
+
+### 11.1 Focus must be unmistakable from across the room
+- Single clearly-focused element at all times — never "no focus."
+- White (`--focus: #ffffff`) **1 px outline with `outline-offset: 2px`**
+  (sits just outside the 1 px resting border so two rings are visible),
+  plus a **22 px blurred outer glow**, plus a **−3 px lift** transform,
+  plus a **grayscale radial wash** on the otherwise color-tinted tile
+  backdrop. Multi-channel: shape + glow + translation + color shift.
+- The same focus treatment is applied to all focusable surfaces (tiles,
+  action-bar buttons, list rows, drawer entries) so the cursor reads
+  consistently no matter where it is.
+
+### 11.2 D-pad first, predictable traversal
+- Five buttons control everything: `D-pad`, `Cross` (select),
+  `Circle` (back), `Square` (toggle on/off), `Triangle` (advance /
+  drawer), plus shoulders for cycling and `Options` for the explorer.
+- 2-D grid navigation reads `cols × rows` from the rendered grid so
+  arrows never produce surprise jumps. Wrap is intentional and matches
+  Apple TV's "stay-on-row" feel.
+- `enterZoom` and `exitToProjects` push/pop **`zoomStack`** so back nav
+  always lands the focus on the exact tile you came from — spatial
+  continuity is preserved.
+- Linear "between-projects" carousel via `Opt + ←/→` (`slideToAdjacent
+  Project`) mirrors tvOS's "swipe between spaces" affordance.
+
+### 11.3 Glanceable, low-density information
+- One job per screen: project picker (L0), agent grid (L1), single
+  agent (L2). No mixed-purpose screens.
+- Tiles show **one strong title** and at most one secondary line
+  (project name + "N agents"; agent name + role). All metadata is
+  Light 300; only the title is Regular 400.
+- `gridLayout(n)` reflows from 1×1 → 4×4 so tile sizes stay generous
+  even at full team size (14 roles → 4 cols × 4 rows max).
+
+### 11.4 No keyboard required, voice over typed input
+- The primary input for free-form content is **push-to-talk**: hold
+  R2 (gamepad) or `v` (keyboard) and speak. Typed text is a
+  fallback bound to `/` and only used when speech is unavailable.
+- Capture screens for project name + goal accept either PTT or typed —
+  the user is never *required* to type.
+- The orchestrator's prompts are designed for **spoken-friendly**
+  output: `body` is 1–3 sentences and never includes controller
+  affordances inline (those live in `actions`).
+
+### 11.5 Spatial continuity through motion
+- Forward (L0 → L1, L1 → L2) and back navigation **morph the source
+  tile itself** — Apple-TV-style "this tile became the next screen."
+  The destination view appears beneath at the exact size and position
+  the morph lands at, so there is no perceived cut.
+- Zoom uses `width/height/left/top` animation (not `transform: scale`)
+  so border-radius and stroke widths stay constant — corners don't
+  warp during the transition.
+- The **content of the morphing shell is hidden synchronously** via
+  `.zoom-shell-only` so text/UI doesn't visibly distort with the
+  resize.
+- Carousel slide on L0 (Opt + arrows) uses a brief 48 px translate
+  animation; centered "+ Create project" card pops with a scale.
+- `.focused` outline and outer glow are stripped during a zoom — focus
+  state isn't an animated property.
+
+### 11.6 Affordance discoverability
+- Persistent **shortcuts rail** (bottom-left) and **action bar**
+  (bottom-right) are visible on every screen so the user always sees
+  what's pressable — Apple TV's "Top Shelf" + "tab bar" equivalent.
+- Both **gamepad** and **keyboard** glyphs are rendered to the DOM;
+  CSS hides the inactive one via `body[data-input-mode]`. The active
+  scheme is auto-detected: defaults to gamepad, swaps to keyboard on
+  first keypress / mouse move. The user never sees an irrelevant
+  control.
+- Inline `<kbd>` chips appear in idle / capture hints alongside the
+  spoken affordance ("Hold R2 and speak" / "Hold v and speak — or
+  press / to type").
+
+### 11.7 Sufficient padding, safe zone, no edge content
+- `#baseplate` uses 24 px / 32 px outer padding and a 20 px gap
+  between the header, surface, and footer — content stays comfortably
+  inside a TV overscan-safe area.
+- Drawers (`#file-drawer` 280 px left, `#file-viewer` 44 vw left)
+  shift the main surface margin so nothing is occluded by the
+  overlapping pane.
+- The footer rail enforces a minimum 56 px height so chips stay
+  finger / cursor-sized.
+
+### 11.8 Glanceable status, audible feedback
+- `#listening-indicator` at far-right of the header reports the
+  current state in plain words: **Connected** at rest, **Listening…**
+  during PTT, **Thinking…** during model calls, **`<error reason>`**
+  on failure. Animated dot for live states.
+- Agent grid tiles encode busy / disabled / lead state in glyphs
+  AND a pulsing dot so the user can see it from across the room.
+- TTS (`speak()`) reads the latest assistant body aloud on
+  `reader/answer` specs and the team-voice summary; users get audio
+  confirmation without looking at the screen.
+
+### 11.9 High-contrast type, readable from 3 m
+- Body type **22 px Light 300** (Barlow Condensed) on `--bg #0b0f14`.
+  Headings 1.4 em / 400. Brand wordmark uses **Source Sans 3**
+  Medium / SemiBold for legibility at the smallest sizes (the
+  top-left lockup) — Apple TV's recommended secondary face.
+- All foreground text uses `--fg #e7ecf3` (WCAG AAA contrast against
+  the bg). Metadata uses `--fg-dim #8b97a8` (still > 4.5:1).
+- No font weight below Light (300); no italics; no thin hairlines —
+  all sub-pixel rendering risks are avoided.
+
+### 11.10 Single primary action; no hidden gestures
+- Every screen exposes its primary action explicitly via the
+  action-bar button at the bottom-right (e.g., "Save", "Back",
+  "Open"). The keyboard chip + gamepad glyph are rendered together
+  so the user always knows what `Enter` / `✕` does *now*.
+- No swipe-only or long-press-only navigation — everything is
+  reachable with D-pad + select + back.
+- Drawers can be toggled via the same key that opens them
+  (`F` / `Options` / `\\` for the explorer); no hidden close gesture.
+
+## 12. Things that were considered and rejected
 
 - **Yellow focus outline (`#ffd35a`).** Replaced with white — felt cheap
   next to the muted backdrop.
