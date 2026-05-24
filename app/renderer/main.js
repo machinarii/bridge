@@ -551,31 +551,39 @@ speech.addEventListener('error', (e) => {
 });
 
 /* ---------- L0 / shared helpers ---------- */
-/* Option+arrows on L0: cycle focus through project tiles only (skipping the
- * "+ New" tile), with a brief slide animation on the focused tile so it
- * feels like sliding between projects. */
+/* Option+arrows on L0: slide through projects in a carousel. The "+ New"
+ * tile is the last stop in the cycle and pops to a centered "Create
+ * project" card when it lands focus this way. */
 function slideToAdjacentProject(delta) {
-  const n = projects.length;
-  if (n === 0) return;
   const tiles = ring.elements;
-  // Find current project index (clamped if currently on "+ New")
-  let cur = ring.index < n ? ring.index : (delta > 0 ? -1 : 0);
-  let next = (cur + delta + n) % n;
+  const n = tiles.length; // includes "+ New" as the last tile
+  if (n === 0) return;
+  const next = (ring.index + delta + n) % n;
   ring.index = next;
   pickerIndex = next;
   ring.paint();
-  // Slide animation: nudge the surface and the focused tile to imply motion
-  const dirClass = delta > 0 ? 'slide-from-right' : 'slide-from-left';
+
   const tile = tiles[next];
-  if (tile) {
-    tile.classList.remove('slide-from-left', 'slide-from-right');
-    // Force reflow so the animation restarts when triggered repeatedly
-    void tile.offsetWidth;
-    tile.classList.add(dirClass);
+  if (!tile) return;
+  const isCreate = tile.classList.contains('new-project');
+  // Clear any prior carousel state on every tile
+  for (const el of tiles) el.classList.remove('slide-from-left', 'slide-from-right', 'centered-create');
+  if (isCreate) {
+    tile.classList.add('centered-create');
+  } else {
+    void tile.offsetWidth; // reflow → animation restarts
+    tile.classList.add(delta > 0 ? 'slide-from-right' : 'slide-from-left');
   }
 }
 
+// Any non-slide navigation (regular arrows, click, mode change) clears the
+// centered-create overlay so the picker grid looks normal again.
+function clearCenteredCreate() {
+  for (const el of ring.elements) el.classList?.remove('centered-create');
+}
+
 function pickerMove(dir) {
+  clearCenteredCreate();
   const grid = surfaceEl.querySelector('.project-picker');
   if (!grid) return;
   const cols = grid._cols, rows = grid._rows;

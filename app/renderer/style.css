@@ -325,6 +325,41 @@ kbd {
 .project-tile.slide-from-right { animation: slideInFromRight 220ms cubic-bezier(.2,.8,.2,1); }
 .project-tile.slide-from-left  { animation: slideInFromLeft  220ms cubic-bezier(.2,.8,.2,1); }
 
+/* Centered Create-project card — triggered when Opt+arrow lands on "+ New". */
+@keyframes popCentered {
+  from { transform: translate(-50%, -50%) scale(0.85); opacity: 0; }
+  to   { transform: translate(-50%, -50%) scale(1);    opacity: 1; }
+}
+.project-tile.new-project.centered-create {
+  position: fixed;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, 70vw);
+  aspect-ratio: 1 / 1;
+  z-index: 80;
+  padding: 2rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
+  background: rgba(20,22,28,0.97);
+  border: 2px dashed rgba(255,255,255,0.25);
+  border-top: 4px solid #6ea8ff;
+  border-radius: 16px;
+  box-shadow: 0 30px 80px -20px rgba(0,0,0,0.7);
+  animation: popCentered 220ms cubic-bezier(.2,.8,.2,1);
+  opacity: 1 !important;
+}
+.project-tile.new-project.centered-create.focused {
+  outline: 3px solid var(--focus, #ffd35a);
+  outline-offset: 4px;
+}
+.project-tile.new-project.centered-create .name { font-size: 2rem; }
+.project-tile.new-project.centered-create .meta { font-size: 1.05rem; opacity: 0.7; }
+/* Backdrop dim behind centered card */
+.project-picker:has(.centered-create) > .project-tile:not(.centered-create) {
+  opacity: 0.35;
+  filter: blur(1px);
+}
+
 /* ===== Role picker (create-flow step 1) ===== */
 .role-picker { padding: 1rem; }
 .role-grid {
