@@ -305,6 +305,17 @@ kbd {
 .project-tile .meta { opacity: 0.6; font-size: 0.9rem; }
 .project-tile.focused { background: rgba(110,168,255,0.16); transform: translateY(-2px); }
 
+@keyframes slideInFromRight {
+  from { transform: translateX(48px) translateY(0); opacity: 0.4; }
+  to   { transform: translateY(-2px); opacity: 1; }
+}
+@keyframes slideInFromLeft {
+  from { transform: translateX(-48px) translateY(0); opacity: 0.4; }
+  to   { transform: translateY(-2px); opacity: 1; }
+}
+.project-tile.slide-from-right { animation: slideInFromRight 220ms cubic-bezier(.2,.8,.2,1); }
+.project-tile.slide-from-left  { animation: slideInFromLeft  220ms cubic-bezier(.2,.8,.2,1); }
+
 /* ===== Role picker (create-flow step 1) ===== */
 .role-picker { padding: 1rem; }
 .role-grid {
