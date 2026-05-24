@@ -591,14 +591,10 @@ function renderGrid() {
   ring.paint();
 
   renderActionBar([
-    { verb: 'Open',     glyph: 'cross',  action: { type: '_grid_open' } },
-    { verb: 'Disable',  glyph: 'square', action: { type: '_grid_toggle_enabled' } },
-    { verb: 'Projects', glyph: 'circle', action: { type: '_grid_back' } },
+    { verb: 'Back', glyph: 'circle', action: { type: '_grid_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'cross',  keyboard: 'Enter', label: 'Open' },
-    { gamepad: 'square', keyboard: 'Space', label: 'Toggle' },
-    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back' },
+    { gamepad: 'square', keyboard: 'Space', label: 'On / Off' },
   ]);
 }
 
