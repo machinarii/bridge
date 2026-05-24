@@ -389,7 +389,7 @@ async function renderNewProjectRoles() {
     t.innerHTML = `
       <div class="role-label">${role.label}</div>
       <div class="role-sample">${sample}</div>
-      <div class="role-toggle">${newProjRoleIds.includes(role.id) ? '☑' : '☐'}</div>`;
+      <div class="role-toggle" data-checked="${newProjRoleIds.includes(role.id)}"></div>`;
     t.addEventListener('click', () => { ring.moveTo(el => el === t); toggleFocusedRole(); });
     grid.appendChild(t);
     tileEls.push(t);
@@ -421,7 +421,7 @@ function toggleFocusedRole() {
   const idx = newProjRoleIds.indexOf(id);
   if (idx >= 0) newProjRoleIds.splice(idx, 1);
   else newProjRoleIds.push(id);
-  cur.querySelector('.role-toggle').textContent = newProjRoleIds.includes(id) ? '☑' : '☐';
+  cur.querySelector('.role-toggle').dataset.checked = String(newProjRoleIds.includes(id));
 }
 
 function roleGridMove(dir) {
