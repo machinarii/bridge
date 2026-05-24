@@ -518,13 +518,9 @@ body[data-mode="zoom"] #surface {
 .project-tile.new-project {
   border-style: dashed;
   opacity: 0.85;
-  background:
-    radial-gradient(ellipse 140% 90% at 50% -10%, rgba(255,255,255,0.10) 0%, transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
+  background: transparent;
 }
-.project-tile.new-project::before {
-  background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 40%);
-}
+.project-tile.new-project::before { background: none; }
 .project-tile .name { font-size: 1.4rem; margin: 0; }
 .project-tile .meta {
   opacity: 0.6;
