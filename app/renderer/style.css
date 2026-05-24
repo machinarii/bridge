@@ -1,39 +1,4 @@
-/* Dosis font family — used app-wide for clean, slightly rounded sans. */
-@font-face {
-  font-family: 'Dosis';
-  src: url('/assets/fonts/dosis/Dosis-ExtraLight.otf') format('opentype');
-  font-weight: 200; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Dosis';
-  src: url('/assets/fonts/dosis/Dosis-Light.otf') format('opentype');
-  font-weight: 300; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Dosis';
-  src: url('/assets/fonts/dosis/Dosis-Regular.otf') format('opentype');
-  font-weight: 400; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Dosis';
-  src: url('/assets/fonts/dosis/Dosis-Medium.otf') format('opentype');
-  font-weight: 500; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Dosis';
-  src: url('/assets/fonts/dosis/Dosis-SemiBold.otf') format('opentype');
-  font-weight: 600; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Dosis';
-  src: url('/assets/fonts/dosis/Dosis-Bold.otf') format('opentype');
-  font-weight: 700; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Dosis';
-  src: url('/assets/fonts/dosis/Dosis-ExtraBold.otf') format('opentype');
-  font-weight: 800; font-style: normal; font-display: swap;
-}
+/* Type family — Barlow Condensed (loaded via <link> in index.html). */
 
 /* Input-mode swap: render both keyboard and gamepad hints, show only one. */
 body[data-input-mode="keyboard"] .for-gamepad { display: none !important; }
@@ -76,7 +41,7 @@ html, body {
   height: 100%;
   background: radial-gradient(ellipse at top, #0f1620 0%, var(--bg) 60%);
   color: var(--fg);
-  font-family: 'Dosis', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: 'Barlow Condensed', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-weight: 300;
   font-size: 22px;
   line-height: 1.45;
