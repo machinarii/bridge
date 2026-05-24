@@ -14,6 +14,14 @@ const ring = new FocusRing();
 const gp = new GamepadInput();
 const speech = new Speech();
 
+/* ---------- Input-mode tracker ---------- */
+function setInputMode(m) {
+  if (document.body.dataset.inputMode !== m) document.body.dataset.inputMode = m;
+}
+setInputMode('keyboard');
+window.addEventListener('keydown', () => setInputMode('keyboard'), true);
+window.addEventListener('mousemove', () => setInputMode('keyboard'), true);
+
 /* ---------- App state ---------- */
 const MODE_PROJECTS         = 'projects';          // L0
 const MODE_NEW_PROJ_ROLES   = 'new_project_roles'; // create-flow step 1
@@ -234,7 +242,8 @@ function renderNewProjectName() {
   t.className = 'capture-tile';
   t.innerHTML = `
     <h2>Name this project</h2>
-    <p class="hint">Hold <kbd>R2</kbd> or <kbd>v</kbd> and speak — or press <kbd>/</kbd> to type.</p>
+    <p class="hint for-gamepad">Hold <kbd>R2</kbd> and speak.</p>
+    <p class="hint for-keyboard">Hold <kbd>v</kbd> and speak — or press <kbd>/</kbd> to type.</p>
     <div class="capture-value">${escapeHtml(newProjName) || '<span class="placeholder">(speak now)</span>'}</div>
     ${newProjRoleIds.includes('pm') || newProjRoleIds.includes('tpm')
       ? ''
@@ -255,7 +264,8 @@ function renderNewProjectGoal() {
   t.className = 'capture-tile';
   t.innerHTML = `
     <h2>What is this project's goal?</h2>
-    <p class="hint">Hold <kbd>R2</kbd> or <kbd>v</kbd> and describe it — or press <kbd>/</kbd> to type.</p>
+    <p class="hint for-gamepad">Hold <kbd>R2</kbd> and describe it.</p>
+    <p class="hint for-keyboard">Hold <kbd>v</kbd> and describe it — or press <kbd>/</kbd> to type.</p>
     <div class="capture-value">${escapeHtml(newProjGoal) || '<span class="placeholder">(speak now)</span>'}</div>`;
   surfaceEl.appendChild(t);
   renderActionBar([
@@ -381,10 +391,14 @@ function renderZoom(specOverride) {
     <div class="agent-header">
       <div class="name-large">${escapeHtml(agent.name)}</div>
       <div class="nav-hint">
-        <span class="shoulder"><span>L1</span> prev</span>
-        <span class="shoulder"><span>R1</span> next</span>
-        <span class="shoulder"><span>△</span> history</span>
-        <span class="shoulder"><span>○</span> grid</span>
+        <span class="shoulder for-gamepad"><span>L1</span> prev</span>
+        <span class="shoulder for-gamepad"><span>R1</span> next</span>
+        <span class="shoulder for-gamepad"><span>△</span> history</span>
+        <span class="shoulder for-gamepad"><span>○</span> grid</span>
+        <span class="shoulder for-keyboard"><span>[</span> prev</span>
+        <span class="shoulder for-keyboard"><span>]</span> next</span>
+        <span class="shoulder for-keyboard"><span>T</span> history</span>
+        <span class="shoulder for-keyboard"><span>Esc</span> grid</span>
       </div>
     </div>
     <div class="tile-surface"></div>`;
@@ -396,7 +410,8 @@ function renderZoom(specOverride) {
     surfaceWrap.innerHTML = `
       <div class="idle">
         <h3>${escapeHtml(agent.name)}</h3>
-        <p>Hold <kbd>R2</kbd> or <kbd>v</kbd> and speak.</p>
+        <p class="for-gamepad">Hold <kbd>R2</kbd> and speak.</p>
+        <p class="for-keyboard">Hold <kbd>v</kbd> and speak — or press <kbd>/</kbd> to type.</p>
       </div>`;
     renderActionBar([{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }]);
     ring.set([]);
@@ -837,13 +852,14 @@ function pressCircle() {
 }
 
 /* ---------- Input bindings ---------- */
-gp.addEventListener('ptt-down', startPTT);
+gp.addEventListener('ptt-down', () => { setInputMode('gamepad'); startPTT(); });
 gp.addEventListener('ptt-up', endPTT);
 gp.addEventListener('connected', () => {
   setIndicator('idle', 'Controller ready');
   setTimeout(() => setIndicator('idle', 'Connected'), 1500);
 });
 gp.addEventListener('press', (e) => {
+  setInputMode('gamepad');
   const b = e.detail.button;
   if (b === 'l2') { speakFocusedAgentName(); return; }
 
