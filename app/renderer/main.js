@@ -551,6 +551,30 @@ speech.addEventListener('error', (e) => {
 });
 
 /* ---------- L0 / shared helpers ---------- */
+/* Option+arrows on L0: cycle focus through project tiles only (skipping the
+ * "+ New" tile), with a brief slide animation on the focused tile so it
+ * feels like sliding between projects. */
+function slideToAdjacentProject(delta) {
+  const n = projects.length;
+  if (n === 0) return;
+  const tiles = ring.elements;
+  // Find current project index (clamped if currently on "+ New")
+  let cur = ring.index < n ? ring.index : (delta > 0 ? -1 : 0);
+  let next = (cur + delta + n) % n;
+  ring.index = next;
+  pickerIndex = next;
+  ring.paint();
+  // Slide animation: nudge the surface and the focused tile to imply motion
+  const dirClass = delta > 0 ? 'slide-from-right' : 'slide-from-left';
+  const tile = tiles[next];
+  if (tile) {
+    tile.classList.remove('slide-from-left', 'slide-from-right');
+    // Force reflow so the animation restarts when triggered repeatedly
+    void tile.offsetWidth;
+    tile.classList.add(dirClass);
+  }
+}
+
 function pickerMove(dir) {
   const grid = surfaceEl.querySelector('.project-picker');
   if (!grid) return;
@@ -928,7 +952,10 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (mode === MODE_PROJECTS) {
-    if (dir) { e.preventDefault(); pickerMove(dir); }
+    if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+      e.preventDefault();
+      slideToAdjacentProject(e.key === 'ArrowRight' ? +1 : -1);
+    } else if (dir) { e.preventDefault(); pickerMove(dir); }
     else if (e.key === 'Enter') { e.preventDefault(); openFocused(); }
   } else if (mode === MODE_NEW_PROJ_ROLES) {
     if (dir) { e.preventDefault(); roleGridMove(dir); }

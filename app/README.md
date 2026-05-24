@@ -71,6 +71,7 @@ classifier and team voice is blocked with a clear message.
 | History drawer    | **t**               | **Triangle** (at L2)|
 | File explorer     | **\\**              | **Options**         |
 | Switch agent      | **[** / **]**       | **L1** / **R1**     |
+| Slide project     | **Opt** + **←/→**   | —                   |
 | Typed fallback    | **/**               | —                   |
 
 Keyboard model: **Enter** selects/advances, **Esc** goes back, **Space**
