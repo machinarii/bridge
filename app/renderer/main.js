@@ -81,18 +81,11 @@ function playZoomIn(target, rect) {
   );
 }
 
-/** Fade out the *content* of an element (its children) while leaving the
- *  element's own backdrop/border intact. Used during zoom transitions so
- *  text and inner UI doesn't visibly distort with the container scale. */
-function fadeOutContent(el, duration = 120) {
-  if (!el) return Promise.resolve();
-  const targets = Array.from(el.children);
-  if (targets.length === 0) return Promise.resolve();
-  const anims = targets.map(c => c.animate(
-    [{ opacity: getComputedStyle(c).opacity }, { opacity: 0 }],
-    { duration, easing: 'ease-out', fill: 'forwards' }
-  ));
-  return Promise.all(anims.map(a => a.finished.catch(() => {})));
+/** Hide all descendants synchronously (via CSS class) so only the
+ *  element's own shape/backdrop animates during a zoom. No fade — content
+ *  disappears instantly before the transform begins. */
+function hideContent(el) {
+  if (el) el.classList.add('zoom-shell-only');
 }
 
 /** Fade in fresh destination content after a zoom completes. */
@@ -123,9 +116,8 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
   clone.style.transformOrigin = 'top left';
   document.body.appendChild(clone);
 
-  // Strip content visibility from the clone before the morph — only the
-  // tile's shape/backdrop animates, the text doesn't distort with it.
-  fadeOutContent(clone, 110);
+  // Hide all of the clone's content instantly — only the shell animates.
+  hideContent(clone);
 
   // Fade out sibling tiles so only the lifted one shows.
   const dimming = [];
@@ -213,11 +205,9 @@ function backZoomWithSnapshot(toRect, renderNewView) {
   overlay.style.transformOrigin = 'center center';
   document.body.appendChild(overlay);
 
-  // Fade the overlay's content out so only its container shape animates.
-  // We walk the top inner container (e.g. .agent-view / .agent-grid /
-  // .project-picker / .role-grid) and fade its children.
-  const innerWrap = overlay.firstElementChild;
-  if (innerWrap) fadeOutContent(innerWrap, 110);
+  // Hide the overlay's content instantly — only the shell (with its
+  // colored backdrop) animates.
+  hideContent(overlay);
 
   // Render the destination view underneath; it'll fade in after morph.
   renderNewView();

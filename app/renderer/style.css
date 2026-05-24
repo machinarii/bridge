@@ -1,5 +1,10 @@
 /* Type family — Barlow Condensed (loaded via <link> in index.html). */
 
+/* When an element is in mid-zoom, hide all its descendant content so
+ * only the shell (its own background/border) animates. The outer
+ * element itself is not selected, so its backdrop stays visible. */
+.zoom-shell-only * { opacity: 0 !important; }
+
 /* Input-mode swap: render both keyboard and gamepad hints, show only one. */
 body[data-input-mode="keyboard"] .for-gamepad { display: none !important; }
 body[data-input-mode="gamepad"]  .for-keyboard { display: none !important; }
