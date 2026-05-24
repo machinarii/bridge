@@ -700,6 +700,12 @@ kbd {
 body[data-file-drawer="open"] #surface { margin-left: 280px; }
 
 /* ===== File viewer panel (left of the prompt container) ===== */
+/* Without this, display:flex on the rule below wins over the `hidden`
+ * HTML attribute and the viewer stays visible. */
+#file-viewer[hidden],
+#file-drawer[hidden],
+#history-drawer[hidden] { display: none !important; }
+
 #file-viewer.drawer.left.wide {
   position: fixed; top: 4rem; bottom: 4rem;
   left: 0;
