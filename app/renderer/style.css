@@ -174,6 +174,13 @@ kbd {
   display: flex; flex-direction: column;
   position: relative;
 }
+/* L2 lets .agent-view BE the visible container — no nested chrome. */
+body[data-mode="zoom"] #surface {
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+}
 
 /* ===== Agent grid (L1 — reflow layout) ===== */
 
