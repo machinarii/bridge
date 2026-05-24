@@ -151,7 +151,7 @@ kbd {
 }
 .agent-tile[data-disabled="true"] { opacity: 0.4; }
 .agent-tile[data-disabled="true"]::after {
-  content: "off"; position: absolute; top: 0.4rem; right: 0.6rem;
+  content: "Off"; position: absolute; top: 0.4rem; right: 0.6rem;
   font-size: 0.7rem; opacity: 0.6; text-transform: uppercase;
 }
 .agent-tile[data-lead="true"] { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.20); }
