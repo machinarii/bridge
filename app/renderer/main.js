@@ -67,8 +67,14 @@ function renderProjects() {
   setContextLabel('Bridge — projects');
   surfaceEl.innerHTML = '';
 
+  const n = projects.length + 1; // include "+ New" tile
+  const { cols, rows } = gridLayout(n);
   const grid = document.createElement('div');
   grid.className = 'project-picker';
+  grid.style.setProperty('--grid-cols', cols);
+  grid.style.setProperty('--grid-rows', rows);
+  grid._cols = cols;
+  grid._rows = rows;
 
   const tileEls = [];
   for (const p of projects) {
@@ -78,7 +84,8 @@ function renderProjects() {
     tile.innerHTML = `
       <h2 class="name">${escapeHtml(p.name)}</h2>
       <div class="meta">${p.agents.length} member${p.agents.length===1?'':'s'}</div>`;
-    tile.addEventListener('click', () => { pickerIndex = tileEls.length; ring.set(tileEls); openFocused(); });
+    const myIdx = tileEls.length;
+    tile.addEventListener('click', () => { pickerIndex = myIdx; ring.index = myIdx; ring.paint(); openFocused(); });
     grid.appendChild(tile);
     tileEls.push(tile);
   }
@@ -86,7 +93,8 @@ function renderProjects() {
   const plus = document.createElement('div');
   plus.className = 'project-tile new-project';
   plus.innerHTML = `<h2 class="name">+ New project</h2><div class="meta">create a team</div>`;
-  plus.addEventListener('click', () => { pickerIndex = tileEls.length; ring.set([...tileEls, plus]); openFocused(); });
+  const plusIdx = tileEls.length;
+  plus.addEventListener('click', () => { pickerIndex = plusIdx; ring.index = plusIdx; ring.paint(); openFocused(); });
   grid.appendChild(plus);
   tileEls.push(plus);
 
@@ -544,12 +552,22 @@ speech.addEventListener('error', (e) => {
 
 /* ---------- L0 / shared helpers ---------- */
 function pickerMove(dir) {
-  // Picker is a 1-row wrap. up/down treat as left/right for simplicity at MVP scale.
-  const n = tileCount();
+  const grid = surfaceEl.querySelector('.project-picker');
+  if (!grid) return;
+  const cols = grid._cols, rows = grid._rows;
+  const n = ring.elements.length;
   if (n <= 1) return;
-  if (dir === 'left' || dir === 'up')    ring.index = (ring.index + n - 1) % n;
-  if (dir === 'right' || dir === 'down') ring.index = (ring.index + 1) % n;
-  pickerIndex = ring.index;
+  const i = ring.index;
+  const r = Math.floor(i / cols), c = i % cols;
+  let nr = r, nc = c;
+  if (dir === 'left')  nc = (c + cols - 1) % cols;
+  if (dir === 'right') nc = (c + 1) % cols;
+  if (dir === 'up')    nr = (r + rows - 1) % rows;
+  if (dir === 'down')  nr = (r + 1) % rows;
+  let next = nr * cols + nc;
+  if (next >= n) next = n - 1;
+  ring.index = next;
+  pickerIndex = next;
   ring.paint();
 }
 function exitToProjects() {

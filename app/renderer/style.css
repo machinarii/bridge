@@ -282,23 +282,26 @@ kbd {
   font-size: 1.1em; outline: none; font-family: inherit;
 }
 
-/* ===== L0 Project picker ===== */
+/* ===== L0 Project picker (reflow grid, same shape as L1) ===== */
 .project-picker {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(var(--grid-cols, 4), 1fr);
+  grid-template-rows: repeat(var(--grid-rows, 2), 1fr);
+  gap: 0.75rem;
   padding: 1rem;
+  height: calc(100vh - 8rem);
 }
 .project-tile {
-  border: 1px solid rgba(255,255,255,0.12);
+  border-top: 4px solid #6ea8ff;
   border-radius: 10px;
-  padding: 1.25rem;
+  padding: 1rem;
   background: rgba(255,255,255,0.04);
   cursor: pointer;
-  transition: transform 80ms ease, background 80ms ease;
+  display: flex; flex-direction: column; justify-content: space-between;
+  transition: transform 180ms cubic-bezier(.2,.8,.2,1), background 160ms;
 }
-.project-tile.new-project { border-style: dashed; opacity: 0.85; }
-.project-tile .name { font-size: 1.4rem; margin: 0 0 0.5rem 0; }
+.project-tile.new-project { border-top-style: dashed; opacity: 0.85; }
+.project-tile .name { font-size: 1.4rem; margin: 0; }
 .project-tile .meta { opacity: 0.6; font-size: 0.9rem; }
 .project-tile.focused { background: rgba(110,168,255,0.16); transform: translateY(-2px); }
 
