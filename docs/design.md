@@ -97,17 +97,14 @@ slightly tracked (`letter-spacing: 0.04em`).
 Family: **Barlow Condensed** (Google Fonts). Loaded via `<link>` in
 `index.html`, weights 200–700.
 
-**Weights are deliberately low** — Bridge avoids heavy/bold text. Maximum
-weight on screen is 500 (Medium). Hierarchy:
+**Only two weights are used** — Light (300) for body / hints / metadata, and
+Regular (400) for headings, brand, tile names, breadcrumbs, and key chips.
+No Medium, SemiBold, or Bold anywhere.
 
 | Use | Weight |
 |---|---|
-| Body text | 300 (Light) |
-| Headings (h1–h6, tile-title) | 400 (Regular) |
-| Brand wordmark, tile names | 500 (Medium) |
-| Metadata (role label, project meta, role sample) | 300 (Light) |
-| Hints, nav-hint, compose-hint | 300 (Light) |
-| Breadcrumbs | 400 (Regular) |
+| Body text, hints, metadata | 300 (Light) |
+| Headings, tile names, brand, breadcrumbs, key chips | 400 (Regular) |
 
 Sentence case across the UI. Status labels: `Idle`, `Thinking…`, `Off`,
 `Connected` — never lowercase, never ALL CAPS in JS (breadcrumbs are
