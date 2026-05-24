@@ -160,9 +160,10 @@ function renderProjects() {
     const tile = document.createElement('div');
     tile.className = 'project-tile';
     tile.dataset.projectId = p.id;
+    const roles = p.agents.map(a => roleLabel(a.role)).join(' · ');
     tile.innerHTML = `
       <h2 class="name">${escapeHtml(p.name)}</h2>
-      <div class="meta">${p.agents.length} agent${p.agents.length===1?'':'s'}</div>`;
+      <div class="meta">${escapeHtml(roles)}</div>`;
     const myIdx = tileEls.length;
     tile.addEventListener('click', () => { pickerIndex = myIdx; ring.index = myIdx; ring.paint(); openFocused(); });
     grid.appendChild(tile);

@@ -388,7 +388,7 @@ kbd {
     radial-gradient(ellipse 140% 90% at 50% -10%, rgba(110,168,255,0.22) 0%, transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
   cursor: pointer;
-  display: flex; flex-direction: column; justify-content: space-between;
+  display: flex; flex-direction: column; justify-content: flex-start;
   overflow: hidden;
   transition: transform 180ms cubic-bezier(.2,.8,.2,1), background 160ms, border-color 160ms;
 }
@@ -412,7 +412,12 @@ kbd {
   background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 40%);
 }
 .project-tile .name { font-size: 1.4rem; margin: 0; }
-.project-tile .meta { opacity: 0.6; font-size: 0.9rem; }
+.project-tile .meta {
+  opacity: 0.6;
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+  line-height: 1.35;
+}
 .project-tile.focused {
   background:
     radial-gradient(ellipse 140% 90% at 50% -10%, rgba(255,255,255,0.18) 0%, transparent 60%),
