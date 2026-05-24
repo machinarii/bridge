@@ -40,8 +40,6 @@ function _zoomFrame(target, rect) {
 
 function playZoomIn(target, rect) {
   if (!rect || !target) return;
-  // No fade — the element physically grows from the source rect to full size,
-  // staying fully opaque so it reads as "this thing is enlarging."
   target.animate(
     [
       { transform: _zoomFrame(target, rect), opacity: 1 },
@@ -49,6 +47,69 @@ function playZoomIn(target, rect) {
     ],
     { duration: 340, easing: 'cubic-bezier(.2,.8,.2,1)' }
   );
+}
+
+/* Forward navigation that morphs the SOURCE tile itself into the next
+ * surface — like the markdown-cards stack-tile transition. The selected
+ * tile clones, siblings dim, the clone flies and grows to fill the
+ * surface, then the destination view renders beneath and the clone fades
+ * out to reveal it. Reads as one physical motion, not an overlay. */
+function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
+  if (!sourceEl || !sourceRect) { renderDest(); return Promise.resolve(); }
+
+  const clone = sourceEl.cloneNode(true);
+  clone.style.position = 'fixed';
+  clone.style.left = `${sourceRect.left}px`;
+  clone.style.top = `${sourceRect.top}px`;
+  clone.style.width = `${sourceRect.width}px`;
+  clone.style.height = `${sourceRect.height}px`;
+  clone.style.margin = '0';
+  clone.style.pointerEvents = 'none';
+  clone.style.zIndex = '50';
+  clone.style.transformOrigin = 'top left';
+  document.body.appendChild(clone);
+
+  // Fade out sibling tiles so only the lifted one shows.
+  const dimming = [];
+  for (const el of ring.elements) {
+    if (el === sourceEl) {
+      el.style.opacity = '0'; // hide the original so the clone reads as it
+    } else {
+      el.style.transition = 'opacity 180ms';
+      el.style.opacity = '0';
+    }
+    dimming.push(el);
+  }
+
+  // Scale + translate so the source rect tweens into the target rect.
+  const sx = targetRect.width / sourceRect.width;
+  const sy = targetRect.height / sourceRect.height;
+  const tx = targetRect.left - sourceRect.left;
+  const ty = targetRect.top - sourceRect.top;
+
+  const grow = clone.animate(
+    [
+      { transform: 'translate(0,0) scale(1,1)' },
+      { transform: `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})` },
+    ],
+    { duration: 340, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }
+  );
+
+  return grow.finished.catch(() => {}).then(() => {
+    // Destination view renders behind the clone at full size — invisible
+    // until we fade the clone out.
+    renderDest();
+    return clone.animate(
+      [{ opacity: 1 }, { opacity: 0 }],
+      { duration: 120, easing: 'ease-out', fill: 'forwards' }
+    ).finished.catch(() => {});
+  }).then(() => {
+    clone.remove();
+    for (const el of dimming) {
+      el.style.transition = '';
+      el.style.opacity = '';
+    }
+  });
 }
 
 function playZoomOutTo(target, rect) {
@@ -235,7 +296,7 @@ function renderProjects() {
   ]);
 }
 
-function openFocused() {
+async function openFocused() {
   const idx = ring.index;
   if (idx === tileCount() - 1) {
     // "+ New" — enter create flow
@@ -243,15 +304,16 @@ function openFocused() {
     newProjName = '';
     newProjGoal = '';
     renderNewProjectRoles();
-  } else {
-    pushZoomFromFocused();
-    activeProject = projects[idx];
-    gridIndex = 0;
-    zoomedIndex = 0;
-    const fromRect = zoomStack[zoomStack.length - 1];
-    renderGrid();
-    playZoomIn(surfaceEl, fromRect);
+    return;
   }
+  const sourceTile = ring.current();
+  const sourceRect = sourceTile?.getBoundingClientRect();
+  const targetRect = surfaceEl.getBoundingClientRect();
+  zoomStack.push(sourceRect);
+  activeProject = projects[idx];
+  gridIndex = 0;
+  zoomedIndex = 0;
+  await forwardMorph(sourceTile, sourceRect, targetRect, () => renderGrid());
 }
 
 function tileCount() { return projects.length + 1; }
@@ -492,16 +554,24 @@ function gridMove(dir) {
 }
 
 
-function enterZoom(specOverride) {
+async function enterZoom(specOverride) {
   if (!activeProject) return;
   const wasAtGrid = mode !== MODE_ZOOM;
-  if (wasAtGrid) pushZoomFromFocused();
-  const idx = mode === MODE_ZOOM ? zoomedIndex : gridIndex;
+  const idx = wasAtGrid ? gridIndex : zoomedIndex;
+  if (!wasAtGrid) {
+    // Re-render in place — no transition (e.g. spec update from submitIntent).
+    zoomedIndex = idx;
+    mode = MODE_ZOOM;
+    renderZoom(specOverride);
+    return;
+  }
+  const sourceTile = ring.current();
+  const sourceRect = sourceTile?.getBoundingClientRect();
+  const targetRect = surfaceEl.getBoundingClientRect();
+  zoomStack.push(sourceRect);
   zoomedIndex = idx;
   mode = MODE_ZOOM;
-  const fromRect = wasAtGrid ? zoomStack[zoomStack.length - 1] : null;
-  renderZoom(specOverride);
-  if (fromRect) playZoomIn(surfaceEl, fromRect);
+  await forwardMorph(sourceTile, sourceRect, targetRect, () => renderZoom(specOverride));
 }
 
 function renderZoom(specOverride) {
