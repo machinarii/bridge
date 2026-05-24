@@ -126,14 +126,13 @@ kbd {
   color: var(--fg);
   flex: 0 0 auto;
 }
-#brand-mark { width: 26px; height: 26px; display: block; filter: drop-shadow(0 0 8px rgba(110,168,255,0.45)); }
+#brand-mark { width: 26px; height: 26px; display: block; }
 #brand .brand-name {
   font-size: 1.1rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: none;
-  background: linear-gradient(120deg, #9cf2c1, #6ea8ff 55%, #c08bff);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
+  color: #ffffff;
 }
 
 #breadcrumbs {
