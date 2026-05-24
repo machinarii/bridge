@@ -81,6 +81,28 @@ function playZoomIn(target, rect) {
   );
 }
 
+/** Fade out the *content* of an element (its children) while leaving the
+ *  element's own backdrop/border intact. Used during zoom transitions so
+ *  text and inner UI doesn't visibly distort with the container scale. */
+function fadeOutContent(el, duration = 120) {
+  if (!el) return Promise.resolve();
+  const targets = Array.from(el.children);
+  if (targets.length === 0) return Promise.resolve();
+  const anims = targets.map(c => c.animate(
+    [{ opacity: getComputedStyle(c).opacity }, { opacity: 0 }],
+    { duration, easing: 'ease-out', fill: 'forwards' }
+  ));
+  return Promise.all(anims.map(a => a.finished.catch(() => {})));
+}
+
+/** Fade in fresh destination content after a zoom completes. */
+function fadeInDestination(duration = 160) {
+  const el = surfaceEl.firstElementChild;
+  if (!el) return;
+  el.animate([{ opacity: 0 }, { opacity: 1 }],
+    { duration, easing: 'ease-out', fill: 'backwards' });
+}
+
 /* Forward navigation that morphs the SOURCE tile itself into the next
  * surface — like the markdown-cards stack-tile transition. The selected
  * tile clones, siblings dim, the clone flies and grows to fill the
@@ -100,6 +122,10 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
   clone.style.zIndex = '50';
   clone.style.transformOrigin = 'top left';
   document.body.appendChild(clone);
+
+  // Strip content visibility from the clone before the morph — only the
+  // tile's shape/backdrop animates, the text doesn't distort with it.
+  fadeOutContent(clone, 110);
 
   // Fade out sibling tiles so only the lifted one shows.
   const dimming = [];
@@ -136,9 +162,9 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
   );
 
   return grow.finished.catch(() => {}).then(() => {
-    // Destination view renders behind the clone at full size — invisible
-    // until we fade the clone out.
+    // Destination view renders behind the empty clone shape.
     renderDest();
+    fadeInDestination(160);
     return clone.animate(
       [{ opacity: 1 }, { opacity: 0 }],
       { duration: 120, easing: 'ease-out', fill: 'forwards' }
@@ -186,8 +212,16 @@ function backZoomWithSnapshot(toRect, renderNewView) {
   overlay.style.zIndex = '50';
   overlay.style.transformOrigin = 'center center';
   document.body.appendChild(overlay);
-  // Render the destination view underneath so it's visible immediately.
+
+  // Fade the overlay's content out so only its container shape animates.
+  // We walk the top inner container (e.g. .agent-view / .agent-grid /
+  // .project-picker / .role-grid) and fade its children.
+  const innerWrap = overlay.firstElementChild;
+  if (innerWrap) fadeOutContent(innerWrap, 110);
+
+  // Render the destination view underneath; it'll fade in after morph.
   renderNewView();
+  fadeInDestination(160);
   // Now animate the overlay (still showing the old view) shrinking into
   // the destination tile rect.
   const tRect = overlay.getBoundingClientRect();
