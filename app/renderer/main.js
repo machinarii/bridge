@@ -646,7 +646,7 @@ function renderGrid() {
     { verb: 'Back', glyph: 'circle', action: { type: '_grid_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'square',  keyboard: 'Space', label: 'On / Off' },
+    { gamepad: 'square',  keyboard: 'Space', label: 'Agent On / Off' },
     { gamepad: 'options', keyboard: 'F',     label: 'Explorer' },
   ]);
 }
