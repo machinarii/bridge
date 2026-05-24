@@ -94,8 +94,11 @@ slightly tracked (`letter-spacing: 0.04em`).
 
 ## 3. Typography
 
-Family: **Barlow Condensed** (Google Fonts). Loaded via `<link>` in
-`index.html`, weights 200–700.
+Primary family: **Barlow Condensed** (Google Fonts), weights 200–700.
+Secondary family: **Source Sans 3** (Google Fonts), weights 300–600 —
+used only for the brand wordmark and keyboard key chips (Enter, Esc,
+Space, T, [, ], v, /, \\, etc.) where a clean upright DIN-style sans
+reads better than the condensed body face.
 
 **Only two weights are used** — Light (300) for body / hints / metadata, and
 Regular (400) for headings, brand, tile names, breadcrumbs, and key chips.
