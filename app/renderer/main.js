@@ -574,7 +574,8 @@ function renderGrid() {
     { verb: 'Back', glyph: 'circle', action: { type: '_grid_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'square', keyboard: 'Space', label: 'On / Off' },
+    { gamepad: 'square',  keyboard: 'Space', label: 'On / Off' },
+    { gamepad: 'options', keyboard: 'T',     label: 'Text viewer' },
   ]);
 }
 
@@ -730,14 +731,10 @@ async function renderChatHistory(container, agent) {
 }
 
 function _setL2Shortcuts() {
-  // History is now always visible inline (iMessage-style) so the
-  // history toggle is gone. Esc/Back is implicit via Circle/Esc — kept
-  // off the rail to reduce noise. Enter/Select lives on the right side
-  // via the action-bar buttons themselves.
   setShortcuts([
-    { gamepad: 'l1',      keyboard: '[',  label: 'Prev' },
-    { gamepad: 'r1',      keyboard: ']',  label: 'Next' },
-    { gamepad: 'options', keyboard: '\\', label: 'Files' },
+    { gamepad: 'l1',      keyboard: '[', label: 'Prev' },
+    { gamepad: 'r1',      keyboard: ']', label: 'Next' },
+    { gamepad: 'options', keyboard: 'T', label: 'Text viewer' },
   ]);
 }
 
@@ -1281,7 +1278,13 @@ window.addEventListener('keydown', (e) => {
   // Hold 'v' for push-to-talk (voice).
   if (e.key === 'v' && !e.repeat) { e.preventDefault(); startPTT(); return; }
 
-  if (e.key === '\\') { e.preventDefault(); toggleFileExplorer(); return; }
+  if (e.key === '\\' || e.key === 't' || e.key === 'T') {
+    // Only L1 / L2 actually have the text viewer; toggleFileExplorer
+    // is a no-op outside those modes.
+    e.preventDefault();
+    toggleFileExplorer();
+    return;
+  }
   if (e.key === '/')  { e.preventDefault(); typedWrap.hidden = false; typedInput.focus(); return; }
 
   const dirMap = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
