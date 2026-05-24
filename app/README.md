@@ -8,7 +8,7 @@ Three-level navigation:
 
 - **L0 Project picker** — pick an existing project or `+ New`.
 - **L1 Project grid** — reflow grid of role agents; lead pulses during
-  team voice; Square enables/disables a member (lead is protected).
+  team voice; Square enables/disables an agent (lead is protected).
 - **L2 Agent zoom** — push-to-talk an individual agent; tile spec renders
   the response and TTS speaks the body.
 

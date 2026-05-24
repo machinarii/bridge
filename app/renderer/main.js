@@ -83,7 +83,7 @@ function renderProjects() {
     tile.dataset.projectId = p.id;
     tile.innerHTML = `
       <h2 class="name">${escapeHtml(p.name)}</h2>
-      <div class="meta">${p.agents.length} member${p.agents.length===1?'':'s'}</div>`;
+      <div class="meta">${p.agents.length} agent${p.agents.length===1?'':'s'}</div>`;
     const myIdx = tileEls.length;
     tile.addEventListener('click', () => { pickerIndex = myIdx; ring.index = myIdx; ring.paint(); openFocused(); });
     grid.appendChild(tile);
