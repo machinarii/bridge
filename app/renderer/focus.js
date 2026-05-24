@@ -15,6 +15,8 @@ export class FocusRing {
     this.paint();
   }
 
+  get elements() { return this.items || []; }
+
   current() { return this.items[this.index] || null; }
 
   move(delta) {
