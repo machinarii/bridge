@@ -101,6 +101,24 @@ function fadeInDestination(duration = 160) {
     { duration, easing: 'ease-out', fill: 'backwards' });
 }
 
+/** Stagger-in the footer rail (shortcuts + action-bar) after a forward
+ *  zoom lands — each chip / button fades and slides in from the right. */
+function staggerInFooter() {
+  const items = [
+    ...document.querySelectorAll('#shortcuts-rail .sc'),
+    ...document.querySelectorAll('#action-bar .action'),
+  ];
+  items.forEach((el, i) => {
+    el.animate(
+      [
+        { transform: 'translateX(28px)', opacity: 0 },
+        { transform: 'translateX(0)',    opacity: 1 },
+      ],
+      { duration: 260, delay: 60 * i, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }
+    );
+  });
+}
+
 /* Forward navigation that morphs the SOURCE tile itself into the next
  * surface — like the markdown-cards stack-tile transition. The selected
  * tile clones, siblings dim, the clone flies and grows to fill the
@@ -152,6 +170,7 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
     surfaceEl.style.opacity = '';
     renderDest();
     fadeInDestination(180);
+    staggerInFooter();
     return clone.animate(
       [{ opacity: 1 }, { opacity: 0 }],
       { duration: 120, easing: 'ease-out', fill: 'forwards' }
