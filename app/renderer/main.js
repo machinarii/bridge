@@ -63,6 +63,46 @@ function playZoomOutTo(target, rect) {
     .catch(() => {});
 }
 
+/* Seamless back nav: snapshot current surface as a floating clone, render
+ * the new view underneath immediately, then animate the clone shrinking
+ * into the destination rect. The user always sees BOTH views, with the
+ * old one collapsing into a tile of the new one. */
+function backZoomWithSnapshot(toRect, renderNewView) {
+  if (!toRect) { renderNewView(); return Promise.resolve(); }
+  const sRect = surfaceEl.getBoundingClientRect();
+  const overlay = surfaceEl.cloneNode(true);
+  overlay.removeAttribute('id');
+  overlay.style.position = 'fixed';
+  overlay.style.left = `${sRect.left}px`;
+  overlay.style.top = `${sRect.top}px`;
+  overlay.style.width = `${sRect.width}px`;
+  overlay.style.height = `${sRect.height}px`;
+  overlay.style.margin = '0';
+  overlay.style.padding = getComputedStyle(surfaceEl).padding;
+  overlay.style.pointerEvents = 'none';
+  overlay.style.zIndex = '50';
+  overlay.style.transformOrigin = 'center center';
+  document.body.appendChild(overlay);
+  // Render the destination view underneath so it's visible immediately.
+  renderNewView();
+  // Now animate the overlay (still showing the old view) shrinking into
+  // the destination tile rect.
+  const tRect = overlay.getBoundingClientRect();
+  const sx = toRect.width / tRect.width;
+  const sy = toRect.height / tRect.height;
+  const s  = Math.max(0.05, Math.min(sx, sy, 0.7));
+  const tx = (toRect.left + toRect.width / 2) - (tRect.left + tRect.width / 2);
+  const ty = (toRect.top + toRect.height / 2) - (tRect.top + tRect.height / 2);
+  const a = overlay.animate(
+    [
+      { transform: 'translate(0,0) scale(1)', opacity: 1 },
+      { transform: `translate(${tx}px,${ty}px) scale(${s})`, opacity: 0 },
+    ],
+    { duration: 280, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }
+  );
+  return a.finished.catch(() => {}).then(() => { overlay.remove(); });
+}
+
 /* ---------- Input-mode tracker ---------- */
 function setInputMode(m) {
   if (document.body.dataset.inputMode !== m) document.body.dataset.inputMode = m;
@@ -519,9 +559,10 @@ async function exitZoom() {
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
   const toRect = popZoomRect();
-  if (toRect) await playZoomOutTo(surfaceEl, toRect);
-  mode = MODE_GRID;
-  renderGrid();
+  await backZoomWithSnapshot(toRect, () => {
+    mode = MODE_GRID;
+    renderGrid();
+  });
 }
 
 function cycleAgent(delta) {
@@ -707,9 +748,10 @@ async function exitToProjects() {
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
   const toRect = popZoomRect();
-  if (toRect) await playZoomOutTo(surfaceEl, toRect);
-  activeProject = null;
-  renderProjects();
+  await backZoomWithSnapshot(toRect, () => {
+    activeProject = null;
+    renderProjects();
+  });
 }
 async function toggleFocusedAgentEnabled() {
   if (mode !== MODE_GRID || !activeProject) return;
