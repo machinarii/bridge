@@ -699,27 +699,51 @@ kbd {
 }
 body[data-file-drawer="open"] #surface { margin-left: 280px; }
 
-/* ===== File viewer panel (right side, opened when a file is selected) ===== */
-#file-viewer.drawer.right.wide {
-  position: fixed; top: 4rem; right: 0; bottom: 4rem;
+/* ===== File viewer panel (left of the prompt container) ===== */
+#file-viewer.drawer.left.wide {
+  position: fixed; top: 4rem; bottom: 4rem;
+  left: 0;
   width: 44vw; min-width: 320px;
   background: rgba(20,22,28,0.97);
-  border-left: 1px solid rgba(255,255,255,0.12);
+  border-right: 1px solid rgba(255,255,255,0.12);
   display: flex; flex-direction: column;
   z-index: 55;
 }
+/* When the file selector drawer is also open, sit the viewer to the right
+ * of it (280 px offset) instead of overlapping. */
+body[data-file-drawer="open"] #file-viewer.drawer.left.wide { left: 280px; }
+
 #file-viewer header {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 0.6rem 0.8rem 0.6rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
   font-weight: 400;
   flex: 0 0 auto;
 }
-#file-viewer header .hint { opacity: 0.5; font-weight: 300; font-size: 0.85rem; }
 #file-viewer .file-viewer-path {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.9rem;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-right: 1rem;
+  margin-right: 0.6rem;
+  flex: 1 1 auto;
+}
+#file-viewer .file-viewer-close {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.18);
+  color: var(--fg);
+  border-radius: 5px;
+  width: 28px; height: 28px;
+  font-size: 1.1rem; line-height: 1;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Source Sans 3', sans-serif;
+  font-weight: 300;
+  transition: background 120ms, border-color 120ms;
+}
+#file-viewer .file-viewer-close:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.36);
 }
 #file-viewer .file-viewer-body {
   flex: 1; min-height: 0;
@@ -733,8 +757,9 @@ body[data-file-drawer="open"] #surface { margin-left: 280px; }
   line-height: 1.55;
   color: var(--fg);
 }
-body[data-file-viewer="open"] #surface { margin-right: calc(44vw); }
-body[data-file-viewer="open"][data-file-drawer="open"] #surface { margin-right: calc(44vw); margin-left: 280px; }
+/* Surface shrinks from the LEFT to make room for the viewer. */
+body[data-file-viewer="open"] #surface { margin-left: 44vw; }
+body[data-file-viewer="open"][data-file-drawer="open"] #surface { margin-left: calc(280px + 44vw); }
 
 /* ===== Team summary banner (L1 PTT result) ===== */
 .team-summary {

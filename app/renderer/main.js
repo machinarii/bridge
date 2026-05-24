@@ -933,6 +933,8 @@ function pickerMove(dir) {
 async function exitToProjects() {
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
+  closeFileViewer();
+  if (fileExplorerOpen) closeFileExplorer();
   const toRect = popZoomRect();
   await backZoomWithSnapshot(toRect, () => {
     activeProject = null;
@@ -1101,10 +1103,12 @@ function paintFileFocus() {
   fileEntries.forEach((el, i) => el.classList.toggle('focused', i === fileFocus));
 }
 
-const fileViewerEl     = document.getElementById('file-viewer');
-const fileViewerPathEl = fileViewerEl.querySelector('.file-viewer-path');
-const fileViewerBodyEl = fileViewerEl.querySelector('.file-viewer-body');
-let fileViewerOpen     = false;
+const fileViewerEl      = document.getElementById('file-viewer');
+const fileViewerPathEl  = fileViewerEl.querySelector('.file-viewer-path');
+const fileViewerBodyEl  = fileViewerEl.querySelector('.file-viewer-body');
+const fileViewerCloseEl = fileViewerEl.querySelector('.file-viewer-close');
+let fileViewerOpen      = false;
+fileViewerCloseEl?.addEventListener('click', () => closeFileViewer());
 
 async function openFocusedFile() {
   const e = fileEntries[fileFocus];
