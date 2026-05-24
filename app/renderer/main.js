@@ -325,6 +325,7 @@ function setContextLabel(text, color) {
 
 function renderProjects() {
   mode = MODE_PROJECTS;
+  document.body.dataset.mode = mode;
   document.documentElement.style.setProperty('--agent-color', '#6ea8ff');
   setBreadcrumbs([{ label: 'Projects' }]);
   surfaceEl.innerHTML = '';
@@ -563,6 +564,7 @@ function roleLabel(roleId) {
 function renderGrid() {
   if (!activeProject) return renderProjects();
   mode = MODE_GRID;
+  document.body.dataset.mode = mode;
   document.documentElement.style.setProperty('--agent-color', '#6ea8ff');
   setBreadcrumbs([{ label: 'Projects' }, { label: activeProject.name }]);
   surfaceEl.innerHTML = '';
@@ -666,6 +668,7 @@ async function enterZoom(specOverride) {
 function renderZoom(specOverride) {
   const agent = currentAgent();
   if (!agent) return renderGrid();
+  document.body.dataset.mode = mode;
   document.documentElement.style.setProperty('--agent-color', agent.color);
   // L2 breadcrumb keeps the agent context out — the page header already
   // shows "<Name> · <Role>". Just trail back to the project.
