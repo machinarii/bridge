@@ -212,8 +212,9 @@ kbd {
 }
 .list-tile li.focused {
   border-color: var(--focus);
-  background: #243144;
-  transform: translateX(4px);
+  background: #2a3a52;
+  transform: translateX(6px);
+  box-shadow: -4px 0 0 var(--focus, #ffd35a), 0 6px 20px -8px rgba(0,0,0,0.5);
 }
 
 .reader-tile .body { font-size: 1.1em; line-height: 1.6; max-width: 70ch; }
@@ -254,8 +255,9 @@ kbd {
 }
 #action-bar .action.focused {
   border-color: var(--focus);
-  background: #243144;
-  transform: translateY(-2px);
+  background: #2a3a52;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 22px -6px rgba(0,0,0,0.55), 0 0 0 4px rgba(255,211,90,0.22);
 }
 .glyph {
   display: inline-flex; align-items: center; justify-content: center;
