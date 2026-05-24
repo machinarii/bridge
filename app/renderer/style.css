@@ -138,7 +138,7 @@ kbd {
     linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%);
   outline: 1px solid var(--focus, #ffffff);
   outline-offset: -3px;
-  box-shadow: 0 12px 32px -8px rgba(0,0,0,0.55), 0 0 22px 6px rgba(255,255,255,0.22);
+  box-shadow: 0 12px 32px -8px rgba(0,0,0,0.55);
   transform: translateY(-3px);
 }
 .agent-tile.focused::before { opacity: 0; }
@@ -272,7 +272,7 @@ kbd {
   border-color: var(--focus);
   background: #2a3a52;
   transform: translateY(-3px);
-  box-shadow: 0 8px 22px -6px rgba(0,0,0,0.55), 0 0 18px 4px rgba(255,255,255,0.22);
+  box-shadow: 0 8px 22px -6px rgba(0,0,0,0.55);
 }
 .glyph {
   display: inline-flex; align-items: center; justify-content: center;
@@ -351,7 +351,7 @@ kbd {
     linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%);
   outline: 1px solid var(--focus, #ffffff);
   outline-offset: -3px;
-  box-shadow: 0 12px 32px -8px rgba(0,0,0,0.55), 0 0 22px 6px rgba(255,255,255,0.22);
+  box-shadow: 0 12px 32px -8px rgba(0,0,0,0.55);
   transform: translateY(-3px);
 }
 
@@ -421,7 +421,7 @@ kbd {
     linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%);
   outline: 1px solid var(--focus, #ffffff);
   outline-offset: -3px;
-  box-shadow: 0 8px 24px -6px rgba(0,0,0,0.5), 0 0 18px 4px rgba(255,255,255,0.18);
+  box-shadow: 0 8px 24px -6px rgba(0,0,0,0.5);
   transform: translateY(-3px);
 }
 .role-label  { font-weight: 600; }
