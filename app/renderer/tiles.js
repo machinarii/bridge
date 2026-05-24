@@ -10,6 +10,12 @@ const GLYPH_SHAPES = {
   square:   '□',
   triangle: '△',
 };
+const GLYPH_KEYS = {
+  cross:    'Enter',
+  circle:   'Esc',
+  square:   'Space',
+  triangle: 'T',
+};
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -83,8 +89,10 @@ export function renderActionBar(actions = []) {
   const buttons = [];
   for (const a of actions) {
     const glyphChar = GLYPH_SHAPES[a.glyph] || '';
+    const keyLabel  = GLYPH_KEYS[a.glyph] || '';
     const btn = el('button', { class: 'action', type: 'button', dataset: { verb: a.verb, glyph: a.glyph || '' } },
-      glyphChar ? el('span', { class: 'glyph', dataset: { glyph: a.glyph } }, glyphChar) : null,
+      glyphChar ? el('span', { class: 'glyph for-gamepad', dataset: { glyph: a.glyph } }, glyphChar) : null,
+      keyLabel  ? el('span', { class: 'glyph for-keyboard', dataset: { glyph: a.glyph } }, keyLabel)  : null,
       el('span', {}, a.verb),
     );
     btn._action = a;
