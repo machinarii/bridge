@@ -67,11 +67,16 @@ classifier and team voice is blocked with a clear message.
 | Navigate          | arrows              | D-pad / left stick  |
 | Select / confirm  | **Enter**           | **Cross**           |
 | Back              | **Esc**             | **Circle**          |
-| Enable/disable    | (n/a)               | **Square** (at L1)  |
+| Enable/disable    | **s** or **d**      | **Square** (at L1)  |
+| Next (role picker)| **Tab**             | **Triangle**        |
 | History drawer    | **t**               | **Triangle** (at L2)|
 | File explorer     | **\\**              | **Options**         |
 | Switch agent      | **[** / **]**       | **L1** / **R1**     |
 | Typed fallback    | **/**               | —                   |
+
+Keyboard navigation works at every level — project picker, role picker
+(arrows toggle with Enter, Tab to advance), name/goal capture (Enter
+confirms, Esc steps back), L1 grid, L2 zoom, and inside both drawers.
 
 ## Tile spec contract (the model's only output)
 

@@ -890,17 +890,40 @@ window.addEventListener('keydown', (e) => {
   if (e.key === '\\') { e.preventDefault(); toggleFileExplorer(); return; }
   if (e.key === '/')  { e.preventDefault(); typedWrap.hidden = false; typedInput.focus(); return; }
 
-  // Mode-specific keys
   const dirMap = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
   const dir = dirMap[e.key];
+
+  // File explorer (overlay at L1/L2) intercepts navigation
+  if (fileExplorerOpen) {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')      { e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight')   { e.preventDefault(); fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+    if (e.key === 'Enter')                                  { e.preventDefault(); openFocusedFile(); return; }
+    if (e.key === 'Escape')                                 { e.preventDefault(); closeFileExplorer(); return; }
+  }
+  // History drawer (L2) intercepts navigation
+  if (drawerOpen && mode === MODE_ZOOM) {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')      { e.preventDefault(); drawerFocus = Math.max(0, drawerFocus - 1); paintDrawerFocus(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight')   { e.preventDefault(); drawerFocus = Math.min(drawerEntries.length - 1, drawerFocus + 1); paintDrawerFocus(); return; }
+    if (e.key === 'Enter')                                  { e.preventDefault(); openHistoryEntry(drawerEntries[drawerFocus]); return; }
+    if (e.key === 'Escape' || e.key === 't')                { e.preventDefault(); closeHistoryDrawer(); return; }
+  }
 
   if (mode === MODE_PROJECTS) {
     if (dir) { e.preventDefault(); pickerMove(dir); }
     else if (e.key === 'Enter') { e.preventDefault(); openFocused(); }
+  } else if (mode === MODE_NEW_PROJ_ROLES) {
+    if (dir) { e.preventDefault(); roleGridMove(dir); }
+    else if (e.key === 'Enter')   { e.preventDefault(); toggleFocusedRole(); }
+    else if (e.key === 'Tab')     { e.preventDefault(); advanceFromRolePicker(); }
+    else if (e.key === 'Escape')  { e.preventDefault(); renderProjects(); }
+  } else if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
+    if (e.key === 'Enter')        { e.preventDefault(); confirmCapture(); }
+    else if (e.key === 'Escape')  { e.preventDefault(); goBackInCreateFlow(); }
   } else if (mode === MODE_GRID) {
     if (dir) { e.preventDefault(); gridMove(dir); }
     else if (e.key === 'Enter') { e.preventDefault(); enterZoom(); }
     else if (e.key === 'Escape') { e.preventDefault(); exitToProjects(); }
+    else if (e.key === 's' || e.key === 'd') { e.preventDefault(); toggleFocusedAgentEnabled(); }
   } else if (mode === MODE_ZOOM) {
     if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')      { e.preventDefault(); ring.move(-1); }
     else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); ring.move(+1); }
