@@ -891,8 +891,38 @@ function cycleAgent(delta) {
     i = (i + delta + n) % n;
     if (activeProject.agents[i].enabled) break;
   }
-  zoomedIndex = i;
-  renderZoom();
+  if (i === zoomedIndex) { renderZoom(); return; }
+  slideAgent(delta, () => { zoomedIndex = i; renderZoom(); });
+}
+
+/** Cross-fade slide between two agent screens at L2. The outgoing
+ *  view is cloned as a fixed overlay that slides off; the new view
+ *  slides in from the opposite side. */
+function slideAgent(delta, doSwap) {
+  const r = surfaceEl.getBoundingClientRect();
+  const overlay = surfaceEl.cloneNode(true);
+  overlay.removeAttribute('id');
+  Object.assign(overlay.style, {
+    position: 'fixed',
+    left: `${r.left}px`, top: `${r.top}px`,
+    width: `${r.width}px`, height: `${r.height}px`,
+    margin: '0', pointerEvents: 'none', zIndex: '50',
+  });
+  document.body.appendChild(overlay);
+  doSwap();
+  const dir = delta > 0 ? 1 : -1;
+  const off = `${-dir * 100}%`;
+  const inFrom = `${dir * 100}%`;
+  overlay.animate(
+    [{ transform: 'translateX(0)', opacity: 1 },
+     { transform: `translateX(${off})`, opacity: 0 }],
+    { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }
+  ).finished.then(() => overlay.remove()).catch(() => overlay.remove());
+  surfaceEl.animate(
+    [{ transform: `translateX(${inFrom})`, opacity: 0 },
+     { transform: 'translateX(0)',         opacity: 1 }],
+    { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' }
+  );
 }
 
 /* ---------- Action execution ---------- */
