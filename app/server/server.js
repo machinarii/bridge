@@ -22,10 +22,12 @@ if (existsSync(envPath)) {
 
 const PORT = Number(process.env.PORT || 4317);
 const RENDERER_DIR = resolve(__dirname, '..', 'renderer');
+const ASSETS_DIR   = resolve(__dirname, '..', 'assets');
 const STATE_DIR = resolve(__dirname, '..', 'state');
 
 const app = express();
 app.use(express.json({ limit: '64kb' }));
+app.use('/assets', express.static(ASSETS_DIR, { maxAge: '1d', immutable: true }));
 app.use(express.static(RENDERER_DIR));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
