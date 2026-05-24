@@ -261,9 +261,19 @@ function backZoomWithSnapshot(toRect, renderNewView) {
   overlay.style.zIndex = '50';
   document.body.appendChild(overlay);
 
-  // Hide the overlay's content instantly — only the shell (with its
-  // colored backdrop) animates.
-  hideContent(overlay);
+  // Hide the overlay's inner UI/text instantly, but keep the FIRST
+  // inner container visible — that's the one carrying the colored
+  // backdrop (.agent-view at L2, .agent-grid at L1). zoom-shell-only's
+  // descendant selector would have hidden it too, killing the shape
+  // entirely. Strip focus state separately.
+  overlay.classList.remove('focused');
+  overlay.querySelectorAll('.focused').forEach(d => d.classList.remove('focused'));
+  const inner = overlay.firstElementChild;
+  if (inner) {
+    for (const c of inner.children) c.style.opacity = '0';
+    inner.style.outline = 'none';
+    inner.style.boxShadow = 'none';
+  }
 
   // Render the destination view underneath. Its content (the L0 grid /
   // L1 grid backdrop) fades in fresh.
