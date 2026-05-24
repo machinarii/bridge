@@ -134,7 +134,7 @@ kbd {
 .agent-tile.focused::before { opacity: 1; }
 .agent-tile.focused {
   background: rgba(110,168,255,0.22);
-  outline: 2px solid var(--focus, #ffffff);
+  outline: 1px solid var(--focus, #ffffff);
   outline-offset: -3px;
   box-shadow: 0 12px 32px -8px rgba(0,0,0,0.55), 0 0 22px 6px rgba(255,255,255,0.22);
   transform: translateY(-3px);
@@ -344,7 +344,7 @@ kbd {
 .project-tile .meta { opacity: 0.6; font-size: 0.9rem; }
 .project-tile.focused {
   background: rgba(110,168,255,0.22);
-  outline: 2px solid var(--focus, #ffffff);
+  outline: 1px solid var(--focus, #ffffff);
   outline-offset: -3px;
   box-shadow: 0 12px 32px -8px rgba(0,0,0,0.55), 0 0 22px 6px rgba(255,255,255,0.22);
   transform: translateY(-3px);
@@ -385,7 +385,7 @@ kbd {
   opacity: 1 !important;
 }
 .project-tile.new-project.centered-create.focused {
-  outline: 2px solid var(--focus, #ffffff);
+  outline: 1px solid var(--focus, #ffffff);
   outline-offset: 4px;
 }
 .project-tile.new-project.centered-create .name { font-size: 2rem; }
@@ -412,7 +412,7 @@ kbd {
 }
 .role-tile.focused {
   background: rgba(255,255,255,0.14);
-  outline: 2px solid var(--focus, #ffffff);
+  outline: 1px solid var(--focus, #ffffff);
   outline-offset: -3px;
   box-shadow: 0 8px 24px -6px rgba(0,0,0,0.5), 0 0 18px 4px rgba(255,255,255,0.18);
   transform: translateY(-3px);
