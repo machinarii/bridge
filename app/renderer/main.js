@@ -305,7 +305,7 @@ function renderGrid() {
     tile.innerHTML = `
       <h2 class="name">${escapeHtml(a.name)}</h2>
       <div class="role">${escapeHtml(roleLabel(a.role))}</div>
-      <div class="status"><span class="dot"></span><span>${agentBusy[a.id] ? 'thinking…' : 'idle'}</span></div>`;
+      <div class="status"><span class="dot"></span><span>${agentBusy[a.id] ? 'Thinking…' : 'Idle'}</span></div>`;
     tile.addEventListener('click', () => { gridIndex = i; ring.set(tileEls); ring.index = i; ring.paint(); enterZoom(); });
     grid.appendChild(tile);
     return tile;
@@ -688,7 +688,7 @@ function openHistoryEntry(entry) {
   closeHistoryDrawer();
   renderZoom({
     intent: 'answer', template: 'reader',
-    context: `${entry.role} turn`,
+    context: `${entry.role[0].toUpperCase() + entry.role.slice(1)} turn`,
     title: entry.role === 'user' ? 'You said' : `${currentAgent()?.name || 'Agent'} said`,
     body: String(entry.content),
     actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
