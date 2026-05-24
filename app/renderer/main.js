@@ -101,6 +101,31 @@ function fadeInDestination(duration = 160) {
     { duration, easing: 'ease-out', fill: 'backwards' });
 }
 
+/** Stagger-in the destination tiles (project / agent / role) — each card
+ *  slides in from a negative-X offset and fades up. */
+function staggerInCards() {
+  const items = surfaceEl.querySelectorAll('.project-tile:not(.centered-create), .agent-tile, .role-tile');
+  if (items.length === 0) return;
+  for (const el of items) {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(-28px)';
+  }
+  void items[0].offsetWidth;
+  items.forEach((el, i) => {
+    const a = el.animate(
+      [
+        { opacity: 0, transform: 'translateX(-28px)' },
+        { opacity: 1, transform: 'translateX(0)'    },
+      ],
+      { duration: 320, delay: 45 * i, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' }
+    );
+    a.finished.then(() => {
+      el.style.opacity = '';
+      el.style.transform = '';
+    }).catch(() => {});
+  });
+}
+
 /** Stagger-in the footer rail (shortcuts + action-bar) after a forward
  *  zoom lands — each chip / button fades and slides in from the right. */
 function staggerInFooter() {
@@ -182,6 +207,7 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
     surfaceEl.style.opacity = '';
     renderDest();
     fadeInDestination(180);
+    staggerInCards();
     staggerInFooter();
     return clone.animate(
       [{ opacity: 1 }, { opacity: 0 }],
@@ -1534,6 +1560,8 @@ window.addEventListener('keyup', (e) => {
 (async () => {
   await loadProjects();
   renderProjects();
+  staggerInCards();
+  staggerInFooter();
   setIndicator('idle', 'Connected');
   console.log('[bridge] L0 ready. ✕ open project, "+ New" to create.');
 })();
