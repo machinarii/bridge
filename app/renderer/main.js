@@ -1121,6 +1121,11 @@ function paintFileFocus() {
   fileEntries.forEach((el, i) => el.classList.toggle('focused', i === fileFocus));
 }
 
+const fileViewerEl     = document.getElementById('file-viewer');
+const fileViewerPathEl = fileViewerEl.querySelector('.file-viewer-path');
+const fileViewerBodyEl = fileViewerEl.querySelector('.file-viewer-body');
+let fileViewerOpen     = false;
+
 async function openFocusedFile() {
   const e = fileEntries[fileFocus];
   if (!e) return;
@@ -1129,23 +1134,25 @@ async function openFocusedFile() {
     const r = await fetch(`/projects/${activeProject.id}/file/${path}`);
     if (!r.ok) throw new Error(await r.text());
     const { body } = await r.json();
-    const spec = {
-      intent: 'answer', template: 'reader',
-      context: 'File', title: path,
-      body,
-      actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
-      _silent: true,
-    };
-    if (mode === MODE_ZOOM) renderZoom(spec);
-    else {
-      zoomedIndex = activeProject.agents.findIndex(a => a.id === activeProject.leadAgentId);
-      mode = MODE_ZOOM;
-      renderZoom(spec);
-    }
-    closeFileExplorer();
+    showFileViewer(path, body);
   } catch (err) {
     setIndicator('error', 'File read failed');
+    console.error(err);
   }
+}
+
+function showFileViewer(path, body) {
+  fileViewerPathEl.textContent = path;
+  fileViewerBodyEl.textContent = body;
+  fileViewerEl.hidden = false;
+  fileViewerOpen = true;
+  document.body.dataset.fileViewer = 'open';
+}
+
+function closeFileViewer() {
+  fileViewerEl.hidden = true;
+  fileViewerOpen = false;
+  document.body.dataset.fileViewer = 'closed';
 }
 function currentAgent() { return activeProject?.agents?.[zoomedIndex] || null; }
 
@@ -1317,7 +1324,16 @@ window.addEventListener('keydown', (e) => {
   } else if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
     if (e.key === 'Enter')        { e.preventDefault(); confirmCapture(); }
     else if (e.key === 'Escape')  { e.preventDefault(); goBackInCreateFlow(); }
-  } else if (mode === MODE_GRID) {
+  }
+
+  // File viewer (right panel) — Esc closes it before any back navigation.
+  if (fileViewerOpen && e.key === 'Escape') {
+    e.preventDefault();
+    closeFileViewer();
+    return;
+  }
+
+  if (mode === MODE_GRID) {
     if (dir) { e.preventDefault(); gridMove(dir); }
     else if (e.key === 'Enter') { e.preventDefault(); enterZoom(); }
     else if (e.key === 'Escape') { e.preventDefault(); exitToProjects(); }

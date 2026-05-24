@@ -699,6 +699,43 @@ kbd {
 }
 body[data-file-drawer="open"] #surface { margin-left: 280px; }
 
+/* ===== File viewer panel (right side, opened when a file is selected) ===== */
+#file-viewer.drawer.right.wide {
+  position: fixed; top: 4rem; right: 0; bottom: 4rem;
+  width: 44vw; min-width: 320px;
+  background: rgba(20,22,28,0.97);
+  border-left: 1px solid rgba(255,255,255,0.12);
+  display: flex; flex-direction: column;
+  z-index: 55;
+}
+#file-viewer header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+  font-weight: 400;
+  flex: 0 0 auto;
+}
+#file-viewer header .hint { opacity: 0.5; font-weight: 300; font-size: 0.85rem; }
+#file-viewer .file-viewer-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-right: 1rem;
+}
+#file-viewer .file-viewer-body {
+  flex: 1; min-height: 0;
+  margin: 0; padding: 1rem 1.25rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 300;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--fg);
+}
+body[data-file-viewer="open"] #surface { margin-right: calc(44vw); }
+body[data-file-viewer="open"][data-file-drawer="open"] #surface { margin-right: calc(44vw); margin-left: 280px; }
+
 /* ===== Team summary banner (L1 PTT result) ===== */
 .team-summary {
   position: fixed; top: 5rem; left: 50%; transform: translateX(-50%);
