@@ -229,8 +229,24 @@ kbd {
   flex: 1;
   display: flex; flex-direction: column;
   min-height: 0;
+  position: relative;
+  padding: 1.25rem 1.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 140% 90% at 50% -10%, color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
   animation: zoomIn 220ms cubic-bezier(.2,.8,.2,1);
 }
+.agent-view::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--agent-color, #6ea8ff) 14%, transparent) 0%, transparent 35%);
+  pointer-events: none;
+  opacity: 0.7;
+}
+.agent-view > * { position: relative; }
 @keyframes zoomIn {
   from { transform: scale(0.92); opacity: 0; }
   to   { transform: scale(1);    opacity: 1; }
