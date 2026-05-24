@@ -205,7 +205,7 @@ function roleGridMove(dir) {
 function advanceFromRolePicker() {
   if (newProjRoleIds.length === 0) {
     setIndicator('error', 'Pick at least one role');
-    setTimeout(() => setIndicator('idle', 'Ready'), 1500);
+    setTimeout(() => setIndicator('idle', 'Connected'), 1500);
     return;
   }
   renderNewProjectName();
@@ -468,7 +468,7 @@ async function executeAction(action, sourceSpec) {
         actions: [{ verb: 'Done', glyph: 'circle', action: { type: 'cancel' } }],
       };
       agent.lastSpec = ack;
-      setIndicator('idle', 'Ready');
+      setIndicator('idle', 'Connected');
       renderZoom(ack);
     } catch (err) {
       setIndicator('error', 'Save failed');
@@ -527,19 +527,19 @@ speech.addEventListener('end', (e) => {
   const text = e.detail;
   if (!text) {
     setIndicator('idle', 'No speech detected');
-    setTimeout(() => setIndicator('idle', 'Ready'), 1500);
+    setTimeout(() => setIndicator('idle', 'Connected'), 1500);
     return;
   }
   if (mode === MODE_NEW_PROJ_NAME) {
     newProjName = text;
     renderNewProjectName();
-    setIndicator('idle', 'Ready');
+    setIndicator('idle', 'Connected');
     return;
   }
   if (mode === MODE_NEW_PROJ_GOAL) {
     newProjGoal = text;
     renderNewProjectGoal();
-    setIndicator('idle', 'Ready');
+    setIndicator('idle', 'Connected');
     return;
   }
   if (mode === MODE_ZOOM) { submitIntent(text); return; }
@@ -547,7 +547,7 @@ speech.addEventListener('end', (e) => {
 });
 speech.addEventListener('error', (e) => {
   setIndicator('error', `Speech error: ${e.detail}`);
-  setTimeout(() => setIndicator('idle', 'Ready'), 2000);
+  setTimeout(() => setIndicator('idle', 'Connected'), 2000);
 });
 
 /* ---------- L0 / shared helpers ---------- */
@@ -614,7 +614,7 @@ async function toggleFocusedAgentEnabled() {
   if (!agent) return;
   if (agent.id === activeProject.leadAgentId) {
     setIndicator('error', "Lead can't be disabled");
-    setTimeout(() => setIndicator('idle', 'Ready'), 1500);
+    setTimeout(() => setIndicator('idle', 'Connected'), 1500);
     return;
   }
   const next = !agent.enabled;
@@ -841,7 +841,7 @@ gp.addEventListener('ptt-down', startPTT);
 gp.addEventListener('ptt-up', endPTT);
 gp.addEventListener('connected', () => {
   setIndicator('idle', 'Controller ready');
-  setTimeout(() => setIndicator('idle', 'Ready'), 1500);
+  setTimeout(() => setIndicator('idle', 'Connected'), 1500);
 });
 gp.addEventListener('press', (e) => {
   const b = e.detail.button;
@@ -1018,7 +1018,7 @@ async function submitIntent(text) {
     const a = activeProject.agents.find(x => x.id === targetId);
     if (a) a.lastSpec = spec;
     if (mode === MODE_ZOOM && currentAgent()?.id === targetId) {
-      setIndicator('idle', 'Ready');
+      setIndicator('idle', 'Connected');
       renderZoom(spec);
     }
   } catch (err) {
@@ -1072,7 +1072,7 @@ async function submitTeamIntent(text) {
     renderGrid();
     showTeamSummary(result.summary);
     if (result.summary?.body) speak(result.summary.body);
-    setIndicator('idle', 'Ready');
+    setIndicator('idle', 'Connected');
   } catch (err) {
     if (err.name === 'AbortError') return;
     setIndicator('error', 'Team voice failed');
@@ -1111,7 +1111,7 @@ async function finalizeNewProject() {
     activeProject = project;
     pickerIndex = projects.findIndex(p => p.id === project.id);
     gridIndex = 0; zoomedIndex = 0;
-    setIndicator('idle', 'Ready');
+    setIndicator('idle', 'Connected');
     renderGrid();
   } catch (err) {
     setIndicator('error', 'Create failed');
@@ -1126,6 +1126,6 @@ window.addEventListener('keyup', (e) => {
 (async () => {
   await loadProjects();
   renderProjects();
-  setIndicator('idle', 'Ready');
+  setIndicator('idle', 'Connected');
   console.log('[bridge] L0 ready. ✕ open project, "+ New" to create.');
 })();
