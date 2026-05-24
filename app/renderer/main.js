@@ -9,6 +9,38 @@ const indicatorTextEl = indicatorEl.querySelector('.state-text');
 const breadcrumbsEl   = document.getElementById('breadcrumbs');
 const typedWrap       = document.getElementById('ptt-typed');
 const typedInput      = document.getElementById('typed-input');
+const shortcutsRailEl = document.getElementById('shortcuts-rail');
+
+/** Set the persistent shortcuts rail at bottom-right. Pass an array of
+ *  { gamepad, keyboard, label } — both glyphs render and CSS hides the
+ *  inactive one based on body[data-input-mode]. */
+function setShortcuts(items) {
+  shortcutsRailEl.innerHTML = '';
+  const GAMEPAD = { cross: '✕', circle: '○', square: '□', triangle: '△' };
+  for (const it of items) {
+    const wrap = document.createElement('span');
+    wrap.className = 'sc';
+    if (it.gamepad) {
+      const g = document.createElement('span');
+      g.className = 'glyph for-gamepad';
+      g.dataset.glyph = it.gamepad;
+      g.textContent = GAMEPAD[it.gamepad] || it.gamepad;
+      wrap.appendChild(g);
+    }
+    if (it.keyboard) {
+      const k = document.createElement('span');
+      k.className = 'glyph for-keyboard';
+      k.dataset.glyph = it.gamepad || '';
+      k.textContent = it.keyboard;
+      wrap.appendChild(k);
+    }
+    const l = document.createElement('span');
+    l.className = 'label';
+    l.textContent = it.label;
+    wrap.appendChild(l);
+    shortcutsRailEl.appendChild(wrap);
+  }
+}
 
 const ring = new FocusRing();
 const gp = new GamepadInput();
@@ -363,6 +395,11 @@ async function renderNewProjectRoles() {
     { verb: 'Next',   glyph: 'triangle', action: { type: '_role_next' } },
     { verb: 'Back',   glyph: 'circle',   action: { type: '_role_back' } },
   ]);
+  setShortcuts([
+    { gamepad: 'cross',    keyboard: 'Space', label: 'Toggle' },
+    { gamepad: 'triangle', keyboard: 'Enter', label: 'Next' },
+    { gamepad: 'circle',   keyboard: 'Esc',   label: 'Back' },
+  ]);
 }
 
 function toggleFocusedRole() {
@@ -437,6 +474,10 @@ function renderNewProjectName() {
     { verb: 'Confirm', glyph: 'cross',  action: { type: '_capture_confirm' } },
     { verb: 'Back',    glyph: 'circle', action: { type: '_capture_back' } },
   ]);
+  setShortcuts([
+    { gamepad: 'cross',  keyboard: 'Enter', label: 'Confirm' },
+    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back' },
+  ]);
   ring.set([]);
 }
 
@@ -455,6 +496,10 @@ function renderNewProjectGoal() {
   renderActionBar([
     { verb: 'Confirm', glyph: 'cross',  action: { type: '_capture_confirm' } },
     { verb: 'Back',    glyph: 'circle', action: { type: '_capture_back' } },
+  ]);
+  setShortcuts([
+    { gamepad: 'cross',  keyboard: 'Enter', label: 'Confirm' },
+    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back' },
   ]);
   ring.set([]);
 }
@@ -514,6 +559,11 @@ function renderGrid() {
     { verb: 'Open',     glyph: 'cross',  action: { type: '_grid_open' } },
     { verb: 'Disable',  glyph: 'square', action: { type: '_grid_toggle_enabled' } },
     { verb: 'Projects', glyph: 'circle', action: { type: '_grid_back' } },
+  ]);
+  setShortcuts([
+    { gamepad: 'cross',  keyboard: 'Enter', label: 'Open' },
+    { gamepad: 'square', keyboard: 'Space', label: 'Toggle' },
+    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back' },
   ]);
 }
 
@@ -578,10 +628,11 @@ function renderZoom(specOverride) {
   const agent = currentAgent();
   if (!agent) return renderGrid();
   document.documentElement.style.setProperty('--agent-color', agent.color);
+  // L2 breadcrumb keeps the agent context out — the page header already
+  // shows "<Name> · <Role>". Just trail back to the project.
   setBreadcrumbs([
     { label: 'Projects' },
     { label: activeProject.name },
-    { label: `${agent.name} · ${roleLabel(agent.role)}`, color: agent.color },
   ]);
   surfaceEl.innerHTML = '';
 
@@ -592,16 +643,6 @@ function renderZoom(specOverride) {
       <div class="agent-title">
         <span class="name-large">${escapeHtml(agent.name)}</span>
         <span class="role-large">${escapeHtml(roleLabel(agent.role))}</span>
-      </div>
-      <div class="nav-hint">
-        <span class="shoulder for-gamepad"><span>L1</span> prev</span>
-        <span class="shoulder for-gamepad"><span>R1</span> next</span>
-        <span class="shoulder for-gamepad"><span>△</span> history</span>
-        <span class="shoulder for-gamepad"><span>○</span> grid</span>
-        <span class="shoulder for-keyboard"><span>[</span> prev</span>
-        <span class="shoulder for-keyboard"><span>]</span> next</span>
-        <span class="shoulder for-keyboard"><span>T</span> history</span>
-        <span class="shoulder for-keyboard"><span>Esc</span> grid</span>
       </div>
     </div>
     <div class="tile-surface"></div>`;
@@ -618,6 +659,7 @@ function renderZoom(specOverride) {
       </div>`;
     renderActionBar([{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }]);
     ring.set([]);
+    _setL2Shortcuts();
     return;
   }
 
@@ -631,7 +673,19 @@ function renderZoom(specOverride) {
   for (const f of focusables) {
     f.addEventListener('click', () => { ring.moveTo(el => el === f); pressCross(); });
   }
+  _setL2Shortcuts();
   if (autoSpeak && !specOverride?._silent) speak(autoSpeak);
+}
+
+function _setL2Shortcuts() {
+  setShortcuts([
+    { gamepad: 'cross',    keyboard: 'Enter', label: 'Select' },
+    { gamepad: 'circle',   keyboard: 'Esc',   label: 'Back' },
+    { gamepad: 'l1',       keyboard: '[',     label: 'Prev' },
+    { gamepad: 'r1',       keyboard: ']',     label: 'Next' },
+    { gamepad: 'triangle', keyboard: 'T',     label: 'History' },
+    { gamepad: 'options',  keyboard: '\\',    label: 'Files' },
+  ]);
 }
 
 async function exitZoom() {
