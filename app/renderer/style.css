@@ -346,9 +346,24 @@ kbd {
 
 /* ===== Action bar ===== */
 
+#footer-rail {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 1rem; padding: 4px 4px 0; min-height: 56px;
+}
+#shortcuts-rail {
+  display: inline-flex; align-items: center; gap: 0.65rem;
+  color: var(--fg-dim);
+  font-size: 0.85em;
+  flex: 1 1 auto;
+}
+#shortcuts-rail .sc {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  white-space: nowrap;
+}
+#shortcuts-rail .sc .label { font-weight: 300; opacity: 0.7; }
 #action-bar {
-  display: flex; justify-content: flex-end; align-items: center; gap: 12px;
-  padding: 4px 4px 0; min-height: 56px;
+  display: inline-flex; justify-content: flex-end; align-items: center; gap: 12px;
+  flex: 0 0 auto;
 }
 #action-bar .action {
   display: inline-flex; align-items: center; gap: 10px;
