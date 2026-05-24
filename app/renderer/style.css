@@ -15,7 +15,7 @@ body[data-input-mode="gamepad"]  .for-keyboard { display: none !important; }
   color: var(--fg) !important; /* override per-glyph color rules */
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.74em;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.04em;
 }
 
@@ -50,8 +50,8 @@ html, body {
 }
 h1, h2, h3, h4, h5, h6 { font-family: inherit; font-weight: 400; letter-spacing: -0.01em; }
 .tile-context, #breadcrumbs { font-weight: 400; }
-#brand .brand-name { font-weight: 500; }
-.agent-tile .name, .project-tile .name, .role-tile .role-label { font-weight: 500; }
+#brand .brand-name { font-weight: 400; }
+.agent-tile .name, .project-tile .name, .role-tile .role-label { font-weight: 400; }
 .agent-tile .role, .project-tile .meta, .role-tile .role-sample { font-weight: 300; }
 .capture-tile h2, .tile-title { font-weight: 400; }
 .capture-tile .hint, .agent-view .agent-header .nav-hint, .compose-tile .compose-hint { font-weight: 300; }
@@ -64,7 +64,7 @@ kbd {
   padding: 2px 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.82em;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--fg);
 }
 
@@ -204,7 +204,7 @@ kbd {
   transform: translateY(-3px);
 }
 .agent-tile.focused::before { opacity: 0; }
-.agent-tile .name { margin: 0; font-size: 1.4rem; font-weight: 500; }
+.agent-tile .name { margin: 0; font-size: 1.4rem; font-weight: 400; }
 .agent-tile .role { opacity: 0.65; font-size: 0.9rem; }
 .agent-tile .status { font-size: 0.8rem; opacity: 0.6; display: inline-flex; align-items: center; gap: 6px; }
 .agent-tile .status .dot {
@@ -258,7 +258,7 @@ kbd {
   padding: 2px 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85em;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--fg);
 }
 
