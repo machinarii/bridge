@@ -188,9 +188,9 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
   // Track sibling tiles so we can restore their inline opacity after.
   const dimming = Array.from(ring.elements);
 
-  // Animate via width/height/left/top instead of transform-scale. Avoids
-  // counter-scaled borders/radius artifacts (border-radius stays naturally
-  // constant in pixels regardless of the size).
+  // Position/size grows the full range; opacity holds at 1 for the first
+  // 70 % then fades to 0 by the time the clone is fully enlarged — so
+  // the destination view shows through without a hard cut.
   const grow = clone.animate(
     [
       { left: `${sourceRect.left}px`, top: `${sourceRect.top}px`,
@@ -200,19 +200,24 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
     ],
     { duration: 340, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }
   );
+  clone.animate(
+    [
+      { offset: 0,    opacity: 1 },
+      { offset: 0.7,  opacity: 1 },
+      { offset: 1,    opacity: 0 },
+    ],
+    { duration: 340, easing: 'ease-out', fill: 'forwards' }
+  );
 
   return grow.finished.catch(() => {}).then(() => {
-    // Destination view renders into the now-empty surface.
+    // Destination view renders into the now-empty surface. The clone
+    // has already faded to 0 during the morph, so no extra fade.
     try { surfaceFade.cancel(); } catch {}
     surfaceEl.style.opacity = '';
     renderDest();
     fadeInDestination(180);
     staggerInCards();
     staggerInFooter();
-    return clone.animate(
-      [{ opacity: 1 }, { opacity: 0 }],
-      { duration: 120, easing: 'ease-out', fill: 'forwards' }
-    ).finished.catch(() => {});
   }).then(() => {
     clone.remove();
     for (const el of dimming) {
