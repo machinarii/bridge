@@ -140,41 +140,34 @@ kbd {
 
 #listening-indicator {
   display: inline-flex; align-items: center; gap: 10px;
-  padding: 6px 14px; border-radius: 999px;
-  background: var(--bg-elev); border: 1px solid #233042;
-  transition: background 120ms, border-color 120ms;
+  padding: 5px 12px; border-radius: 999px;
+  background: rgba(20,22,28,0.92);
+  border: none;
+  color: var(--fg-dim);
+  font-weight: 300;
+  transition: background 120ms;
 }
 #listening-indicator .dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--fg-dim); transition: background 120ms, box-shadow 200ms;
 }
-#listening-indicator[data-state="listening"] { background: rgba(110,168,255,0.10); border-color: var(--accent); }
+/* State color cue lives only on the dot — the pill stays dark. */
 #listening-indicator[data-state="listening"] .dot {
-  background: var(--accent); animation: pulse 1.2s ease-out infinite;
+  background: var(--accent); box-shadow: 0 0 10px rgba(110,168,255,0.55);
+  animation: pulse 1.2s ease-out infinite;
 }
-#listening-indicator[data-state="thinking"] { border-color: var(--accent-2); }
 #listening-indicator[data-state="thinking"] .dot {
-  background: var(--accent-2); animation: thinking 1s linear infinite;
+  background: var(--accent-2); box-shadow: 0 0 10px rgba(156,242,193,0.55);
+  animation: thinking 1s linear infinite;
 }
-#listening-indicator[data-state="error"] { border-color: var(--danger); color: var(--danger); }
-#listening-indicator[data-state="error"] .dot { background: var(--danger); }
-
-/* Connected (idle) — green; Disconnected — red. */
-#listening-indicator[data-state="idle"] {
-  border-color: #34c759;
-  color: #34c759;
+#listening-indicator[data-state="error"] .dot {
+  background: var(--danger); box-shadow: 0 0 10px rgba(255,123,134,0.55);
 }
 #listening-indicator[data-state="idle"] .dot {
-  background: #34c759;
-  box-shadow: 0 0 10px rgba(52,199,89,0.55);
-}
-#listening-indicator[data-state="disconnected"] {
-  border-color: #ff3b30;
-  color: #ff3b30;
+  background: #34c759; box-shadow: 0 0 10px rgba(52,199,89,0.55);
 }
 #listening-indicator[data-state="disconnected"] .dot {
-  background: #ff3b30;
-  box-shadow: 0 0 10px rgba(255,59,48,0.55);
+  background: #ff3b30; box-shadow: 0 0 10px rgba(255,59,48,0.55);
 }
 
 @keyframes pulse {
