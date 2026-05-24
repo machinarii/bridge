@@ -181,7 +181,7 @@ kbd {
     radial-gradient(ellipse 140% 90% at 50% -10%, color-mix(in oklab, var(--tile-color, #6ea8ff) 28%, transparent) 0%, transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
   padding: 1rem;
-  display: flex; flex-direction: column; justify-content: space-between;
+  display: flex; flex-direction: column; justify-content: flex-start;
   cursor: pointer;
   overflow: hidden;
   transition: transform 180ms cubic-bezier(.2,.8,.2,1), background 160ms, border-color 160ms;
@@ -206,8 +206,8 @@ kbd {
 }
 .agent-tile.focused::before { opacity: 0; }
 .agent-tile .name { margin: 0; font-size: 1.4rem; font-weight: 400; }
-.agent-tile .role { opacity: 0.65; font-size: 0.9rem; }
-.agent-tile .status { font-size: 0.8rem; opacity: 0.6; display: inline-flex; align-items: center; gap: 6px; }
+.agent-tile .role { opacity: 0.65; font-size: 0.9rem; margin-top: 0.25rem; line-height: 1.35; }
+.agent-tile .status { font-size: 0.8rem; opacity: 0.6; display: inline-flex; align-items: center; gap: 6px; margin-top: auto; }
 .agent-tile .status .dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--fg-dim);
