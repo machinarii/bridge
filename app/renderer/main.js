@@ -690,46 +690,88 @@ function renderZoom(specOverride) {
         <span class="role-large">${escapeHtml(roleLabel(agent.role))}</span>
       </div>
     </div>
+    <div class="chat-scroll"></div>
     <div class="tile-surface"></div>`;
   surfaceEl.appendChild(view);
+  const chatEl = view.querySelector('.chat-scroll');
   const surfaceWrap = view.querySelector('.tile-surface');
+
+  // Always-visible inline conversation history (iMessage-style bubbles).
+  renderChatHistory(chatEl, agent);
 
   const spec = specOverride ?? agent.lastSpec;
   if (!spec) {
     surfaceWrap.innerHTML = `
       <div class="idle">
-        <h3>${escapeHtml(agent.name)}</h3>
         <p class="for-gamepad">Hold <kbd>R2</kbd> and speak.</p>
         <p class="for-keyboard">Hold <kbd>v</kbd> and speak — or press <kbd>/</kbd> to type.</p>
       </div>`;
-    renderActionBar([{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }]);
+    renderActionBar([]);
     ring.set([]);
     _setL2Shortcuts();
     return;
   }
 
-  const { surface, focusables, autoSpeak } = renderTile(spec);
-  surfaceWrap.appendChild(surface);
-  const actionButtons = renderActionBar(spec.actions || []);
-  ring.set([...focusables, ...actionButtons]);
-  for (const btn of actionButtons) {
-    btn.addEventListener('click', () => executeAction(btn._action, spec));
-  }
-  for (const f of focusables) {
-    f.addEventListener('click', () => { ring.moveTo(el => el === f); pressCross(); });
+  // Compose / list specs still get their interactive surface below the
+  // chat; reader/answer specs are already represented as the latest
+  // agent bubble, so we don't double up.
+  const showTile = spec.template === 'compose' || spec.template === 'list';
+  if (showTile) {
+    const { surface, focusables, autoSpeak } = renderTile(spec);
+    surfaceWrap.appendChild(surface);
+    const actionButtons = renderActionBar(spec.actions || []);
+    ring.set([...focusables, ...actionButtons]);
+    for (const btn of actionButtons) {
+      btn.addEventListener('click', () => executeAction(btn._action, spec));
+    }
+    for (const f of focusables) {
+      f.addEventListener('click', () => { ring.moveTo(el => el === f); pressCross(); });
+    }
+    if (autoSpeak && !specOverride?._silent) speak(autoSpeak);
+  } else {
+    renderActionBar([]);
+    ring.set([]);
+    if (spec.body && !specOverride?._silent) speak(spec.body);
   }
   _setL2Shortcuts();
-  if (autoSpeak && !specOverride?._silent) speak(autoSpeak);
+}
+
+async function renderChatHistory(container, agent) {
+  container.innerHTML = '';
+  try {
+    const r = await fetch(`/projects/${activeProject.id}/agents/${agent.id}/history`);
+    if (!r.ok) return;
+    const { messages } = await r.json();
+    for (const m of messages) {
+      const bubble = document.createElement('div');
+      bubble.className = `bubble ${m.role === 'user' ? 'user' : 'agent'}`;
+      let body = String(m.content || '').trim();
+      if (m.role === 'assistant') {
+        // The assistant turn is the raw spec JSON; extract its body.
+        try {
+          const parsed = JSON.parse(body.replace(/^```(?:json)?/i,'').replace(/```$/, '').trim());
+          if (parsed?.body) body = parsed.body;
+          else if (parsed?.title) body = parsed.title;
+        } catch { /* leave body as-is */ }
+      }
+      bubble.textContent = body;
+      container.appendChild(bubble);
+    }
+    container.scrollTop = container.scrollHeight;
+  } catch (err) {
+    console.warn('[chat] history failed:', err);
+  }
 }
 
 function _setL2Shortcuts() {
+  // History is now always visible inline (iMessage-style) so the
+  // history toggle is gone. Esc/Back is implicit via Circle/Esc — kept
+  // off the rail to reduce noise. Enter/Select lives on the right side
+  // via the action-bar buttons themselves.
   setShortcuts([
-    { gamepad: 'cross',    keyboard: 'Enter', label: 'Select' },
-    { gamepad: 'circle',   keyboard: 'Esc',   label: 'Back' },
-    { gamepad: 'l1',       keyboard: '[',     label: 'Prev' },
-    { gamepad: 'r1',       keyboard: ']',     label: 'Next' },
-    { gamepad: 'triangle', keyboard: 'T',     label: 'History' },
-    { gamepad: 'options',  keyboard: '\\',    label: 'Files' },
+    { gamepad: 'l1',      keyboard: '[',  label: 'Prev' },
+    { gamepad: 'r1',      keyboard: ']',  label: 'Next' },
+    { gamepad: 'options', keyboard: '\\', label: 'Files' },
   ]);
 }
 
@@ -955,9 +997,8 @@ async function toggleFocusedAgentEnabled() {
     console.error(err);
   }
 }
-const drawerEl = document.getElementById('history-drawer');
-const drawerListEl = drawerEl.querySelector('.history-list');
-
+// History drawer was removed; chat is always inline. Keep these stubs
+// so file-explorer code that references "drawerOpen" doesn't crash.
 let drawerOpen = false;
 let drawerFocus = 0;
 let drawerEntries = [];
@@ -1201,20 +1242,12 @@ gp.addEventListener('press', (e) => {
       if (b === 'cross')                { openFocusedFile(); return; }
       if (b === 'circle')               { closeFileExplorer(); return; }
     }
-    if (drawerOpen) {
-      if (b === 'up' || b === 'left')   { drawerFocus = Math.max(0, drawerFocus - 1); paintDrawerFocus(); return; }
-      if (b === 'down' || b === 'right'){ drawerFocus = Math.min(drawerEntries.length - 1, drawerFocus + 1); paintDrawerFocus(); return; }
-      if (b === 'cross')                { openHistoryEntry(drawerEntries[drawerFocus]); return; }
-      if (b === 'circle')               { closeHistoryDrawer(); return; }
-      if (b === 'triangle')             { closeHistoryDrawer(); return; }
-    }
     if (b === 'up' || b === 'left')      ring.move(-1);
     else if (b === 'down' || b === 'right') ring.move(+1);
     else if (b === 'cross')              pressCross();
     else if (b === 'circle')             pressCircle();
     else if (b === 'l1')                 cycleAgent(-1);
     else if (b === 'r1')                 cycleAgent(+1);
-    else if (b === 'triangle')           toggleHistoryDrawer();
     return;
   }
 
@@ -1284,14 +1317,6 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'Enter')                                  { e.preventDefault(); openFocusedFile(); return; }
     if (e.key === 'Escape')                                 { e.preventDefault(); closeFileExplorer(); return; }
   }
-  // History drawer (L2) intercepts navigation
-  if (drawerOpen && mode === MODE_ZOOM) {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')      { e.preventDefault(); drawerFocus = Math.max(0, drawerFocus - 1); paintDrawerFocus(); return; }
-    if (e.key === 'ArrowDown' || e.key === 'ArrowRight')   { e.preventDefault(); drawerFocus = Math.min(drawerEntries.length - 1, drawerFocus + 1); paintDrawerFocus(); return; }
-    if (e.key === 'Enter')                                  { e.preventDefault(); openHistoryEntry(drawerEntries[drawerFocus]); return; }
-    if (e.key === 'Escape' || e.key === 't')                { e.preventDefault(); closeHistoryDrawer(); return; }
-  }
-
   if (mode === MODE_PROJECTS) {
     if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
       e.preventDefault();
@@ -1318,7 +1343,6 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'Escape')     { e.preventDefault(); pressCircle(); }
     else if (e.key === '[')          { e.preventDefault(); cycleAgent(-1); }
     else if (e.key === ']')          { e.preventDefault(); cycleAgent(+1); }
-    else if (e.key === 't')          { e.preventDefault(); toggleHistoryDrawer(); }
   }
 });
 
