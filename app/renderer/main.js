@@ -1094,6 +1094,8 @@ function closeFileExplorer() {
   fileDrawerEl.hidden = true;
   fileExplorerOpen = false;
   document.body.dataset.fileDrawer = 'closed';
+  // The viewer is tied to the file manager — never appears on its own.
+  closeFileViewer();
 }
 
 function paintFileFocus() {
