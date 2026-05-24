@@ -6,7 +6,7 @@ import { renderTile, renderActionBar } from './tiles.js';
 const surfaceEl       = document.getElementById('surface');
 const indicatorEl     = document.getElementById('listening-indicator');
 const indicatorTextEl = indicatorEl.querySelector('.state-text');
-const contextLabelEl  = document.getElementById('context-label');
+const breadcrumbsEl   = document.getElementById('breadcrumbs');
 const typedWrap       = document.getElementById('ptt-typed');
 const typedInput      = document.getElementById('typed-input');
 
@@ -65,7 +65,8 @@ function playZoomOutTo(target, rect) {
 function setInputMode(m) {
   if (document.body.dataset.inputMode !== m) document.body.dataset.inputMode = m;
 }
-setInputMode('keyboard');
+// Boot in gamepad mode; flip to keyboard as soon as the user touches a key or mouse.
+setInputMode('gamepad');
 window.addEventListener('keydown', () => setInputMode('keyboard'), true);
 window.addEventListener('mousemove', () => setInputMode('keyboard'), true);
 
@@ -105,21 +106,44 @@ function setIndicator(state, text) {
   if (text) indicatorTextEl.textContent = text;
 }
 
+/** Set breadcrumbs in the top-right. Pass an array of {label, color?} where
+ *  the last entry is the current page. */
+function setBreadcrumbs(parts) {
+  breadcrumbsEl.innerHTML = '';
+  parts.forEach((p, i) => {
+    if (i > 0) {
+      const sep = document.createElement('span');
+      sep.className = 'sep';
+      sep.textContent = '›'; // ›
+      breadcrumbsEl.appendChild(sep);
+    }
+    const c = document.createElement('span');
+    c.className = 'crumb' + (i === parts.length - 1 ? ' current' : '');
+    if (p.color) {
+      const chip = document.createElement('span');
+      chip.className = 'agent-chip';
+      chip.style.setProperty('--agent-color', p.color);
+      c.appendChild(chip);
+    }
+    c.appendChild(document.createTextNode(p.label));
+    breadcrumbsEl.appendChild(c);
+  });
+}
+// Back-compat shim — old callers pass (text, color); we re-derive crumbs.
 function setContextLabel(text, color) {
-  contextLabelEl.innerHTML = '';
-  if (color) {
-    const chip = document.createElement('span');
-    chip.className = 'agent-chip';
-    chip.style.setProperty('--agent-color', color);
-    contextLabelEl.appendChild(chip);
+  if (!text || text === 'Bridge' || /^Bridge —/.test(text)) {
+    if (text === 'Bridge — projects') setBreadcrumbs([{ label: 'Projects' }]);
+    else setBreadcrumbs([]);
+    return;
   }
-  contextLabelEl.appendChild(document.createTextNode(text || 'Bridge'));
+  // Default fallback — single crumb
+  setBreadcrumbs([{ label: text, color }]);
 }
 
 function renderProjects() {
   mode = MODE_PROJECTS;
   document.documentElement.style.setProperty('--agent-color', '#6ea8ff');
-  setContextLabel('Bridge — projects');
+  setBreadcrumbs([{ label: 'Projects' }]);
   surfaceEl.innerHTML = '';
 
   // Fixed 4×2 layout — "+ New" is always one of the 8 cells.
@@ -186,7 +210,7 @@ function tileCount() { return projects.length + 1; }
 
 async function renderNewProjectRoles() {
   mode = MODE_NEW_PROJ_ROLES;
-  setContextLabel('New project — pick roles');
+  setBreadcrumbs([{ label: 'Projects' }, { label: 'New project' }, { label: 'Roles' }]);
   surfaceEl.innerHTML = '';
 
   // Lazy-load role catalog
@@ -286,7 +310,7 @@ function confirmCapture() {
 }
 function renderNewProjectName() {
   mode = MODE_NEW_PROJ_NAME;
-  setContextLabel('New project — name');
+  setBreadcrumbs([{ label: 'Projects' }, { label: 'New project' }, { label: 'Name' }]);
   surfaceEl.innerHTML = '';
   const t = document.createElement('section');
   t.className = 'capture-tile';
@@ -308,7 +332,7 @@ function renderNewProjectName() {
 
 function renderNewProjectGoal() {
   mode = MODE_NEW_PROJ_GOAL;
-  setContextLabel('New project — goal');
+  setBreadcrumbs([{ label: 'Projects' }, { label: 'New project' }, { label: 'Goal' }]);
   surfaceEl.innerHTML = '';
   const t = document.createElement('section');
   t.className = 'capture-tile';
@@ -343,7 +367,7 @@ function renderGrid() {
   if (!activeProject) return renderProjects();
   mode = MODE_GRID;
   document.documentElement.style.setProperty('--agent-color', '#6ea8ff');
-  setContextLabel(activeProject.name);
+  setBreadcrumbs([{ label: 'Projects' }, { label: activeProject.name }]);
   surfaceEl.innerHTML = '';
 
   const { cols, rows } = gridLayout(activeProject.agents.length);
@@ -436,7 +460,11 @@ function renderZoom(specOverride) {
   const agent = currentAgent();
   if (!agent) return renderGrid();
   document.documentElement.style.setProperty('--agent-color', agent.color);
-  setContextLabel(`${agent.name} — ${roleLabel(agent.role)}`, agent.color);
+  setBreadcrumbs([
+    { label: 'Projects' },
+    { label: activeProject.name },
+    { label: `${agent.name} · ${roleLabel(agent.role)}`, color: agent.color },
+  ]);
   surfaceEl.innerHTML = '';
 
   const view = document.createElement('section');
@@ -997,6 +1025,15 @@ function speakFocusedAgentName() {
     if (agent) { stopSpeaking(); speak(agent.name); }
   }
 }
+
+// Brand link: clicking it returns to L0.
+document.getElementById('brand')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (mode === MODE_PROJECTS) return;
+  if (mode === MODE_ZOOM)      exitZoom().then(() => exitToProjects());
+  else if (mode === MODE_GRID) exitToProjects();
+  else                          renderProjects();
+});
 
 window.addEventListener('keydown', (e) => {
   if (document.activeElement === typedInput) {
