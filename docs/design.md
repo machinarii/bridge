@@ -398,10 +398,20 @@ checkbox in the top-right corner.
 ## 11. Smart-TV HCI compliance
 
 Bridge is designed for couch / 10-foot operation with a gamepad as the
-primary input. The interaction model deliberately mirrors **Apple
-tvOS Human Interface Guidelines** and **Google TV design principles**
-so the product is comfortable on a TV-class device. The non-negotiable
-TV-HCI rules and how Bridge satisfies each:
+primary input. The interaction model deliberately mirrors three
+overlapping platform conventions:
+
+- **Apple tvOS Human Interface Guidelines** — focus engine, parallax
+  motion, large rest sizes, "no text input on the surface."
+- **Google TV** (a.k.a. Android TV) **design principles** — flat
+  grids, persistent action affordances, voice-first secondary nav.
+- **Xbox One/Series UX guidelines** ("Cortana / Fluent for gaming") —
+  ABXY mapping, safe-area discipline, "focus is sacred," shoulder
+  buttons reserved for traversal/cycling.
+
+Where the three platforms disagree, Bridge falls back to **what's
+common to all three**. The non-negotiable TV-HCI rules and how Bridge
+satisfies each:
 
 ### 11.1 Focus must be unmistakable from across the room
 - Single clearly-focused element at all times — never "no focus."
@@ -418,14 +428,33 @@ TV-HCI rules and how Bridge satisfies each:
 - Five buttons control everything: `D-pad`, `Cross` (select),
   `Circle` (back), `Square` (toggle on/off), `Triangle` (advance /
   drawer), plus shoulders for cycling and `Options` for the explorer.
+- **Cross-platform mapping** (Bridge renders PS5 glyphs in
+  `body[data-input-mode="gamepad"]`):
+
+  | Bridge / PS5  | Xbox  | Switch | Role                           |
+  |---|---|---|---|
+  | Cross  `✕`    | A     | B      | Primary select / advance       |
+  | Circle `○`    | B     | A      | Back / cancel                  |
+  | Square `□`    | X     | Y      | Toggle on/off                  |
+  | Triangle `△`  | Y     | X      | Context / drawer / advance     |
+  | L1 / R1       | LB/RB | L/R    | Cycle through agents at L2     |
+  | L2 / R2       | LT/RT | ZL/ZR  | (L2 unused; R2 hold = voice)   |
+  | Options       | View  | −      | Files / explorer               |
+
+  This matches Xbox's "**A accepts, B cancels**" axiom, the inverse of
+  Switch's button layout. The product never relies on a button's
+  *physical position*; only on its semantic role (select / back /
+  toggle / context). On a non-PS controller the user re-learns
+  "Cross = A" once and the model carries forward.
 - 2-D grid navigation reads `cols × rows` from the rendered grid so
   arrows never produce surprise jumps. Wrap is intentional and matches
   Apple TV's "stay-on-row" feel.
 - `enterZoom` and `exitToProjects` push/pop **`zoomStack`** so back nav
   always lands the focus on the exact tile you came from — spatial
-  continuity is preserved.
+  continuity is preserved (the "Quick Resume" principle from Xbox).
 - Linear "between-projects" carousel via `Opt + ←/→` (`slideToAdjacent
-  Project`) mirrors tvOS's "swipe between spaces" affordance.
+  Project`) mirrors tvOS's "swipe between spaces" affordance and
+  Xbox's LB/RB tab-cycling pattern.
 
 ### 11.3 Glanceable, low-density information
 - One job per screen: project picker (L0), agent grid (L1), single
@@ -478,12 +507,16 @@ TV-HCI rules and how Bridge satisfies each:
 ### 11.7 Sufficient padding, safe zone, no edge content
 - `#baseplate` uses 24 px / 32 px outer padding and a 20 px gap
   between the header, surface, and footer — content stays comfortably
-  inside a TV overscan-safe area.
+  inside a TV overscan-safe area (Apple tvOS recommends 60 px / 90 px
+  margins on a 1080p canvas; Xbox spec is 5 % "TV-safe" on each side,
+  approximately matched here at 1080p; Google TV likewise calls for
+  48 dp minimum).
 - Drawers (`#file-drawer` 280 px left, `#file-viewer` 44 vw left)
   shift the main surface margin so nothing is occluded by the
   overlapping pane.
 - The footer rail enforces a minimum 56 px height so chips stay
-  finger / cursor-sized.
+  finger / cursor-sized — meets Xbox's "44 dp minimum touch target"
+  and Apple's "minimum 70 pt focusable" rules at couch distance.
 
 ### 11.8 Glanceable status, audible feedback
 - `#listening-indicator` at far-right of the header reports the
@@ -500,7 +533,11 @@ TV-HCI rules and how Bridge satisfies each:
 - Body type **22 px Light 300** (Barlow Condensed) on `--bg #0b0f14`.
   Headings 1.4 em / 400. Brand wordmark uses **Source Sans 3**
   Medium / SemiBold for legibility at the smallest sizes (the
-  top-left lockup) — Apple TV's recommended secondary face.
+  top-left lockup).
+- Meets each platform's "minimum at 10 feet" rule: Apple tvOS calls
+  for **17 pt body minimum**, Google TV for **14 sp**, Xbox UX for
+  **24 px equivalent for primary body text**; Bridge's 22 px Light
+  body, 1.4 em / 400 headings exceed all three.
 - All foreground text uses `--fg #e7ecf3` (WCAG AAA contrast against
   the bg). Metadata uses `--fg-dim #8b97a8` (still > 4.5:1).
 - No font weight below Light (300); no italics; no thin hairlines —
@@ -512,9 +549,25 @@ TV-HCI rules and how Bridge satisfies each:
   "Open"). The keyboard chip + gamepad glyph are rendered together
   so the user always knows what `Enter` / `✕` does *now*.
 - No swipe-only or long-press-only navigation — everything is
-  reachable with D-pad + select + back.
+  reachable with D-pad + select + back. Xbox's "no hidden actions"
+  rule (every interactable must show its button glyph in the help
+  rail) is honored by the persistent shortcuts rail.
 - Drawers can be toggled via the same key that opens them
   (`F` / `Options` / `\\` for the explorer); no hidden close gesture.
+
+### 11.11 Loading & uncertainty (Xbox "tell the user something")
+- Long-running calls (model interpret, team voice) immediately flip
+  the connection indicator to **`Thinking…`** (pulsing accent dot)
+  and, for team voice, mark the lead agent tile as busy with the
+  pulsing-dot animation. The user is never staring at a static
+  screen wondering whether the press registered.
+- Network errors fall through to the indicator (red **Error**) and
+  the relevant view re-renders with a reader tile explaining the
+  failure — never a silent no-op.
+- Connection health is polled (`/health` every 5 s) and surfaced
+  in the indicator as **Connected** (green) / **Disconnected** (red).
+- TTS reads the latest assistant body aloud — eyes-off audible
+  feedback per all three platforms' accessibility guidance.
 
 ## 12. Things that were considered and rejected
 
