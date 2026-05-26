@@ -1118,6 +1118,7 @@ function _setL2Shortcuts() {
     { gamepad: 'l1',      keyboard: '[', label: 'Prev agent',   action: () => cycleAgent(-1) },
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
     { gamepad: 'options', keyboard: 'F', label: 'Explorer',     action: () => toggleFileExplorer() },
+    {                     keyboard: 'S', label: 'Skills',       action: () => toggleSkillsDrawer() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => pressCross() });
@@ -1277,7 +1278,7 @@ async function executeAction(action, sourceSpec) {
 const PTT_MODES = new Set([MODE_ZOOM, MODE_GRID, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL]);
 function startPTT() {
   if (pttActive) return;
-  if (!newFolderModalOpen && !PTT_MODES.has(mode)) return;
+  if (!newFolderModalOpen && !newSkillModalOpen && !PTT_MODES.has(mode)) return;
   pttActive = true;
   stopSpeaking();
   if (!speech.supported) {
@@ -1309,6 +1310,11 @@ speech.addEventListener('end', (e) => {
   }
   if (newFolderModalOpen) {
     newFolderInputEl.value = text;
+    setIndicator('idle', 'Connected');
+    return;
+  }
+  if (newSkillModalOpen) {
+    newSkillInputEl.value = text;
     setIndicator('idle', 'Connected');
     return;
   }
@@ -1503,6 +1509,85 @@ let fileEntries = [];
 let explorerFocused = false; // true while keyboard nav is inside the explorer
 let folderState = { charters: true, notes: true }; // default open
 let userFolders = []; // [{ key: 'user_<ts>', label: 'Name' }] — client-side
+let projectSkills = {}; // { [projectId]: [{ name, desc }] } — client-side
+let skillsDrawerOpen = false;
+
+const skillsDrawerEl = document.getElementById('skills-drawer');
+const skillsListEl   = skillsDrawerEl?.querySelector('.skills-list');
+const newSkillBtnEl  = document.getElementById('new-skill-btn');
+const newSkillModalEl = document.getElementById('new-skill-modal');
+const newSkillInputEl = document.getElementById('new-skill-name');
+const newSkillDictateEl = document.getElementById('new-skill-dictate');
+const newSkillCancelEl  = document.getElementById('new-skill-cancel');
+const newSkillCreateEl  = document.getElementById('new-skill-create');
+let newSkillModalOpen = false;
+
+function toggleSkillsDrawer() {
+  if (mode === MODE_PROJECTS) return;
+  if (!activeProject) return;
+  if (skillsDrawerOpen) { closeSkillsDrawer(); return; }
+  openSkillsDrawer();
+}
+function openSkillsDrawer() {
+  syncExplorerHeights();
+  rebuildSkillsList();
+  skillsDrawerEl.hidden = false;
+  skillsDrawerOpen = true;
+  document.body.dataset.skillsDrawer = 'open';
+  if (fileExplorerOpen) closeFileExplorer();
+}
+function closeSkillsDrawer() {
+  skillsDrawerEl.hidden = true;
+  skillsDrawerOpen = false;
+  document.body.dataset.skillsDrawer = 'closed';
+}
+function rebuildSkillsList() {
+  const list = projectSkills[activeProject.id] || [];
+  skillsListEl.innerHTML = '';
+  if (list.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'skills-empty';
+    empty.textContent = 'No skills yet — tap + to add one.';
+    skillsListEl.appendChild(empty);
+    return;
+  }
+  for (const s of list) {
+    const row = document.createElement('div');
+    row.className = 'skill-entry';
+    row.innerHTML = `<div class="skill-name">${escapeHtml(s.name)}</div>
+                     <div class="skill-desc">${escapeHtml(s.desc || '')}</div>`;
+    skillsListEl.appendChild(row);
+  }
+}
+
+function showNewSkillModal() {
+  newSkillInputEl.value = '';
+  newSkillModalEl.hidden = false;
+  newSkillModalOpen = true;
+  setTimeout(() => newSkillInputEl.focus(), 0);
+}
+function hideNewSkillModal() {
+  newSkillModalEl.hidden = true;
+  newSkillModalOpen = false;
+}
+function commitNewSkill() {
+  const desc = newSkillInputEl.value.trim();
+  if (!desc) { hideNewSkillModal(); return; }
+  // First word(s) become the name; full text is desc. AI integration TBD.
+  const name = desc.split(/[.!?]/)[0].slice(0, 40);
+  if (!projectSkills[activeProject.id]) projectSkills[activeProject.id] = [];
+  projectSkills[activeProject.id].push({ name, desc });
+  hideNewSkillModal();
+  rebuildSkillsList();
+}
+newSkillBtnEl?.addEventListener('click', () => showNewSkillModal());
+newSkillCancelEl?.addEventListener('click', () => hideNewSkillModal());
+newSkillCreateEl?.addEventListener('click', () => commitNewSkill());
+newSkillDictateEl?.addEventListener('click', () => { startPTT(); });
+newSkillInputEl?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter')  { e.preventDefault(); commitNewSkill(); }
+  else if (e.key === 'Escape') { e.preventDefault(); hideNewSkillModal(); }
+});
 const newFolderModalEl   = document.getElementById('new-folder-modal');
 const newFolderBtnEl     = document.getElementById('new-folder-btn');
 const newFolderInputEl   = document.getElementById('new-folder-name');
@@ -1861,6 +1946,13 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     toggleFileExplorer();
     return;
+  }
+  if (e.key === 's' || e.key === 'S') {
+    if (mode === MODE_GRID || mode === MODE_ZOOM) {
+      e.preventDefault();
+      toggleSkillsDrawer();
+      return;
+    }
   }
   if (e.key === '/')  { e.preventDefault(); typedWrap.hidden = false; typedInput.focus(); return; }
 
