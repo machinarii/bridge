@@ -91,7 +91,7 @@ export async function runTeamVoice({ projectId, text }) {
       },
     };
   }
-  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4.5';
+  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.7';
   const lead = project.agents.find(a => a.id === project.leadAgentId);
   const others = project.agents.filter(a => a.id !== lead.id && a.enabled);
 
