@@ -872,12 +872,10 @@ function renderGrid() {
     tile.style.setProperty('--tile-color', projectColor);
     tile.dataset.agentId = a.id;
     tile.dataset.busy = agentBusy[a.id] ? 'true' : 'false';
-    const isLead = a.id === activeProject.leadAgentId;
     tile.innerHTML = `
       <h2 class="name">${escapeHtml(a.name)}</h2>
       <div class="role">${escapeHtml(roleLabel(a.role))}</div>
-      <div class="status"><span class="dot"></span><span>${agentBusy[a.id] ? 'Thinking…' : 'Idle'}</span></div>
-      ${isLead ? '<span class="lead-badge" title="Lead — always on">Lead</span>' : ''}`;
+      <div class="status"><span class="dot"></span><span>${agentBusy[a.id] ? 'Thinking…' : 'Idle'}</span></div>`;
     tile.addEventListener('click', () => { gridIndex = i; ring.set(tileEls); ring.index = i; ring.paint(); enterZoom(); });
     grid.appendChild(tile);
     return tile;
