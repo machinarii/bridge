@@ -953,7 +953,63 @@ body[data-file-viewer="open"] #surface {
 #file-viewer[hidden],
 #file-drawer[hidden],
 #history-drawer[hidden],
-#new-folder-modal[hidden] { display: none !important; }
+#skills-drawer[hidden],
+#new-folder-modal[hidden],
+#new-skill-modal[hidden] { display: none !important; }
+
+/* Skills drawer — same shape as file-drawer. */
+#skills-drawer.drawer.left {
+  position: fixed;
+  top: var(--surface-top, 1.5rem);
+  left: 1.5rem;
+  bottom: var(--surface-bottom, 5rem);
+  width: 280px;
+  background: var(--bg-elev);
+  border: 1px solid #1d2734;
+  border-radius: var(--radius);
+  overflow-y: auto; padding: 0; z-index: 60;
+}
+#skills-drawer header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+  font-weight: 400;
+}
+#new-skill-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.22);
+  color: var(--fg);
+  border-radius: 5px;
+  width: 26px; height: 26px;
+  font-size: 1rem; line-height: 1;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Source Sans 3', sans-serif;
+  font-weight: 400;
+}
+#new-skill-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.36); }
+.skills-list { padding: 0.25rem 0; }
+.skill-entry {
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  display: flex; flex-direction: column; gap: 0.2rem;
+}
+.skill-entry .skill-name { font-weight: 400; }
+.skill-entry .skill-desc { font-size: 0.82rem; opacity: 0.6; font-weight: 300; }
+.skill-entry.focused {
+  background: rgba(110,168,255,0.22);
+  border-left-color: var(--focus, #ffffff);
+  border-left-width: 4px;
+}
+.skills-empty {
+  padding: 1rem;
+  font-size: 0.9rem;
+  font-weight: 300;
+  color: var(--fg-dim);
+  font-style: italic;
+}
+body[data-skills-drawer="open"] #surface { margin-left: calc(280px + 1rem); }
 
 /* ===== New-folder button in #file-drawer header ===== */
 #file-drawer header {
