@@ -444,7 +444,7 @@ function renderProjects() {
     tile.className = 'project-tile';
     tile.dataset.projectId = p.id;
     tile.innerHTML = `
-      <h2 class="name">${escapeHtml(p.name)}</h2>
+      <h2 class="name">${escapeHtml(sentenceCase(p.name))}</h2>
       <div class="meta">${p.agents.length} agent${p.agents.length===1?'':'s'}</div>`;
     const myIdx = tileEls.length;
     tile.addEventListener('click', () => { pickerIndex = myIdx; ring.index = myIdx; ring.paint(); openFocused(); });
@@ -702,8 +702,8 @@ function renderGrid() {
   const heading = document.createElement('header');
   heading.className = 'project-heading';
   heading.innerHTML = `
-    <h2 class="project-title">${escapeHtml(activeProject.name)}</h2>
-    <p class="project-goal">${escapeHtml(activeProject.goal || '')}</p>`;
+    <h2 class="project-title">${escapeHtml(sentenceCase(activeProject.name))}</h2>
+    <p class="project-goal">${escapeHtml(sentenceCase(activeProject.goal || ''))}</p>`;
   surfaceEl.appendChild(heading);
 
   // Fixed 4×2 layout — matches the project picker on L0.
@@ -773,6 +773,14 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
+}
+
+/** Display-time sentence case: uppercase the first letter, leave the
+ *  rest of the string as-typed (so iOS, Cassidy, etc. survive). */
+function sentenceCase(s) {
+  const t = String(s ?? '').trim();
+  if (!t) return t;
+  return t[0].toUpperCase() + t.slice(1);
 }
 
 function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
