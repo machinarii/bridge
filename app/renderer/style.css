@@ -87,7 +87,7 @@ kbd {
   padding: 24px 32px;
   gap: 20px;
 }
-#baseplate > #footer-rail { margin-top: auto; }
+#baseplate > #footer-rail { margin-top: auto; flex: 0 0 auto; }
 
 #context-strip {
   display: flex;
@@ -187,8 +187,9 @@ kbd {
   overflow: hidden;
   display: flex; flex-direction: column;
   position: relative;
-  /* Auto height — sizes to its content, doesn't fill the viewport. */
-  flex: 0 0 auto;
+  /* Stretch to fill the available vertical space between header and footer. */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 /* L2 lets .agent-view BE the visible container — no nested chrome. */
 body[data-mode="zoom"] #surface {
