@@ -120,12 +120,13 @@ kbd {
   appearance: none;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--fg-dim);
-  width: 28px; height: 28px;
+  width: 36px; height: 36px;
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer;
-  margin-right: 0.6rem;
+  margin-left: 0.6rem;
+  flex: 0 0 auto;
   transition: color 120ms, border-color 120ms, background 120ms;
 }
 #settings-btn:hover { color: var(--fg); background: rgba(255,255,255,0.06); }
