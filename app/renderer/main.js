@@ -1279,7 +1279,7 @@ async function executeAction(action, sourceSpec) {
 const PTT_MODES = new Set([MODE_ZOOM, MODE_GRID, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL]);
 function startPTT() {
   if (pttActive) return;
-  if (!newFolderModalOpen && !newSkillModalOpen && !PTT_MODES.has(mode)) return;
+  if (!PTT_MODES.has(mode)) return;
   pttActive = true;
   stopSpeaking();
   if (!speech.supported) {
@@ -1307,16 +1307,6 @@ speech.addEventListener('end', (e) => {
   if (!text) {
     setIndicator('idle', 'No speech detected');
     setTimeout(() => setIndicator('idle', 'Connected'), 1500);
-    return;
-  }
-  if (newFolderModalOpen) {
-    newFolderInputEl.value = text;
-    setIndicator('idle', 'Connected');
-    return;
-  }
-  if (newSkillModalOpen) {
-    newSkillInputEl.value = text;
-    setIndicator('idle', 'Connected');
     return;
   }
   if (mode === MODE_NEW_PROJ_NAME) {
@@ -1400,8 +1390,6 @@ async function exitToProjects() {
   closeFileViewer();
   if (fileExplorerOpen) closeFileExplorer();
   if (skillsDrawerOpen) closeSkillsDrawer();
-  if (newFolderModalOpen) hideNewFolderModal();
-  if (newSkillModalOpen) hideNewSkillModal();
   const fromProjectId = activeProject?.id;
   popZoomRect(); // discard stale cached rect; we'll compute fresh
   await backZoomWithSnapshot(
@@ -1518,13 +1506,6 @@ let skillsDrawerOpen = false;
 
 const skillsDrawerEl = document.getElementById('skills-drawer');
 const skillsListEl   = skillsDrawerEl?.querySelector('.skills-list');
-const newSkillBtnEl  = document.getElementById('new-skill-btn');
-const newSkillModalEl = document.getElementById('new-skill-modal');
-const newSkillInputEl = document.getElementById('new-skill-name');
-const newSkillDictateEl = document.getElementById('new-skill-dictate');
-const newSkillCancelEl  = document.getElementById('new-skill-cancel');
-const newSkillCreateEl  = document.getElementById('new-skill-create');
-let newSkillModalOpen = false;
 
 function toggleSkillsDrawer() {
   if (mode === MODE_PROJECTS) return;
@@ -1539,9 +1520,6 @@ function openSkillsDrawer() {
   skillsDrawerOpen = true;
   document.body.dataset.skillsDrawer = 'open';
   if (fileExplorerOpen) closeFileExplorer();
-  // Land focus on the + button so the user can immediately create a
-  // new skill via keyboard / d-pad.
-  setTimeout(() => newSkillBtnEl?.focus(), 0);
 }
 function closeSkillsDrawer() {
   skillsDrawerEl.hidden = true;
@@ -1554,7 +1532,7 @@ function rebuildSkillsList() {
   if (list.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'skills-empty';
-    empty.textContent = 'No skills yet — tap + to add one.';
+    empty.textContent = 'No skills yet.';
     skillsListEl.appendChild(empty);
     return;
   }
@@ -1566,108 +1544,6 @@ function rebuildSkillsList() {
     skillsListEl.appendChild(row);
   }
 }
-
-function showNewSkillModal() {
-  syncExplorerHeights();
-  newSkillInputEl.value = '';
-  newSkillModalEl.hidden = false;
-  newSkillModalOpen = true;
-  document.body.dataset.creationPanel = 'open';
-  setTimeout(() => newSkillInputEl.focus(), 0);
-}
-function hideNewSkillModal() {
-  newSkillModalEl.hidden = true;
-  newSkillModalOpen = false;
-  document.body.dataset.creationPanel = 'closed';
-}
-function commitNewSkill() {
-  const desc = newSkillInputEl.value.trim();
-  if (!desc) { hideNewSkillModal(); return; }
-  // First word(s) become the name; full text is desc. AI integration TBD.
-  const name = desc.split(/[.!?]/)[0].slice(0, 40);
-  if (!projectSkills[activeProject.id]) projectSkills[activeProject.id] = [];
-  projectSkills[activeProject.id].push({ name, desc });
-  hideNewSkillModal();
-  rebuildSkillsList();
-}
-newSkillBtnEl?.addEventListener('click', (e) => { e.stopPropagation(); showNewSkillModal(); });
-newSkillBtnEl?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault(); e.stopPropagation();
-    showNewSkillModal();
-  } else if (e.key === 'Escape') {
-    e.preventDefault(); e.stopPropagation();
-    newSkillBtnEl.blur();
-    closeSkillsDrawer();
-  } else if (e.key === 'ArrowRight') {
-    // Hop out of the drawer to the main surface.
-    e.preventDefault(); e.stopPropagation();
-    newSkillBtnEl.blur();
-    ring.paint();
-  }
-});
-newSkillCancelEl?.addEventListener('click', () => hideNewSkillModal());
-newSkillCreateEl?.addEventListener('click', () => commitNewSkill());
-newSkillDictateEl?.addEventListener('click', () => { startPTT(); });
-newSkillInputEl?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter')  { e.preventDefault(); commitNewSkill(); }
-  else if (e.key === 'Escape') { e.preventDefault(); hideNewSkillModal(); }
-});
-const newFolderModalEl   = document.getElementById('new-folder-modal');
-const newFolderBtnEl     = document.getElementById('new-folder-btn');
-const newFolderInputEl   = document.getElementById('new-folder-name');
-const newFolderDictateEl = document.getElementById('new-folder-dictate');
-const newFolderCancelEl  = document.getElementById('new-folder-cancel');
-const newFolderCreateEl  = document.getElementById('new-folder-create');
-let newFolderModalOpen = false;
-
-function showNewFolderModal() {
-  syncExplorerHeights();
-  newFolderInputEl.value = '';
-  newFolderModalEl.hidden = false;
-  newFolderModalOpen = true;
-  document.body.dataset.creationPanel = 'open';
-  setTimeout(() => newFolderInputEl.focus(), 0);
-}
-function hideNewFolderModal() {
-  newFolderModalEl.hidden = true;
-  newFolderModalOpen = false;
-  document.body.dataset.creationPanel = 'closed';
-}
-function commitNewFolder() {
-  const name = newFolderInputEl.value.trim();
-  if (!name) { hideNewFolderModal(); return; }
-  const key = `user_${Date.now()}`;
-  userFolders.push({ key, label: name });
-  folderState[key] = true;
-  hideNewFolderModal();
-  rebuildFileEntries();
-}
-newFolderBtnEl?.addEventListener('click', (e) => { e.stopPropagation(); showNewFolderModal(); });
-newFolderBtnEl?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault(); e.stopPropagation();
-    showNewFolderModal();
-  } else if (e.key === 'ArrowDown') {
-    e.preventDefault(); e.stopPropagation();
-    newFolderBtnEl.blur();
-    explorerFocused = true;
-    fileFocus = 0;
-    paintFileFocus();
-  } else if (e.key === 'Escape') {
-    e.preventDefault(); e.stopPropagation();
-    newFolderBtnEl.blur();
-    explorerFocused = true;
-    paintFileFocus();
-  }
-});
-newFolderCancelEl?.addEventListener('click', () => hideNewFolderModal());
-newFolderCreateEl?.addEventListener('click', () => commitNewFolder());
-newFolderDictateEl?.addEventListener('click', () => { startPTT(); });
-newFolderInputEl?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter')  { e.preventDefault(); commitNewFolder(); }
-  else if (e.key === 'Escape') { e.preventDefault(); hideNewFolderModal(); }
-});
 
 async function toggleFileExplorer() {
   if (mode === MODE_PROJECTS) return;
@@ -2022,13 +1898,6 @@ window.addEventListener('keydown', (e) => {
   // explorer holds focus. Right-arrow exits the explorer to the right.
   if (fileExplorerOpen && explorerFocused) {
     if (e.key === 'ArrowUp') {
-      if (fileFocus === 0 && newFolderBtnEl) {
-        e.preventDefault();
-        explorerFocused = false;
-        fileEntries.forEach(el => el.classList.remove('focused'));
-        newFolderBtnEl.focus();
-        return;
-      }
       e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return;
     }
     if (e.key === 'ArrowLeft')                               { e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }

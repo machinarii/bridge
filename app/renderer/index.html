@@ -37,7 +37,6 @@
   <aside id="file-drawer" class="drawer left" hidden>
     <header>
       <span>Files</span>
-      <button id="new-folder-btn" type="button" aria-label="New folder">＋</button>
     </header>
     <div class="file-tree"></div>
   </aside>
@@ -45,35 +44,9 @@
   <aside id="skills-drawer" class="drawer left" hidden>
     <header>
       <span>Skills</span>
-      <button id="new-skill-btn" type="button" aria-label="Add skill with AI">＋</button>
     </header>
     <div class="skills-list"></div>
   </aside>
-
-  <div id="new-skill-modal" class="modal" hidden>
-    <div class="modal-card">
-      <h3>New skill</h3>
-      <input type="text" id="new-skill-name" placeholder="What should this skill do?" autocomplete="off" />
-      <p style="font-size:0.85rem;opacity:0.7;font-weight:300;">AI will generate the skill from your description.</p>
-      <div class="modal-row">
-        <button type="button" id="new-skill-dictate">Dictate</button>
-        <button type="button" id="new-skill-cancel">Cancel</button>
-        <button type="button" id="new-skill-create">Create</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="new-folder-modal" class="modal" hidden>
-    <div class="modal-card">
-      <h3>New folder</h3>
-      <input type="text" id="new-folder-name" placeholder="Folder name" autocomplete="off" />
-      <div class="modal-row">
-        <button type="button" id="new-folder-dictate">Dictate</button>
-        <button type="button" id="new-folder-cancel">Cancel</button>
-        <button type="button" id="new-folder-create">Create</button>
-      </div>
-    </div>
-  </div>
 
   <aside id="file-viewer" class="drawer left wide" hidden>
     <header>
