@@ -996,7 +996,11 @@ function renderZoom(specOverride) {
       </div>
     </div>
     <div class="chat-scroll"></div>
-    <div class="tile-surface"></div>`;
+    <div class="tile-surface"></div>
+    <div class="agent-view-hint">
+      <span class="for-gamepad">Hold <kbd>R2</kbd> to speak</span>
+      <span class="for-keyboard">Hold <kbd>v</kbd> to speak</span>
+    </div>`;
   surfaceEl.appendChild(view);
   const chatEl = view.querySelector('.chat-scroll');
   const surfaceWrap = view.querySelector('.tile-surface');
