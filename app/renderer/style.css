@@ -232,6 +232,16 @@ body[data-surface-close-focus="true"] #surface {
   box-shadow: 0 0 22px 6px rgba(255,255,255,0.18);
 }
 
+/* L1 surface carries the project's color as its backdrop (the tiles
+ * inside are neutral). */
+body[data-mode="grid"] #surface {
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -10%,
+      color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%,
+      transparent 60%),
+    var(--bg-elev);
+}
+
 /* L2 lets .agent-view BE the visible container — no nested chrome. */
 body[data-mode="zoom"] #surface {
   background: transparent;
@@ -275,7 +285,7 @@ body[data-mode="zoom"] #surface {
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.06);
   background:
-    radial-gradient(ellipse 140% 90% at 50% -10%, color-mix(in oklab, var(--tile-color, #6ea8ff) 28%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse 140% 90% at 50% -10%, rgba(255,255,255,0.10) 0%, transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
   padding: 1rem;
   min-height: 130px;
@@ -287,7 +297,7 @@ body[data-mode="zoom"] #surface {
 .agent-tile::before {
   content: '';
   position: absolute; inset: 0;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--tile-color, #6ea8ff) 14%, transparent) 0%, transparent 35%);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 35%);
   pointer-events: none;
   opacity: 0.7;
   transition: opacity 200ms;
