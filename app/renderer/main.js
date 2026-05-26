@@ -577,7 +577,7 @@ function updatePickerShortcuts() {
   const lead = focused.agents.find(a => a.id === focused.leadAgentId);
   const leadName = lead?.name || 'Lead';
   setShortcuts([
-    { gamepad: 'r2', keyboard: 'V', label: `Talk to ${leadName}`,
+    { gamepad: 'r2', keyboard: 'V', label: `Hold to talk`,
       action: () => talkToFocusedLead() },
   ]);
 }
@@ -896,7 +896,7 @@ function updateGridShortcuts() {
   const focused = activeProject.agents[gridIndex];
   const isLeadFocused = focused?.id === activeProject.leadAgentId;
   const items = [
-    { gamepad: 'r2', keyboard: 'V', label: `Talk to ${lead?.name || 'Lead'}`, action: () => startPTT() },
+    { gamepad: 'r2', keyboard: 'V', label: 'Hold to talk', action: () => startPTT() },
     { gamepad: 'l1', keyboard: '[', label: 'Prev project', action: () => cycleProject(-1) },
     { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
     { gamepad: 'options', keyboard: 'F', label: 'Explorer', action: () => toggleFileExplorer() },
