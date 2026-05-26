@@ -1687,6 +1687,7 @@ async function openFileExplorer() {
   paintFileFocus();
   document.body.dataset.fileDrawer = 'open';
   if (drawerOpen) closeHistoryDrawer();
+  if (skillsDrawerOpen) closeSkillsDrawer();
 }
 
 function closeFileExplorer() {
