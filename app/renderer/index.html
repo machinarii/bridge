@@ -35,9 +35,24 @@
   </div>
 
   <aside id="file-drawer" class="drawer left" hidden>
-    <header><span>Files</span></header>
+    <header>
+      <span>Files</span>
+      <button id="new-folder-btn" type="button" aria-label="New folder">＋</button>
+    </header>
     <div class="file-tree"></div>
   </aside>
+
+  <div id="new-folder-modal" class="modal" hidden>
+    <div class="modal-card">
+      <h3>New folder</h3>
+      <input type="text" id="new-folder-name" placeholder="Folder name" autocomplete="off" />
+      <div class="modal-row">
+        <button type="button" id="new-folder-dictate">Dictate</button>
+        <button type="button" id="new-folder-cancel">Cancel</button>
+        <button type="button" id="new-folder-create">Create</button>
+      </div>
+    </div>
+  </div>
 
   <aside id="file-viewer" class="drawer left wide" hidden>
     <header>

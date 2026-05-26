@@ -829,7 +829,84 @@ body[data-file-viewer="open"] #surface {
  * HTML attribute and the viewer stays visible. */
 #file-viewer[hidden],
 #file-drawer[hidden],
-#history-drawer[hidden] { display: none !important; }
+#history-drawer[hidden],
+#new-folder-modal[hidden] { display: none !important; }
+
+/* ===== New-folder button in #file-drawer header ===== */
+#file-drawer header {
+  position: relative;
+}
+#new-folder-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.22);
+  color: var(--fg);
+  border-radius: 5px;
+  width: 26px; height: 26px;
+  font-size: 1rem; line-height: 1;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Source Sans 3', sans-serif;
+  font-weight: 400;
+  transition: background 120ms, border-color 120ms;
+}
+#new-folder-btn:hover,
+#new-folder-btn:focus-visible {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.36);
+  outline: 1px solid var(--focus, #ffffff);
+  outline-offset: 2px;
+}
+
+/* ===== New-folder modal ===== */
+#new-folder-modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+#new-folder-modal .modal-card {
+  min-width: 360px;
+  max-width: 480px;
+  background: var(--bg-elev);
+  border: 1px solid #1d2734;
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  display: flex; flex-direction: column; gap: 1rem;
+  box-shadow: 0 30px 80px -20px rgba(0,0,0,0.7);
+}
+#new-folder-modal h3 { margin: 0; font-weight: 400; font-size: 1.2rem; }
+#new-folder-modal input {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem;
+  color: var(--fg);
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+}
+#new-folder-modal input:focus { border-color: var(--focus); }
+#new-folder-modal .modal-row { display: flex; gap: 0.5rem; justify-content: flex-end; }
+#new-folder-modal .modal-row button {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.22);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 300;
+  transition: background 120ms, border-color 120ms;
+}
+#new-folder-modal .modal-row button:hover,
+#new-folder-modal .modal-row button:focus-visible {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.36);
+  outline: 1px solid var(--focus, #ffffff);
+  outline-offset: 2px;
+}
 
 #file-viewer.drawer.left.wide {
   position: fixed;

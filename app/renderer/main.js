@@ -1180,7 +1180,8 @@ async function executeAction(action, sourceSpec) {
 /* ---------- PTT + intent submission ---------- */
 const PTT_MODES = new Set([MODE_ZOOM, MODE_GRID, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL]);
 function startPTT() {
-  if (pttActive || !PTT_MODES.has(mode)) return;
+  if (pttActive) return;
+  if (!newFolderModalOpen && !PTT_MODES.has(mode)) return;
   pttActive = true;
   stopSpeaking();
   if (!speech.supported) {
@@ -1208,6 +1209,11 @@ speech.addEventListener('end', (e) => {
   if (!text) {
     setIndicator('idle', 'No speech detected');
     setTimeout(() => setIndicator('idle', 'Connected'), 1500);
+    return;
+  }
+  if (newFolderModalOpen) {
+    newFolderInputEl.value = text;
+    setIndicator('idle', 'Connected');
     return;
   }
   if (mode === MODE_NEW_PROJ_NAME) {
@@ -1400,6 +1406,42 @@ let fileFocus = 0;
 let fileEntries = [];
 let explorerFocused = false; // true while keyboard nav is inside the explorer
 let folderState = { charters: true, notes: true }; // default open
+let userFolders = []; // [{ key: 'user_<ts>', label: 'Name' }] — client-side
+const newFolderModalEl   = document.getElementById('new-folder-modal');
+const newFolderBtnEl     = document.getElementById('new-folder-btn');
+const newFolderInputEl   = document.getElementById('new-folder-name');
+const newFolderDictateEl = document.getElementById('new-folder-dictate');
+const newFolderCancelEl  = document.getElementById('new-folder-cancel');
+const newFolderCreateEl  = document.getElementById('new-folder-create');
+let newFolderModalOpen = false;
+
+function showNewFolderModal() {
+  newFolderInputEl.value = '';
+  newFolderModalEl.hidden = false;
+  newFolderModalOpen = true;
+  setTimeout(() => newFolderInputEl.focus(), 0);
+}
+function hideNewFolderModal() {
+  newFolderModalEl.hidden = true;
+  newFolderModalOpen = false;
+}
+function commitNewFolder() {
+  const name = newFolderInputEl.value.trim();
+  if (!name) { hideNewFolderModal(); return; }
+  const key = `user_${Date.now()}`;
+  userFolders.push({ key, label: name });
+  folderState[key] = true;
+  hideNewFolderModal();
+  rebuildFileEntries();
+}
+newFolderBtnEl?.addEventListener('click', () => showNewFolderModal());
+newFolderCancelEl?.addEventListener('click', () => hideNewFolderModal());
+newFolderCreateEl?.addEventListener('click', () => commitNewFolder());
+newFolderDictateEl?.addEventListener('click', () => { startPTT(); });
+newFolderInputEl?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter')  { e.preventDefault(); commitNewFolder(); }
+  else if (e.key === 'Escape') { e.preventDefault(); hideNewFolderModal(); }
+});
 
 async function toggleFileExplorer() {
   if (mode === MODE_PROJECTS) return;
@@ -1493,6 +1535,23 @@ function rebuildFileEntries() {
     li.textContent = n.path.replace(/^notes\//,'').replace(/\.md$/,'');
     li.dataset.path = n.path;
   });
+  // User-created folders (client-side, no contents yet).
+  for (const uf of userFolders) {
+    const head = document.createElement('div');
+    head.className = 'file-section file-folder';
+    head.dataset.folder = uf.key;
+    head.innerHTML = `<span class="folder-toggle">${folderState[uf.key] ? '▾' : '▸'}</span> ${escapeHtml(uf.label)}`;
+    fileTreeEl.appendChild(head);
+    fileEntries.push(head);
+    if (folderState[uf.key]) {
+      const empty = document.createElement('div');
+      empty.className = 'file-entry';
+      empty.style.opacity = '0.5';
+      empty.style.fontStyle = 'italic';
+      empty.textContent = '(empty)';
+      fileTreeEl.appendChild(empty);
+    }
+  }
 
   const pm = document.createElement('div');
   pm.className = 'file-entry';
