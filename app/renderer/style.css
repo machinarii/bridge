@@ -1037,25 +1037,30 @@ body[data-skills-drawer="open"] #surface { margin-left: calc(280px + 1rem); }
   outline-offset: 2px;
 }
 
-/* ===== New-folder modal ===== */
-#new-folder-modal {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.55);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 100;
-}
-#new-folder-modal .modal-card {
-  min-width: 360px;
-  max-width: 480px;
+/* ===== Creation panels (new folder / new skill) ===== */
+/* Open as a right-side panel matching the file viewer's layout
+ * (same position as #file-viewer when its drawer is open). */
+#new-folder-modal, #new-skill-modal {
+  position: fixed;
+  top: var(--surface-top, 1.5rem);
+  bottom: var(--surface-bottom, 5rem);
+  left: calc(1.5rem + 280px + 0.75rem);
+  width: 44vw; min-width: 320px;
   background: var(--bg-elev);
   border: 1px solid #1d2734;
   border-radius: var(--radius);
-  padding: 1.5rem;
-  display: flex; flex-direction: column; gap: 1rem;
-  box-shadow: 0 30px 80px -20px rgba(0,0,0,0.7);
+  display: flex; flex-direction: column;
+  z-index: 55;
 }
-#new-folder-modal h3 { margin: 0; font-weight: 400; font-size: 1.2rem; }
-#new-folder-modal input {
+#new-folder-modal .modal-card,
+#new-skill-modal .modal-card {
+  display: flex; flex-direction: column; gap: 1rem;
+  padding: 1.25rem 1.25rem 1rem;
+}
+#new-folder-modal h3,
+#new-skill-modal h3 { margin: 0; font-weight: 400; font-size: 1.2rem; }
+#new-folder-modal input,
+#new-skill-modal input {
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.18);
   border-radius: 8px;
@@ -1065,9 +1070,12 @@ body[data-skills-drawer="open"] #surface { margin-left: calc(280px + 1rem); }
   font-family: inherit;
   outline: none;
 }
-#new-folder-modal input:focus { border-color: var(--focus); }
-#new-folder-modal .modal-row { display: flex; gap: 0.5rem; justify-content: flex-end; }
-#new-folder-modal .modal-row button {
+#new-folder-modal input:focus,
+#new-skill-modal input:focus { border-color: var(--focus); }
+#new-folder-modal .modal-row,
+#new-skill-modal .modal-row { display: flex; gap: 0.5rem; justify-content: flex-end; }
+#new-folder-modal .modal-row button,
+#new-skill-modal .modal-row button {
   appearance: none;
   background: transparent;
   border: 1px solid rgba(255,255,255,0.22);
@@ -1080,7 +1088,9 @@ body[data-skills-drawer="open"] #surface { margin-left: calc(280px + 1rem); }
   transition: background 120ms, border-color 120ms;
 }
 #new-folder-modal .modal-row button:hover,
-#new-folder-modal .modal-row button:focus-visible {
+#new-folder-modal .modal-row button:focus-visible,
+#new-skill-modal .modal-row button:hover,
+#new-skill-modal .modal-row button:focus-visible {
   background: rgba(255,255,255,0.08);
   border-color: rgba(255,255,255,0.36);
   outline: 1px solid var(--focus, #ffffff);
