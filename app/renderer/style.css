@@ -561,7 +561,7 @@ body[data-mode="zoom"] #surface {
   padding: 1rem;
   min-height: 150px;
   background:
-    radial-gradient(ellipse 140% 90% at 50% -10%, rgba(110,168,255,0.22) 0%, transparent 60%),
+    radial-gradient(ellipse 140% 90% at 50% -10%, color-mix(in oklab, var(--tile-color, #6ea8ff) 28%, transparent) 0%, transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
   cursor: pointer;
   display: flex; flex-direction: column; justify-content: flex-start;
