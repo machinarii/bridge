@@ -454,7 +454,7 @@ function renderProjects() {
   // "+ New" tile
   const plus = document.createElement('div');
   plus.className = 'project-tile new-project';
-  plus.innerHTML = `<h2 class="name">+ New project</h2><div class="meta">create a team</div>`;
+  plus.innerHTML = `<h2 class="name">+ New project</h2><div class="meta">Create a team</div>`;
   const plusIdx = tileEls.length;
   plus.addEventListener('click', () => { pickerIndex = plusIdx; ring.index = plusIdx; ring.paint(); openFocused(); });
   grid.appendChild(plus);
@@ -637,7 +637,7 @@ function renderNewProjectName() {
     <h2>Name this project</h2>
     <p class="hint for-gamepad">Hold <kbd>R2</kbd> and speak.</p>
     <p class="hint for-keyboard">Hold <kbd>v</kbd> and speak — or press <kbd>/</kbd> to type.</p>
-    <div class="capture-value">${escapeHtml(newProjName) || '<span class="placeholder">(speak now)</span>'}</div>
+    <div class="capture-value">${escapeHtml(newProjName) || '<span class="placeholder">(Speak now)</span>'}</div>
     ${newProjRoleIds.includes('pm') || newProjRoleIds.includes('tpm')
       ? ''
       : '<div class="lead-badge">Cadence will lead this team.</div>'}`;
@@ -663,7 +663,7 @@ function renderNewProjectGoal() {
     <h2>What is this project's goal?</h2>
     <p class="hint for-gamepad">Hold <kbd>R2</kbd> and describe it.</p>
     <p class="hint for-keyboard">Hold <kbd>v</kbd> and describe it — or press <kbd>/</kbd> to type.</p>
-    <div class="capture-value">${escapeHtml(newProjGoal) || '<span class="placeholder">(speak now)</span>'}</div>`;
+    <div class="capture-value">${escapeHtml(newProjGoal) || '<span class="placeholder">(Speak now)</span>'}</div>`;
   surfaceEl.appendChild(t);
   renderActionBar([
     { verb: 'Confirm', glyph: 'cross',  action: { type: '_capture_confirm' } },
