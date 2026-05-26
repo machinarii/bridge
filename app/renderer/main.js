@@ -605,12 +605,15 @@ function getProjectColor(project) {
   return PROJECT_PALETTE[h % PROJECT_PALETTE.length];
 }
 
-/** Move the lead agent to index 0 so it always renders top-left on L1. */
+/** Move the lead agent to index 0 so it always renders top-left on L1;
+ *  the rest of the roles are sorted alphabetically by role label. */
 function withLeadFirst(project) {
   if (!project?.leadAgentId) return project;
   const lead = project.agents.find(a => a.id === project.leadAgentId);
   if (!lead) return project;
-  const others = project.agents.filter(a => a.id !== project.leadAgentId);
+  const others = project.agents
+    .filter(a => a.id !== project.leadAgentId)
+    .sort((a, b) => roleLabel(a.role).localeCompare(roleLabel(b.role)));
   return { ...project, agents: [lead, ...others] };
 }
 
@@ -859,10 +862,12 @@ function renderGrid() {
     tile.style.setProperty('--tile-color', projectColor);
     tile.dataset.agentId = a.id;
     tile.dataset.busy = agentBusy[a.id] ? 'true' : 'false';
+    const isLead = a.id === activeProject.leadAgentId;
     tile.innerHTML = `
       <h2 class="name">${escapeHtml(a.name)}</h2>
       <div class="role">${escapeHtml(roleLabel(a.role))}</div>
-      <div class="status"><span class="dot"></span><span>${agentBusy[a.id] ? 'Thinking…' : 'Idle'}</span></div>`;
+      <div class="status"><span class="dot"></span><span>${agentBusy[a.id] ? 'Thinking…' : 'Idle'}</span></div>
+      ${isLead ? '<span class="lead-badge" title="Lead — always on">Lead</span>' : ''}`;
     tile.addEventListener('click', () => { gridIndex = i; ring.set(tileEls); ring.index = i; ring.paint(); enterZoom(); });
     grid.appendChild(tile);
     return tile;
