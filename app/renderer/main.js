@@ -986,13 +986,25 @@ function cycleAgent(delta) {
  *  slides in from the opposite side. */
 function slideAgent(delta, doSwap) {
   const r = surfaceEl.getBoundingClientRect();
+  const cs = getComputedStyle(surfaceEl);
   const overlay = surfaceEl.cloneNode(true);
   overlay.removeAttribute('id');
+  // The #id is removed so the #surface CSS rule (flex column, padding,
+  // bg, border) no longer applies. Re-apply the relevant chrome inline
+  // so the cloned children lay out exactly like the original.
   Object.assign(overlay.style, {
     position: 'fixed',
     left: `${r.left}px`, top: `${r.top}px`,
     width: `${r.width}px`, height: `${r.height}px`,
     margin: '0', pointerEvents: 'none', zIndex: '50',
+    display: 'flex',
+    flexDirection: 'column',
+    padding: cs.padding,
+    background: cs.background,
+    border: cs.border,
+    borderRadius: cs.borderRadius,
+    overflow: 'hidden',
+    boxSizing: cs.boxSizing,
   });
   document.body.appendChild(overlay);
   doSwap();
