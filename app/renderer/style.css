@@ -783,8 +783,9 @@ body[data-mode="zoom"] #surface {
   border-left-color: var(--focus, #ffffff);
   border-left-width: 4px;
 }
-/* Explorer overlays the surface — surface stays full width and the
- * portion under the explorer is simply cut off behind it. */
+/* File selector (drawer) pushes the surface over; the file viewer
+ * (handled below) is the one that overlays without resizing. */
+body[data-file-drawer="open"] #surface { margin-left: calc(280px + 1rem); }
 
 /* ===== File viewer panel (left of the prompt container) ===== */
 /* Without this, display:flex on the rule below wins over the `hidden`
