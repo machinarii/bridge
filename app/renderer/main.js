@@ -403,6 +403,17 @@ let newProjRoleIds = [];          // toggled during step 1
 let newProjName    = '';          // captured during step 2
 let newProjGoal    = '';          // captured during step 3
 
+/* ---------- Explorer height sync ----------
+ * The explorer panels are position:fixed cards; their top/bottom track
+ * #surface via CSS variables updated whenever the surface measures. */
+function syncExplorerHeights() {
+  const r = surfaceEl.getBoundingClientRect();
+  document.documentElement.style.setProperty('--surface-top', `${r.top}px`);
+  document.documentElement.style.setProperty('--surface-bottom', `${window.innerHeight - r.bottom}px`);
+}
+window.addEventListener('resize', syncExplorerHeights);
+window.addEventListener('load', syncExplorerHeights);
+
 /* ---------- Nav state persistence (survives page refresh) ---------- */
 const NAV_KEY = 'bridge:nav';
 function saveNavState() {
@@ -1397,6 +1408,7 @@ async function toggleFileExplorer() {
 }
 
 async function openFileExplorer() {
+  syncExplorerHeights();
   try {
     const r = await fetch(`/projects/${activeProject.id}/files`);
     if (!r.ok) throw new Error(await r.text());
