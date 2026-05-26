@@ -197,11 +197,13 @@ function staggerInCards() {
   });
 }
 
-/** Stagger-in the footer rail (shortcuts + action-bar) after a forward
- *  zoom lands — each chip / button fades and slides in from the right. */
+/** Stagger-in the footer rail (shortcuts + primary + action-bar) after a
+ *  forward zoom lands — each chip / button fades and slides in from the
+ *  right. */
 function staggerInFooter() {
   const items = [
     ...document.querySelectorAll('#shortcuts-rail .sc'),
+    ...document.querySelectorAll('#primary-shortcut .sc'),
     ...document.querySelectorAll('#action-bar .action'),
   ];
   if (items.length === 0) return;
@@ -521,6 +523,10 @@ function renderProjects() {
   renderActionBar([
     { verb: 'Open',   glyph: 'cross',  action: { type: '_picker_open' } },
   ]);
+  // L0 has no left-rail shortcuts; Select sits on the bottom-right.
+  setShortcuts([]);
+  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
+                       action: () => openFocused() });
 }
 
 /** Move the lead agent to index 0 so it always renders top-left on L1. */
