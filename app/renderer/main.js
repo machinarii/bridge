@@ -568,8 +568,8 @@ async function renderNewProjectRoles() {
     { verb: 'Back',   glyph: 'circle',   action: { type: '_role_back' } },
   ]);
   setShortcuts([
+    { gamepad: 'triangle', keyboard: 'Enter', label: 'Select', action: () => advanceFromRolePicker() },
     { gamepad: 'cross',    keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedRole() },
-    { gamepad: 'triangle', keyboard: 'Enter', label: 'Next',   action: () => advanceFromRolePicker() },
     { gamepad: 'circle',   keyboard: 'Esc',   label: 'Back',   action: () => renderProjects() },
   ]);
 }
@@ -647,8 +647,8 @@ function renderNewProjectName() {
     { verb: 'Back',    glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'cross',  keyboard: 'Enter', label: 'Confirm', action: () => confirmCapture() },
-    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',    action: () => goBackInCreateFlow() },
+    { gamepad: 'cross',  keyboard: 'Enter', label: 'Select', action: () => confirmCapture() },
+    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',   action: () => goBackInCreateFlow() },
   ]);
   ring.set([]);
 }
@@ -670,8 +670,8 @@ function renderNewProjectGoal() {
     { verb: 'Back',    glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'cross',  keyboard: 'Enter', label: 'Confirm', action: () => confirmCapture() },
-    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',    action: () => goBackInCreateFlow() },
+    { gamepad: 'cross',  keyboard: 'Enter', label: 'Select', action: () => confirmCapture() },
+    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',   action: () => goBackInCreateFlow() },
   ]);
   ring.set([]);
 }
@@ -744,13 +744,14 @@ function renderGrid() {
 }
 
 /** L1 shortcuts depend on which agent is focused — the lead can't be
- *  disabled, so "Agent On / Off" disappears when the lead is selected. */
+ *  disabled, so "Agent on / off" disappears when the lead is selected. */
 function updateGridShortcuts() {
   if (!activeProject) return;
   const lead = activeProject.agents.find(a => a.id === activeProject.leadAgentId);
   const focused = activeProject.agents[gridIndex];
   const isLeadFocused = focused?.id === activeProject.leadAgentId;
   const items = [
+    { gamepad: 'cross', keyboard: 'Enter', label: 'Select', action: () => enterZoom() },
     { gamepad: 'r2', keyboard: 'V', label: `Talk to ${lead?.name || 'Lead'}`, action: () => startPTT() },
   ];
   if (!isLeadFocused) {
@@ -925,9 +926,10 @@ async function renderChatHistory(container, agent) {
 
 function _setL2Shortcuts() {
   setShortcuts([
-    { gamepad: 'l1',      keyboard: '[', label: 'Prev',     action: () => cycleAgent(-1) },
-    { gamepad: 'r1',      keyboard: ']', label: 'Next',     action: () => cycleAgent(+1) },
-    { gamepad: 'options', keyboard: 'F', label: 'Explorer', action: () => toggleFileExplorer() },
+    { gamepad: 'cross',   keyboard: 'Enter', label: 'Select',   action: () => pressCross() },
+    { gamepad: 'l1',      keyboard: '[',     label: 'Prev',     action: () => cycleAgent(-1) },
+    { gamepad: 'r1',      keyboard: ']',     label: 'Next',     action: () => cycleAgent(+1) },
+    { gamepad: 'options', keyboard: 'F',     label: 'Explorer', action: () => toggleFileExplorer() },
   ]);
 }
 
