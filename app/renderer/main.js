@@ -215,13 +215,6 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
   // Hide all of the clone's content instantly — only the shell animates.
   hideContent(clone);
 
-  // Fade the entire outgoing surface (the L0 / L1 backdrop and all its
-  // tiles) so only the morphing clone is on screen during the zoom.
-  const surfaceFade = surfaceEl.animate(
-    [{ opacity: 1 }, { opacity: 0 }],
-    { duration: 260, easing: 'ease-out', fill: 'forwards' }
-  );
-
   // Track sibling tiles so we can restore their inline opacity after.
   const dimming = Array.from(ring.elements);
 
@@ -240,22 +233,35 @@ function forwardMorph(sourceEl, sourceRect, targetRect, renderDest) {
   clone.animate(
     [
       { offset: 0,    opacity: 1 },
-      { offset: 0.7,  opacity: 1 },
+      { offset: 0.55, opacity: 1 },
       { offset: 1,    opacity: 0 },
     ],
     { duration: 340, easing: 'ease-out', fill: 'forwards' }
   );
 
-  return grow.finished.catch(() => {}).then(() => {
-    // Destination view renders into the now-empty surface. The clone
-    // has already faded to 0 during the morph, so no extra fade.
-    try { surfaceFade.cancel(); } catch {}
-    surfaceEl.style.opacity = '';
+  // Pre-render the destination behind the clone partway through the
+  // morph so it's already visible (cross-fading with the clone) by the
+  // time the clone reaches opacity 0. No empty moment.
+  const handoffMs = 170; // ~50% of morph
+  let preRendered = false;
+  const handoff = setTimeout(() => {
+    preRendered = true;
     renderDest();
-    fadeInDestination(180);
+    fadeInDestination(170);
     staggerInCards();
     staggerInFooter();
-  }).then(() => {
+  }, handoffMs);
+
+  return grow.finished.catch(() => {}).then(() => {
+    clearTimeout(handoff);
+    // If the grow finished before our pre-render fired (very fast
+    // machine or aborted animation), render now.
+    if (!preRendered) {
+      renderDest();
+      fadeInDestination(140);
+      staggerInCards();
+      staggerInFooter();
+    }
     clone.remove();
     for (const el of dimming) {
       el.style.transition = '';
