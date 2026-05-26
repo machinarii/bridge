@@ -1055,12 +1055,17 @@ body[data-skills-drawer="open"] #surface { margin-left: calc(280px + 1rem); }
   position: fixed;
   top: var(--surface-top, 1.5rem);
   bottom: var(--surface-bottom, 5rem);
+  /* Identical positioning + width to #file-viewer when its drawer is
+   * open. Both panels share these exact values. */
   left: calc(1.5rem + 280px + 0.75rem);
-  width: 44vw; min-width: 320px;
+  width: 44vw;
+  min-width: 320px;
+  box-sizing: border-box;
   background: var(--bg-elev);
   border: 1px solid #1d2734;
   border-radius: var(--radius);
   display: flex; flex-direction: column;
+  overflow: hidden;
   z-index: 55;
 }
 #new-folder-modal .modal-card,
@@ -1113,7 +1118,9 @@ body[data-skills-drawer="open"] #surface { margin-left: calc(280px + 1rem); }
   top: var(--surface-top, 1.5rem);
   bottom: var(--surface-bottom, 5rem);
   left: 1.5rem;
-  width: 44vw; min-width: 320px;
+  width: 44vw;
+  min-width: 320px;
+  box-sizing: border-box;
   background: var(--bg-elev);
   border: 1px solid #1d2734;
   border-radius: var(--radius);
