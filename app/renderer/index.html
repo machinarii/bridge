@@ -11,7 +11,13 @@
 </head>
 <body>
   <div id="baseplate">
-    <header id="context-strip">
+    <div id="ptt-typed" hidden>
+      <input id="typed-input" type="text" placeholder="Type an intent and press Enter…" autocomplete="off" />
+    </div>
+
+    <main id="surface" aria-live="polite"></main>
+
+    <footer id="footer-rail" role="toolbar" aria-label="Shortcuts and actions">
       <a id="brand" href="#" aria-label="Bridge home">
         <svg id="brand-mark" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <!-- two nodes joined by an arc -->
@@ -21,20 +27,6 @@
         </svg>
         <span class="brand-name">Bridge</span>
       </a>
-      <nav id="breadcrumbs" aria-label="Breadcrumb"></nav>
-      <span id="listening-indicator" data-state="idle">
-        <span class="dot"></span>
-        <span class="state-text">Connected</span>
-      </span>
-    </header>
-
-    <div id="ptt-typed" hidden>
-      <input id="typed-input" type="text" placeholder="Type an intent and press Enter…" autocomplete="off" />
-    </div>
-
-    <main id="surface" aria-live="polite"></main>
-
-    <footer id="footer-rail" role="toolbar" aria-label="Shortcuts and actions">
       <div id="shortcuts-rail" aria-label="Navigation shortcuts"></div>
       <div id="action-bar"></div>
     </footer>

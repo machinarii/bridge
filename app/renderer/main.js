@@ -4,9 +4,9 @@ import { FocusRing } from './focus.js';
 import { renderTile, renderActionBar } from './tiles.js';
 
 const surfaceEl       = document.getElementById('surface');
-const indicatorEl     = document.getElementById('listening-indicator');
-const indicatorTextEl = indicatorEl.querySelector('.state-text');
-const breadcrumbsEl   = document.getElementById('breadcrumbs');
+const indicatorEl     = document.getElementById('listening-indicator');     // removed from DOM
+const indicatorTextEl = indicatorEl?.querySelector('.state-text') || null;
+const breadcrumbsEl   = document.getElementById('breadcrumbs');             // removed from DOM
 const typedWrap       = document.getElementById('ptt-typed');
 const typedInput      = document.getElementById('typed-input');
 const shortcutsRailEl = document.getElementById('shortcuts-rail');
@@ -382,13 +382,15 @@ async function loadProjects() {
 
 /* ---------- UI helpers ---------- */
 function setIndicator(state, text) {
+  if (!indicatorEl) return;
   indicatorEl.dataset.state = state;
-  if (text) indicatorTextEl.textContent = text;
+  if (text && indicatorTextEl) indicatorTextEl.textContent = text;
 }
 
 /** Set breadcrumbs in the top-right. Pass an array of {label, color?} where
  *  the last entry is the current page. */
 function setBreadcrumbs(parts) {
+  if (!breadcrumbsEl) return; // breadcrumb DOM removed
   breadcrumbsEl.innerHTML = '';
   parts.forEach((p, i) => {
     if (i > 0) {
@@ -1707,19 +1709,5 @@ window.addEventListener('keyup', (e) => {
  * green on success. Skip while listening / thinking so we don't clobber
  * those transient states. */
 function startConnectionPing() {
-  let lastOK = true;
-  const tick = async () => {
-    const cur = indicatorEl.dataset.state;
-    if (cur !== 'idle' && cur !== 'disconnected') return; // don't disturb live states
-    try {
-      const r = await fetch('/health', { cache: 'no-store' });
-      if (!r.ok) throw new Error('not ok');
-      if (!lastOK) setIndicator('idle', 'Connected');
-      lastOK = true;
-    } catch {
-      if (lastOK) setIndicator('disconnected', 'Disconnected');
-      lastOK = false;
-    }
-  };
-  setInterval(tick, 5000);
+  // Indicator removed from the chrome — no need to poll.
 }
