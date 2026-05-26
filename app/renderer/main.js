@@ -19,6 +19,16 @@ const primaryShortcutEl = document.getElementById('primary-shortcut');
  *  the chip is focused-and-Entered via keyboard navigation. */
 let shortcutItems = [];
 let shortcutFocusIdx = -1; // -1 means focus is not in the rail
+
+/* Builds the full footer focus order at the moment the user enters the
+ * rail: every clickable chip in #shortcuts-rail, then #primary-shortcut,
+ * then every #action-bar .action button. */
+function footerFocusables() {
+  const rail = [...shortcutsRailEl.querySelectorAll('.sc')];
+  const primary = [...primaryShortcutEl.querySelectorAll('.sc')];
+  const actions = [...document.querySelectorAll('#action-bar .action')];
+  return [...rail, ...primary, ...actions];
+}
 function setShortcuts(items) {
   shortcutsRailEl.innerHTML = '';
   shortcutItems = items || [];
@@ -55,11 +65,12 @@ function setShortcuts(items) {
 }
 
 function paintShortcutFocus() {
-  shortcutsRailEl.querySelectorAll('.sc').forEach((el, i) =>
-    el.classList.toggle('focused', i === shortcutFocusIdx));
+  const items = footerFocusables();
+  items.forEach((el, i) => el.classList.toggle('focused', i === shortcutFocusIdx));
 }
 function enterShortcuts() {
-  if (shortcutItems.length === 0) return false;
+  const items = footerFocusables();
+  if (items.length === 0) return false;
   shortcutFocusIdx = 0;
   paintShortcutFocus();
   return true;
@@ -69,14 +80,21 @@ function leaveShortcuts() {
   paintShortcutFocus();
 }
 function moveShortcutFocus(delta) {
-  const n = shortcutItems.length;
+  const items = footerFocusables();
+  const n = items.length;
   if (n === 0) return;
   shortcutFocusIdx = (shortcutFocusIdx + delta + n) % n;
   paintShortcutFocus();
 }
 function activateFocusedShortcut() {
-  const it = shortcutItems[shortcutFocusIdx];
-  if (it?.action) it.action();
+  const items = footerFocusables();
+  const el = items[shortcutFocusIdx];
+  if (!el) return;
+  // Synthesize a click — covers chips with click handlers AND action-bar
+  // buttons. For chips without handlers (e.g. the "Enter Select" primary)
+  // this is a no-op, which is correct — pressing Enter on it is the same
+  // as Enter on the focused tile.
+  el.click();
 }
 function isShortcutsFocused() { return shortcutFocusIdx >= 0; }
 
@@ -1856,6 +1874,77 @@ document.getElementById('brand')?.addEventListener('click', (e) => {
   else                          renderProjects();
 });
 
+/* ---------- Settings modal ---------- */
+const settingsBtnEl     = document.getElementById('settings-btn');
+const settingsModalEl   = document.getElementById('settings-modal');
+const settingsApiKeyEl  = document.getElementById('settings-api-key');
+const settingsApiMetaEl = document.getElementById('settings-api-key-current');
+const settingsModelEl   = document.getElementById('settings-model');
+const settingsSaveEl    = document.getElementById('settings-save');
+const settingsCancelEl  = document.getElementById('settings-cancel');
+let settingsOpen = false;
+
+async function openSettings() {
+  if (settingsOpen) return;
+  settingsOpen = true;
+  settingsModalEl.hidden = false;
+  settingsApiKeyEl.value = '';
+  settingsApiMetaEl.textContent = '';
+  settingsModelEl.value = '';
+  try {
+    const r = await fetch('/settings');
+    if (r.ok) {
+      const s = await r.json();
+      settingsApiMetaEl.textContent = s.OPENROUTER_API_KEY_SET
+        ? `Current: ${s.OPENROUTER_API_KEY} — leave blank to keep.`
+        : 'No key set.';
+      settingsModelEl.value = s.OPENROUTER_MODEL || '';
+    }
+  } catch {}
+  setTimeout(() => settingsApiKeyEl.focus(), 0);
+}
+
+function closeSettings() {
+  settingsModalEl.hidden = true;
+  settingsOpen = false;
+}
+
+async function saveSettings() {
+  const updates = {};
+  const apiKey = settingsApiKeyEl.value.trim();
+  if (apiKey) updates.OPENROUTER_API_KEY = apiKey;
+  const model = settingsModelEl.value.trim();
+  if (model) updates.OPENROUTER_MODEL = model;
+  if (Object.keys(updates).length === 0) { closeSettings(); return; }
+  try {
+    const r = await fetch('/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!r.ok) throw new Error(await r.text());
+  } catch (err) {
+    console.error('[settings] save failed', err);
+  }
+  closeSettings();
+}
+
+settingsBtnEl?.addEventListener('click', (e) => { e.stopPropagation(); openSettings(); });
+settingsBtnEl?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault(); e.stopPropagation();
+    openSettings();
+  }
+});
+settingsSaveEl?.addEventListener('click', () => saveSettings());
+settingsCancelEl?.addEventListener('click', () => closeSettings());
+settingsModalEl?.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); closeSettings(); }
+  else if (e.key === 'Enter' && document.activeElement?.tagName !== 'BUTTON') {
+    e.preventDefault(); saveSettings();
+  }
+});
+
 window.addEventListener('keydown', (e) => {
   if (document.activeElement === typedInput) {
     if (e.key === 'Enter') {
@@ -2022,8 +2111,14 @@ window.addEventListener('keydown', (e) => {
       paintFileFocus();
       return;
     }
-    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')      { e.preventDefault(); ring.move(-1); }
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); ring.move(+1); }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const lastIdx = Math.max(0, ring.elements.length - 1);
+      if ((ring.elements.length === 0 || ring.index === lastIdx) && enterShortcuts()) return;
+      ring.move(+1);
+    }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')      { e.preventDefault(); ring.move(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); ring.move(+1); }
     else if (e.key === 'Enter')      { e.preventDefault(); pressCross(); }
     else if (e.key === 'Escape')     { e.preventDefault(); pressCircle(); }
     else if (e.key === '[')          { e.preventDefault(); cycleAgent(-1); }
