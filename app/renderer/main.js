@@ -423,6 +423,12 @@ function renderProjects() {
   setBreadcrumbs([{ label: 'Projects' }]);
   surfaceEl.innerHTML = '';
 
+  // Heading at top-left of the surface, like the project detail screen.
+  const heading = document.createElement('header');
+  heading.className = 'project-heading';
+  heading.innerHTML = `<h2 class="project-title">Projects</h2>`;
+  surfaceEl.appendChild(heading);
+
   // Fixed 4×2 layout — "+ New" is always one of the 8 cells.
   const cols = 4, rows = 2;
   const grid = document.createElement('div');
@@ -733,13 +739,26 @@ function renderGrid() {
   renderActionBar([
     { verb: 'Back', glyph: 'circle', action: { type: '_grid_back' } },
   ]);
+  updateGridShortcuts();
+}
+
+/** L1 shortcuts depend on which agent is focused — the lead can't be
+ *  disabled, so "Agent On / Off" disappears when the lead is selected. */
+function updateGridShortcuts() {
+  if (!activeProject) return;
   const lead = activeProject.agents.find(a => a.id === activeProject.leadAgentId);
-  const leadName = lead?.name || 'Lead';
-  setShortcuts([
-    { gamepad: 'r2',      keyboard: 'V',     label: `Talk to ${leadName}`, action: () => startPTT() },
-    { gamepad: 'square',  keyboard: 'Space', label: 'Agent On / Off',      action: () => toggleFocusedAgentEnabled() },
-    { gamepad: 'options', keyboard: 'F',     label: 'Explorer',            action: () => toggleFileExplorer() },
-  ]);
+  const focused = activeProject.agents[gridIndex];
+  const isLeadFocused = focused?.id === activeProject.leadAgentId;
+  const items = [
+    { gamepad: 'r2', keyboard: 'V', label: `Talk to ${lead?.name || 'Lead'}`, action: () => startPTT() },
+  ];
+  if (!isLeadFocused) {
+    items.push({ gamepad: 'square', keyboard: 'Space', label: 'Agent On / Off',
+                 action: () => toggleFocusedAgentEnabled() });
+  }
+  items.push({ gamepad: 'options', keyboard: 'F', label: 'Explorer',
+               action: () => toggleFileExplorer() });
+  setShortcuts(items);
 }
 
 function summarizeLastSpec(spec) {
@@ -776,6 +795,7 @@ function gridMove(dir) {
   ring.index = next;
   gridIndex = next;
   ring.paint();
+  updateGridShortcuts();
 }
 
 
