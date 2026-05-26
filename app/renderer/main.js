@@ -1399,6 +1399,7 @@ let fileTree = null;
 let fileFocus = 0;
 let fileEntries = [];
 let explorerFocused = false; // true while keyboard nav is inside the explorer
+let folderState = { charters: true, notes: true }; // default open
 
 async function toggleFileExplorer() {
   if (mode === MODE_PROJECTS) return;
@@ -1418,39 +1419,7 @@ async function openFileExplorer() {
     console.error(err);
     return;
   }
-  fileTreeEl.innerHTML = '';
-  fileEntries = [];
-
-  if (fileTree.charters.length) {
-    const h = document.createElement('div'); h.className = 'file-section'; h.textContent = '▾ Charters';
-    fileTreeEl.appendChild(h);
-    for (const c of fileTree.charters) {
-      const li = document.createElement('div');
-      li.className = 'file-entry';
-      li.innerHTML = `<span>${escapeHtml(c.roleId)}.md</span><span class="who">${escapeHtml(c.agentName)}</span>`;
-      li.dataset.path = c.path;
-      fileTreeEl.appendChild(li);
-      fileEntries.push(li);
-    }
-  }
-  if (fileTree.notes.length) {
-    const h = document.createElement('div'); h.className = 'file-section'; h.textContent = '▾ Notes';
-    fileTreeEl.appendChild(h);
-    for (const n of fileTree.notes) {
-      const li = document.createElement('div');
-      li.className = 'file-entry';
-      li.textContent = n.path.replace(/^notes\//,'').replace(/\.md$/,'');
-      li.dataset.path = n.path;
-      fileTreeEl.appendChild(li);
-      fileEntries.push(li);
-    }
-  }
-  const pm = document.createElement('div');
-  pm.className = 'file-entry';
-  pm.textContent = 'project.md';
-  pm.dataset.path = 'project.md';
-  fileTreeEl.appendChild(pm);
-  fileEntries.push(pm);
+  rebuildFileEntries();
 
   fileDrawerEl.hidden = false;
   fileExplorerOpen = true;
@@ -1490,10 +1459,65 @@ fileViewerCloseEl?.addEventListener('keydown', (e) => {
   }
 });
 
+/** Re-render the explorer entries based on fileTree + folderState.
+ *  Folder headers are focusable; pressing Enter on one toggles. */
+function rebuildFileEntries() {
+  fileTreeEl.innerHTML = '';
+  fileEntries = [];
+  if (!fileTree) return;
+
+  const addFolder = (key, label, files, fileRender) => {
+    if (files.length === 0) return;
+    const head = document.createElement('div');
+    head.className = 'file-section file-folder';
+    head.dataset.folder = key;
+    head.innerHTML = `<span class="folder-toggle">${folderState[key] ? '▾' : '▸'}</span> ${label}`;
+    fileTreeEl.appendChild(head);
+    fileEntries.push(head);
+    if (folderState[key]) {
+      for (const f of files) {
+        const li = document.createElement('div');
+        li.className = 'file-entry';
+        fileRender(li, f);
+        fileTreeEl.appendChild(li);
+        fileEntries.push(li);
+      }
+    }
+  };
+
+  addFolder('charters', 'Charters', fileTree.charters, (li, c) => {
+    li.innerHTML = `<span>${escapeHtml(c.roleId)}.md</span><span class="who">${escapeHtml(c.agentName)}</span>`;
+    li.dataset.path = c.path;
+  });
+  addFolder('notes', 'Notes', fileTree.notes, (li, n) => {
+    li.textContent = n.path.replace(/^notes\//,'').replace(/\.md$/,'');
+    li.dataset.path = n.path;
+  });
+
+  const pm = document.createElement('div');
+  pm.className = 'file-entry';
+  pm.textContent = 'project.md';
+  pm.dataset.path = 'project.md';
+  fileTreeEl.appendChild(pm);
+  fileEntries.push(pm);
+}
+
 async function openFocusedFile() {
   const e = fileEntries[fileFocus];
   if (!e) return;
+  // If the focused entry is a folder header, toggle expand/collapse.
+  if (e.classList.contains('file-folder')) {
+    const key = e.dataset.folder;
+    folderState[key] = !folderState[key];
+    rebuildFileEntries();
+    // Re-focus the same folder header after rebuild.
+    fileFocus = fileEntries.findIndex(el => el.dataset.folder === key);
+    if (fileFocus < 0) fileFocus = 0;
+    paintFileFocus();
+    return;
+  }
   const path = e.dataset.path;
+  if (!path) return;
   try {
     const r = await fetch(`/projects/${activeProject.id}/file/${path}`);
     if (!r.ok) throw new Error(await r.text());

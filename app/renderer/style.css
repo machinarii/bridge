@@ -780,7 +780,29 @@ body[data-mode="zoom"] #surface {
   font-weight: 600;
 }
 #file-drawer header .hint { opacity: 0.5; font-weight: 400; font-size: 0.85rem; }
-.file-section { padding: 0.5rem 1rem; opacity: 0.6; font-size: 0.8rem; text-transform: uppercase; }
+.file-section {
+  padding: 0.5rem 1rem;
+  opacity: 0.7;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  display: flex; align-items: center; gap: 0.4rem;
+  letter-spacing: 0.06em;
+}
+.file-section.file-folder {
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+.file-section.file-folder .folder-toggle {
+  display: inline-block;
+  width: 0.85em;
+  font-size: 0.9em;
+  opacity: 0.7;
+}
+.file-section.file-folder.focused {
+  background: rgba(110,168,255,0.16);
+  border-left-color: var(--focus, #ffffff);
+  opacity: 1;
+}
 .file-entry {
   display: flex; justify-content: space-between;
   padding: 0.5rem 1rem; cursor: pointer;
