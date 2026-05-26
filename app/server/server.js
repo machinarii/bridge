@@ -69,6 +69,31 @@ app.get('/settings', (_req, res) => {
   });
 });
 
+let _modelsCache = null;
+let _modelsCacheAt = 0;
+const MODELS_TTL = 60 * 60 * 1000;
+
+app.get('/settings/models', async (_req, res) => {
+  try {
+    const now = Date.now();
+    if (_modelsCache && (now - _modelsCacheAt) < MODELS_TTL) {
+      return res.json({ models: _modelsCache });
+    }
+    const r = await fetch('https://openrouter.ai/api/v1/models');
+    if (!r.ok) throw new Error(`upstream ${r.status}`);
+    const data = await r.json();
+    const list = (data?.data || [])
+      .map(m => ({ id: m.id, name: m.name || m.id }))
+      .filter(m => m.id);
+    list.sort((a, b) => a.id.localeCompare(b.id));
+    _modelsCache = list;
+    _modelsCacheAt = now;
+    res.json({ models: list });
+  } catch (err) {
+    res.status(502).json({ error: String(err?.message || err) });
+  }
+});
+
 app.put('/settings', (req, res) => {
   try {
     const updates = {};

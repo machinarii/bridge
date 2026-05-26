@@ -1887,13 +1887,54 @@ const settingsSaveEl    = document.getElementById('settings-save');
 const settingsCancelEl  = document.getElementById('settings-cancel');
 let settingsOpen = false;
 
+let _settingsModelsLoaded = false;
+
+async function populateModelSelect(currentId) {
+  // Always seed with the current model so the dropdown has something
+  // sensible even if the OpenRouter fetch fails.
+  settingsModelEl.innerHTML = '';
+  if (currentId) {
+    const opt = document.createElement('option');
+    opt.value = currentId;
+    opt.textContent = currentId;
+    opt.selected = true;
+    settingsModelEl.appendChild(opt);
+  }
+  try {
+    const r = await fetch('/settings/models');
+    if (!r.ok) throw new Error(`models ${r.status}`);
+    const { models } = await r.json();
+    settingsModelEl.innerHTML = '';
+    let matched = false;
+    for (const m of models) {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.name === m.id ? m.id : `${m.name} — ${m.id}`;
+      if (m.id === currentId) { opt.selected = true; matched = true; }
+      settingsModelEl.appendChild(opt);
+    }
+    if (currentId && !matched) {
+      // The configured model isn't in the upstream list (custom / unlisted).
+      // Add it on top so it stays selectable.
+      const opt = document.createElement('option');
+      opt.value = currentId;
+      opt.textContent = `${currentId} (current)`;
+      opt.selected = true;
+      settingsModelEl.prepend(opt);
+    }
+    _settingsModelsLoaded = true;
+  } catch (err) {
+    console.warn('[settings] model list fetch failed', err);
+  }
+}
+
 async function openSettings() {
   if (settingsOpen) return;
   settingsOpen = true;
   settingsModalEl.hidden = false;
   settingsApiKeyEl.value = '';
   settingsApiMetaEl.textContent = '';
-  settingsModelEl.value = '';
+  let current = '';
   try {
     const r = await fetch('/settings');
     if (r.ok) {
@@ -1901,9 +1942,10 @@ async function openSettings() {
       settingsApiMetaEl.textContent = s.OPENROUTER_API_KEY_SET
         ? `Current: ${s.OPENROUTER_API_KEY} — leave blank to keep.`
         : 'No key set.';
-      settingsModelEl.value = s.OPENROUTER_MODEL || '';
+      current = s.OPENROUTER_MODEL || '';
     }
   } catch {}
+  await populateModelSelect(current);
   setTimeout(() => settingsApiKeyEl.focus(), 0);
 }
 
@@ -1916,7 +1958,7 @@ async function saveSettings() {
   const updates = {};
   const apiKey = settingsApiKeyEl.value.trim();
   if (apiKey) updates.OPENROUTER_API_KEY = apiKey;
-  const model = settingsModelEl.value.trim();
+  const model = (settingsModelEl.value || '').trim();
   if (model) updates.OPENROUTER_MODEL = model;
   if (Object.keys(updates).length === 0) { closeSettings(); return; }
   try {
