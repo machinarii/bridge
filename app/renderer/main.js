@@ -520,10 +520,7 @@ function renderProjects() {
   ring.index = clamp(pickerIndex, 0, tileEls.length - 1);
   ring.paint();
 
-  renderActionBar([
-    { verb: 'Open',   glyph: 'cross',  action: { type: '_picker_open' } },
-  ]);
-  // L0 has no left-rail shortcuts; Select sits on the bottom-right.
+  renderActionBar([]); // no separate "Open" verb — covered by Select chip
   setShortcuts([]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => openFocused() });
@@ -622,9 +619,7 @@ async function renderNewProjectRoles() {
   ring.paint();
 
   renderActionBar([
-    { verb: 'Toggle', glyph: 'cross',    action: { type: '_role_toggle' } },
-    { verb: 'Next',   glyph: 'triangle', action: { type: '_role_next' } },
-    { verb: 'Back',   glyph: 'circle',   action: { type: '_role_back' } },
+    { verb: 'Back', glyph: 'circle', action: { type: '_role_back' } },
   ]);
   setShortcuts([
     { gamepad: 'cross',  keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedRole() },
@@ -703,8 +698,7 @@ function renderNewProjectName() {
       : '<div class="lead-badge">Cadence will lead this team.</div>'}`;
   surfaceEl.appendChild(t);
   renderActionBar([
-    { verb: 'Confirm', glyph: 'cross',  action: { type: '_capture_confirm' } },
-    { verb: 'Back',    glyph: 'circle', action: { type: '_capture_back' } },
+    { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
@@ -727,8 +721,7 @@ function renderNewProjectGoal() {
     <div class="capture-value">${escapeHtml(newProjGoal) || '<span class="placeholder">(Speak now)</span>'}</div>`;
   surfaceEl.appendChild(t);
   renderActionBar([
-    { verb: 'Confirm', glyph: 'cross',  action: { type: '_capture_confirm' } },
-    { verb: 'Back',    glyph: 'circle', action: { type: '_capture_back' } },
+    { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
