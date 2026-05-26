@@ -25,14 +25,11 @@ let shortcutFocusIdx = -1; // -1 means focus is not in the rail
  * rail: every clickable chip in #shortcuts-rail, then #primary-shortcut,
  * then every #action-bar .action button. */
 function footerFocusables() {
-  // Order matches the visible footer rail: rail chips → back → primary
-  // → action-bar buttons → gear.
-  const rail = [...shortcutsRailEl.querySelectorAll('.sc')];
-  const back = [...backShortcutEl.querySelectorAll('.sc')];
-  const primary = [...primaryShortcutEl.querySelectorAll('.sc')];
-  const actions = [...document.querySelectorAll('#action-bar .action')];
-  const gear = document.getElementById('settings-btn');
-  return [...rail, ...back, ...primary, ...actions, ...(gear ? [gear] : [])];
+  // Single DOM-order query so nav order is always identical to visual
+  // order in the rail. Anything focusable in #footer-rail counts.
+  return [...document.querySelectorAll(
+    '#footer-rail .sc, #footer-rail .action, #footer-rail #settings-btn'
+  )];
 }
 
 const GAMEPAD_GLYPHS = { cross: '✕', circle: '○', square: '□', triangle: '△' };
