@@ -1539,6 +1539,9 @@ function openSkillsDrawer() {
   skillsDrawerOpen = true;
   document.body.dataset.skillsDrawer = 'open';
   if (fileExplorerOpen) closeFileExplorer();
+  // Land focus on the + button so the user can immediately create a
+  // new skill via keyboard / d-pad.
+  setTimeout(() => newSkillBtnEl?.focus(), 0);
 }
 function closeSkillsDrawer() {
   skillsDrawerEl.hidden = true;
@@ -1595,6 +1598,12 @@ newSkillBtnEl?.addEventListener('keydown', (e) => {
   } else if (e.key === 'Escape') {
     e.preventDefault(); e.stopPropagation();
     newSkillBtnEl.blur();
+    closeSkillsDrawer();
+  } else if (e.key === 'ArrowRight') {
+    // Hop out of the drawer to the main surface.
+    e.preventDefault(); e.stopPropagation();
+    newSkillBtnEl.blur();
+    ring.paint();
   }
 });
 newSkillCancelEl?.addEventListener('click', () => hideNewSkillModal());
