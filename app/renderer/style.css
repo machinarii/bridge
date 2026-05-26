@@ -783,9 +783,15 @@ body[data-mode="zoom"] #surface {
   border-left-color: var(--focus, #ffffff);
   border-left-width: 4px;
 }
-/* File selector (drawer) pushes the surface over; the file viewer
- * (handled below) is the one that overlays without resizing. */
+/* File selector (drawer): shifts the surface right via margin so the
+ * surface visibly narrows to fit. */
 body[data-file-drawer="open"] #surface { margin-left: calc(280px + 1rem); }
+/* File viewer (open file): translates the surface right by the viewer
+ * width without resizing — surface keeps its width, right edge
+ * extends past the viewport. */
+body[data-file-viewer="open"] #surface {
+  transform: translateX(calc(44vw + 1rem));
+}
 
 /* ===== File viewer panel (left of the prompt container) ===== */
 /* Without this, display:flex on the rule below wins over the `hidden`
@@ -864,8 +870,8 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   line-height: 1.55;
   color: var(--fg);
 }
-/* Surface is NOT resized when the viewer opens — the viewer overlays
- * the left portion of the surface; whatever sits underneath is hidden. */
+/* (See translateX rule above — kept here as anchor for legacy layout
+ * comments.) */
 
 /* ===== Team summary banner (L1 PTT result) ===== */
 .team-summary {
