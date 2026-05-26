@@ -479,6 +479,27 @@ function withLeadFirst(project) {
   return { ...project, agents: [lead, ...others] };
 }
 
+/** The morph target should be the surface's *content* area (inside its
+ *  padding), not its outer rect — otherwise the clone lands larger than
+ *  the destination's visible content area and the new view looks like
+ *  it "shrunk down" after the morph finished. */
+function surfaceContentRect() {
+  const r = surfaceEl.getBoundingClientRect();
+  const cs = getComputedStyle(surfaceEl);
+  const pl = parseFloat(cs.paddingLeft)   || 0;
+  const pr = parseFloat(cs.paddingRight)  || 0;
+  const pt = parseFloat(cs.paddingTop)    || 0;
+  const pb = parseFloat(cs.paddingBottom) || 0;
+  return {
+    left: r.left + pl,
+    top:  r.top  + pt,
+    right:  r.right  - pr,
+    bottom: r.bottom - pb,
+    width:  r.width  - pl - pr,
+    height: r.height - pt - pb,
+  };
+}
+
 async function openFocused() {
   const idx = ring.index;
   if (idx === tileCount() - 1) {
@@ -491,7 +512,7 @@ async function openFocused() {
   }
   const sourceTile = ring.current();
   const sourceRect = sourceTile?.getBoundingClientRect();
-  const targetRect = surfaceEl.getBoundingClientRect();
+  const targetRect = surfaceContentRect();
   zoomStack.push(sourceRect);
   activeProject = withLeadFirst(projects[idx]);
   gridIndex = 0;
@@ -777,7 +798,7 @@ async function enterZoom(specOverride) {
   }
   const sourceTile = ring.current();
   const sourceRect = sourceTile?.getBoundingClientRect();
-  const targetRect = surfaceEl.getBoundingClientRect();
+  const targetRect = surfaceContentRect();
   zoomStack.push(sourceRect);
   zoomedIndex = idx;
   mode = MODE_ZOOM;
