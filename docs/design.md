@@ -417,6 +417,49 @@ ux_research
 
 ---
 
+## 10.5 Universal input accessibility (non-negotiable)
+
+**Every interactive surface in Bridge must be reachable and operable
+via all three input modes:**
+
+1. **Keyboard** — Tab and arrow keys move focus; Enter activates; Esc
+   backs out / closes; Space toggles. No interaction may require a
+   mouse or controller.
+2. **D-pad / gamepad** — dpad navigates; Cross activates; Circle backs
+   out; Square toggles; Triangle advances. No interaction may require
+   typing.
+3. **Mouse** — every focusable surface accepts click, with the same
+   visual focus state on `:focus-visible` and `.focused`.
+
+Checklist for new UI:
+
+- [ ] First focusable element receives focus when the surface opens.
+- [ ] Arrow keys (or D-pad) navigate every control in a predictable
+      order; nothing is reachable only by Tab.
+- [ ] Tab also works (covers screen readers and assistive tech).
+- [ ] Enter / Cross activates the focused control.
+- [ ] Esc / Circle closes or backs out — always available, never
+      silently consumed.
+- [ ] Focus visuals follow the standard `--focus: #ffffff` outline +
+      glow treatment (see §2.3).
+- [ ] Background keyboard shortcuts (`v` PTT, `e` Explorer, `s` Skills,
+      `/` typed prompt) are **disabled** while the surface owns the
+      input — surfaces explicitly opt out by checking their open flag
+      at the top of the global window keydown.
+- [ ] Mouse click works on every focusable surface and lands focus
+      where the user clicked.
+
+Existing surfaces that meet this bar: L0 picker, L1 grid, L2 zoom,
+role picker, name/goal capture, file explorer + viewer, skills drawer,
+settings modal (including tabs and per-role dropdowns), surface-close X,
+brand link, gear icon.
+
+When you add a new modal / drawer / overlay, copy the pattern from
+`openSettings()` → `handleSettingsGamepad()` → modal-scoped keydown
+handler.
+
+---
+
 ## 11. Smart-TV HCI compliance
 
 Bridge is designed for couch / 10-foot operation with a gamepad as the
