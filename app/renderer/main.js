@@ -589,6 +589,31 @@ async function talkToFocusedLead() {
   startPTT();
 }
 
+/* ---------- Top-right close (×) button on L1 / L2 ---------- */
+function createSurfaceCloseButton(onClose) {
+  const btn = document.createElement('button');
+  btn.className = 'surface-close';
+  btn.type = 'button';
+  btn.setAttribute('aria-label', 'Close');
+  btn.textContent = '×';
+  btn.addEventListener('click', onClose);
+  btn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClose(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      btn.blur();
+      ring.paint();
+    }
+  });
+  return btn;
+}
+
+function focusSurfaceClose() {
+  const btn = surfaceEl.querySelector('.surface-close');
+  if (btn) { btn.focus(); ring.items.forEach(el => el.classList.remove('focused')); return true; }
+  return false;
+}
+
 /* ---------- Per-project color palette ----------
  * Each project gets a deterministic color from a fixed palette so the
  * surface, project tile, and all of the project's agents share one hue.
@@ -851,6 +876,9 @@ function renderGrid() {
     <p class="project-goal">${escapeHtml(sentenceCase(activeProject.goal || ''))}</p>`;
   surfaceEl.appendChild(heading);
 
+  // Close × button — top-right of the surface, exits to L0.
+  surfaceEl.appendChild(createSurfaceCloseButton(() => exitToProjects()));
+
   // Fixed 4×2 layout — matches the project picker on L0.
   const cols = 4, rows = 2;
   const grid = document.createElement('div');
@@ -1007,6 +1035,8 @@ function renderZoom(specOverride) {
       <span class="for-keyboard">Hold <kbd>v</kbd> to speak</span>
     </div>`;
   surfaceEl.appendChild(view);
+  // Close × button — top-right of the agent surface, exits to L1.
+  surfaceEl.appendChild(createSurfaceCloseButton(() => exitZoom()));
   const chatEl = view.querySelector('.chat-scroll');
   const surfaceWrap = view.querySelector('.tile-surface');
 
@@ -1901,6 +1931,19 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (mode === MODE_GRID) {
+    // Up arrow at the top row of the grid hops focus to the × close
+    // button at the top-right; Right at the rightmost cell does the same.
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowRight') && document.activeElement !== surfaceEl.querySelector('.surface-close')) {
+      const grid = surfaceEl.querySelector('.agent-grid');
+      if (grid) {
+        const cols = grid._cols, rows = grid._rows;
+        const r = Math.floor(ring.index / cols);
+        const c = ring.index % cols;
+        if ((e.key === 'ArrowUp' && r === 0) || (e.key === 'ArrowRight' && c === cols - 1)) {
+          if (focusSurfaceClose()) { e.preventDefault(); return; }
+        }
+      }
+    }
     // Left from the leftmost grid column with the explorer open hops
     // focus back into the explorer.
     if (e.key === 'ArrowLeft' && fileExplorerOpen && !explorerFocused) {
@@ -1929,6 +1972,10 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === '[')      { e.preventDefault(); cycleProject(-1); }
     else if (e.key === ']')      { e.preventDefault(); cycleProject(+1); }
   } else if (mode === MODE_ZOOM) {
+    // Up / Right hops to the × close button.
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowRight') && document.activeElement !== surfaceEl.querySelector('.surface-close')) {
+      if (ring.index === 0 && focusSurfaceClose()) { e.preventDefault(); return; }
+    }
     // Left at the first ring position with explorer open hops back in.
     if (e.key === 'ArrowLeft' && fileExplorerOpen && !explorerFocused && ring.index === 0) {
       e.preventDefault();
