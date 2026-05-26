@@ -10,6 +10,7 @@ const breadcrumbsEl   = document.getElementById('breadcrumbs');             // r
 const typedWrap       = document.getElementById('ptt-typed');
 const typedInput      = document.getElementById('typed-input');
 const shortcutsRailEl = document.getElementById('shortcuts-rail');
+const primaryShortcutEl = document.getElementById('primary-shortcut');
 
 /** Set the persistent shortcuts rail at bottom-right. Pass an array of
  *  { gamepad, keyboard, label, action } — both glyphs render and CSS
@@ -78,6 +79,39 @@ function activateFocusedShortcut() {
   if (it?.action) it.action();
 }
 function isShortcutsFocused() { return shortcutFocusIdx >= 0; }
+
+/** The "Enter Select" chip lives on the right side of the footer rail
+ *  (just before the action-bar). Pass null to clear it. */
+function setPrimaryShortcut(item) {
+  primaryShortcutEl.innerHTML = '';
+  if (!item) return;
+  const GAMEPAD = { cross: '✕', circle: '○', square: '□', triangle: '△' };
+  const wrap = document.createElement('span');
+  wrap.className = 'sc';
+  if (item.action) {
+    wrap.style.cursor = 'pointer';
+    wrap.addEventListener('click', () => item.action());
+  }
+  if (item.gamepad) {
+    const g = document.createElement('span');
+    g.className = 'glyph for-gamepad';
+    g.dataset.glyph = item.gamepad;
+    g.textContent = GAMEPAD[item.gamepad] || item.gamepad;
+    wrap.appendChild(g);
+  }
+  if (item.keyboard) {
+    const k = document.createElement('span');
+    k.className = 'glyph for-keyboard';
+    k.dataset.glyph = item.gamepad || '';
+    k.textContent = item.keyboard;
+    wrap.appendChild(k);
+  }
+  const l = document.createElement('span');
+  l.className = 'label';
+  l.textContent = item.label;
+  wrap.appendChild(l);
+  primaryShortcutEl.appendChild(wrap);
+}
 
 const ring = new FocusRing();
 const gp = new GamepadInput();
@@ -587,10 +621,11 @@ async function renderNewProjectRoles() {
     { verb: 'Back',   glyph: 'circle',   action: { type: '_role_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'triangle', keyboard: 'Enter', label: 'Select', action: () => advanceFromRolePicker() },
-    { gamepad: 'cross',    keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedRole() },
-    { gamepad: 'circle',   keyboard: 'Esc',   label: 'Back',   action: () => renderProjects() },
+    { gamepad: 'cross',  keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedRole() },
+    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',   action: () => renderProjects() },
   ]);
+  setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Select',
+                       action: () => advanceFromRolePicker() });
 }
 
 function toggleFocusedRole() {
@@ -666,9 +701,10 @@ function renderNewProjectName() {
     { verb: 'Back',    glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'cross',  keyboard: 'Enter', label: 'Select', action: () => confirmCapture() },
-    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',   action: () => goBackInCreateFlow() },
+    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
+  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
+                       action: () => confirmCapture() });
   ring.set([]);
 }
 
@@ -689,9 +725,10 @@ function renderNewProjectGoal() {
     { verb: 'Back',    glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'cross',  keyboard: 'Enter', label: 'Select', action: () => confirmCapture() },
-    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',   action: () => goBackInCreateFlow() },
+    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
+  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
+                       action: () => confirmCapture() });
   ring.set([]);
 }
 
@@ -771,7 +808,6 @@ function updateGridShortcuts() {
   const focused = activeProject.agents[gridIndex];
   const isLeadFocused = focused?.id === activeProject.leadAgentId;
   const items = [
-    { gamepad: 'cross', keyboard: 'Enter', label: 'Select', action: () => enterZoom() },
     { gamepad: 'r2', keyboard: 'V', label: `Talk to ${lead?.name || 'Lead'}`, action: () => startPTT() },
   ];
   if (!isLeadFocused) {
@@ -781,6 +817,8 @@ function updateGridShortcuts() {
   items.push({ gamepad: 'options', keyboard: 'F', label: 'Explorer',
                action: () => toggleFileExplorer() });
   setShortcuts(items);
+  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
+                       action: () => enterZoom() });
 }
 
 function summarizeLastSpec(spec) {
@@ -947,11 +985,12 @@ async function renderChatHistory(container, agent) {
 
 function _setL2Shortcuts() {
   setShortcuts([
-    { gamepad: 'cross',   keyboard: 'Enter', label: 'Select',   action: () => pressCross() },
-    { gamepad: 'l1',      keyboard: '[',     label: 'Prev',     action: () => cycleAgent(-1) },
-    { gamepad: 'r1',      keyboard: ']',     label: 'Next',     action: () => cycleAgent(+1) },
-    { gamepad: 'options', keyboard: 'F',     label: 'Explorer', action: () => toggleFileExplorer() },
+    { gamepad: 'l1',      keyboard: '[', label: 'Prev',     action: () => cycleAgent(-1) },
+    { gamepad: 'r1',      keyboard: ']', label: 'Next',     action: () => cycleAgent(+1) },
+    { gamepad: 'options', keyboard: 'F', label: 'Explorer', action: () => toggleFileExplorer() },
   ]);
+  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
+                       action: () => pressCross() });
 }
 
 async function exitZoom() {
