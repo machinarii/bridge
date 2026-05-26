@@ -134,10 +134,11 @@ kbd {
 #settings-btn:focus-visible,
 #settings-btn.focused {
   color: var(--fg);
-  outline: 2px solid var(--focus, #ffffff);
-  outline-offset: 3px;
-  background: rgba(255,255,255,0.10);
-  box-shadow: 0 0 16px 2px rgba(255,255,255,0.25);
+  outline: none;
+  background: rgba(255,255,255,0.14);
+  box-shadow:
+    0 0 0 2px var(--focus, #ffffff),
+    0 0 16px 2px rgba(255,255,255,0.25);
 }
 
 #settings-modal[hidden] { display: none !important; }
@@ -780,10 +781,20 @@ body[data-mode="zoom"] #surface {
 }
 #shortcuts-rail .sc .label { font-weight: 300; opacity: 0.7; }
 #shortcuts-rail .sc.focused {
-  outline: 2px solid var(--focus, #ffffff);
-  outline-offset: 3px;
-  background: rgba(255,255,255,0.14);
-  box-shadow: 0 0 16px 2px rgba(255,255,255,0.25);
+  /* Use box-shadow as the outline so the ring sits flush against the
+   * chip — no gap between border and background. */
+  outline: none;
+  background: rgba(255,255,255,0.18);
+  box-shadow:
+    0 0 0 2px var(--focus, #ffffff),
+    0 0 16px 2px rgba(255,255,255,0.25);
+}
+/* When the chip is focused, hide the keycap's own outline so the two
+ * borders don't double up. */
+#shortcuts-rail .sc.focused .glyph.for-keyboard,
+#back-shortcut .sc.focused .glyph.for-keyboard,
+#primary-shortcut .sc.focused .glyph.for-keyboard {
+  border-color: transparent;
 }
 
 /* Brief pulse on just the small key/glyph element when its shortcut
@@ -815,10 +826,11 @@ body[data-mode="zoom"] #surface {
 #back-shortcut .sc .label { font-weight: 300; opacity: 0.7; }
 #primary-shortcut .sc.focused,
 #back-shortcut .sc.focused {
-  outline: 2px solid var(--focus, #ffffff);
-  outline-offset: 3px;
-  background: rgba(255,255,255,0.14);
-  box-shadow: 0 0 16px 2px rgba(255,255,255,0.25);
+  outline: none;
+  background: rgba(255,255,255,0.18);
+  box-shadow:
+    0 0 0 2px var(--focus, #ffffff),
+    0 0 16px 2px rgba(255,255,255,0.25);
 }
 #action-bar {
   display: inline-flex; justify-content: flex-end; align-items: center; gap: 0.5rem;
@@ -842,11 +854,12 @@ body[data-mode="zoom"] #surface {
 }
 #action-bar .action.focused {
   border-color: var(--focus);
-  background: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.18);
   color: var(--fg);
-  outline: 2px solid var(--focus, #ffffff);
-  outline-offset: 3px;
-  box-shadow: 0 0 16px 2px rgba(255,255,255,0.25);
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--focus, #ffffff),
+    0 0 16px 2px rgba(255,255,255,0.25);
 }
 .glyph {
   display: inline-flex; align-items: center; justify-content: center;
