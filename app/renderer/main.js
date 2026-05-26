@@ -778,8 +778,6 @@ function renderNewProjectName() {
   t.className = 'capture-tile';
   t.innerHTML = `
     <h2>Name this project</h2>
-    <p class="hint for-gamepad">Hold <kbd>R2</kbd> and speak.</p>
-    <p class="hint for-keyboard">Hold <kbd>v</kbd> and speak — or press <kbd>/</kbd> to type.</p>
     <div class="capture-value">${escapeHtml(newProjName) || '<span class="placeholder">(Speak now)</span>'}</div>
     ${newProjRoleIds.includes('pm') || newProjRoleIds.includes('tpm')
       ? ''
@@ -804,8 +802,6 @@ function renderNewProjectGoal() {
   t.className = 'capture-tile';
   t.innerHTML = `
     <h2>What is this project's goal?</h2>
-    <p class="hint for-gamepad">Hold <kbd>R2</kbd> and describe it.</p>
-    <p class="hint for-keyboard">Hold <kbd>v</kbd> and describe it — or press <kbd>/</kbd> to type.</p>
     <div class="capture-value">${escapeHtml(newProjGoal) || '<span class="placeholder">(Speak now)</span>'}</div>`;
   surfaceEl.appendChild(t);
   renderActionBar([
@@ -1010,11 +1006,7 @@ function renderZoom(specOverride) {
 
   const spec = specOverride ?? agent.lastSpec;
   if (!spec) {
-    surfaceWrap.innerHTML = `
-      <div class="idle">
-        <p class="for-gamepad">Hold <kbd>R2</kbd> and speak.</p>
-        <p class="for-keyboard">Hold <kbd>v</kbd> and speak — or press <kbd>/</kbd> to type.</p>
-      </div>`;
+    surfaceWrap.innerHTML = '';
     renderActionBar([]);
     ring.set([]);
     _setL2Shortcuts();
