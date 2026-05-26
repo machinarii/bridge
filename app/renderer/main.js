@@ -560,6 +560,22 @@ async function talkToFocusedLead() {
   startPTT();
 }
 
+/* ---------- Per-project color palette ----------
+ * Each project gets a deterministic color from a fixed palette so the
+ * surface, project tile, and all of the project's agents share one hue.
+ * Removes the per-role color scheme inside a project. */
+const PROJECT_PALETTE = [
+  '#6ea8ff', '#ff7b86', '#c08bff', '#9cf2c1',
+  '#ffd35a', '#ffb86b', '#5fdcd6', '#ff8ec7',
+  '#a5b4fc', '#fb923c', '#34d399', '#f472b6',
+];
+function getProjectColor(project) {
+  if (!project?.id) return PROJECT_PALETTE[0];
+  let h = 0;
+  for (let i = 0; i < project.id.length; i++) h = (h * 31 + project.id.charCodeAt(i)) >>> 0;
+  return PROJECT_PALETTE[h % PROJECT_PALETTE.length];
+}
+
 /** Move the lead agent to index 0 so it always renders top-left on L1. */
 function withLeadFirst(project) {
   if (!project?.leadAgentId) return project;
@@ -783,7 +799,7 @@ function renderGrid() {
   if (!activeProject) return renderProjects();
   mode = MODE_GRID;
   document.body.dataset.mode = mode;
-  document.documentElement.style.setProperty('--agent-color', '#6ea8ff');
+  document.documentElement.style.setProperty('--agent-color', getProjectColor(activeProject));
   setBreadcrumbs([{ label: 'Projects' }, { label: activeProject.name }]);
   surfaceEl.innerHTML = '';
   saveNavState();
@@ -805,12 +821,13 @@ function renderGrid() {
   grid._cols = cols;
   grid._rows = rows;
 
+  const projectColor = getProjectColor(activeProject);
   const tileEls = activeProject.agents.map((a, i) => {
     const tile = document.createElement('div');
     tile.className = 'agent-tile';
     if (!a.enabled) tile.dataset.disabled = 'true';
     if (a.id === activeProject.leadAgentId) tile.dataset.lead = 'true';
-    tile.style.setProperty('--tile-color', a.color);
+    tile.style.setProperty('--tile-color', projectColor);
     tile.dataset.agentId = a.id;
     tile.dataset.busy = agentBusy[a.id] ? 'true' : 'false';
     tile.innerHTML = `
@@ -926,7 +943,7 @@ function renderZoom(specOverride) {
   if (!agent) return renderGrid();
   document.body.dataset.mode = mode;
   saveNavState();
-  document.documentElement.style.setProperty('--agent-color', agent.color);
+  document.documentElement.style.setProperty('--agent-color', getProjectColor(activeProject));
   // L2 breadcrumb keeps the agent context out — the page header already
   // shows "<Name> · <Role>". Just trail back to the project.
   setBreadcrumbs([
