@@ -1722,6 +1722,19 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (mode === MODE_GRID) {
+    // Left from the leftmost grid column with the explorer open hops
+    // focus back into the explorer.
+    if (e.key === 'ArrowLeft' && fileExplorerOpen && !explorerFocused) {
+      const grid = surfaceEl.querySelector('.agent-grid');
+      const cols = grid?._cols || 4;
+      if ((ring.index % cols) === 0) {
+        e.preventDefault();
+        explorerFocused = true;
+        ring.items.forEach(el => el.classList.remove('focused'));
+        paintFileFocus();
+        return;
+      }
+    }
     if (e.key === 'ArrowDown') {
       const grid = surfaceEl.querySelector('.agent-grid');
       if (grid) {
@@ -1737,6 +1750,14 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === '[')      { e.preventDefault(); cycleProject(-1); }
     else if (e.key === ']')      { e.preventDefault(); cycleProject(+1); }
   } else if (mode === MODE_ZOOM) {
+    // Left at the first ring position with explorer open hops back in.
+    if (e.key === 'ArrowLeft' && fileExplorerOpen && !explorerFocused && ring.index === 0) {
+      e.preventDefault();
+      explorerFocused = true;
+      ring.items.forEach(el => el.classList.remove('focused'));
+      paintFileFocus();
+      return;
+    }
     if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')      { e.preventDefault(); ring.move(-1); }
     else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); ring.move(+1); }
     else if (e.key === 'Enter')      { e.preventDefault(); pressCross(); }
