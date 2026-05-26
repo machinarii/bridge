@@ -509,6 +509,7 @@ function renderProjects() {
     const tile = document.createElement('div');
     tile.className = 'project-tile';
     tile.dataset.projectId = p.id;
+    tile.style.setProperty('--tile-color', getProjectColor(p));
     tile.innerHTML = `
       <h2 class="name">${escapeHtml(sentenceCase(p.name))}</h2>
       <div class="meta">${p.agents.length} agent${p.agents.length===1?'':'s'}</div>`;
