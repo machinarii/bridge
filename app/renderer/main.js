@@ -1671,12 +1671,25 @@ const fileViewerPathEl  = fileViewerEl.querySelector('.file-viewer-path');
 const fileViewerBodyEl  = fileViewerEl.querySelector('.file-viewer-body');
 const fileViewerCloseEl = fileViewerEl.querySelector('.file-viewer-close');
 let fileViewerOpen      = false;
-fileViewerCloseEl?.addEventListener('click', () => closeFileViewer());
+fileViewerCloseEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  closeFileViewer();
+});
 // Right-arrow off the × button: move focus to the surface itself so
 // Enter closes the viewer. Left-arrow returns focus to the ×.
 fileViewerCloseEl?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault(); e.stopPropagation();
+    closeFileViewer();
+    return;
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault(); e.stopPropagation();
+    closeFileViewer();
+    return;
+  }
   if (e.key === 'ArrowRight') {
-    e.preventDefault();
+    e.preventDefault(); e.stopPropagation();
     fileViewerCloseEl.blur();
     setSurfaceCloseFocus(true);
   }
