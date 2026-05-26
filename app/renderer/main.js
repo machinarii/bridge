@@ -27,7 +27,8 @@ function footerFocusables() {
   const rail = [...shortcutsRailEl.querySelectorAll('.sc')];
   const primary = [...primaryShortcutEl.querySelectorAll('.sc')];
   const actions = [...document.querySelectorAll('#action-bar .action')];
-  return [...rail, ...primary, ...actions];
+  const gear = document.getElementById('settings-btn');
+  return [...rail, ...primary, ...actions, ...(gear ? [gear] : [])];
 }
 function setShortcuts(items) {
   shortcutsRailEl.innerHTML = '';
@@ -2025,6 +2026,12 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.key === '/')  { e.preventDefault(); typedWrap.hidden = false; typedInput.focus(); return; }
 
+  // Universal Tab: jumps focus into the footer rail from anywhere. Once
+  // there, the rail keydown handler below takes over.
+  if (e.key === 'Tab' && !e.shiftKey && !isShortcutsFocused() && !fileExplorerOpen) {
+    if (enterShortcuts()) { e.preventDefault(); return; }
+  }
+
   const dirMap = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
   const dir = dirMap[e.key];
 
@@ -2083,11 +2090,22 @@ window.addEventListener('keydown', (e) => {
     } else if (dir) { e.preventDefault(); pickerMove(dir); }
     else if (e.key === 'Enter') { e.preventDefault(); openFocused(); }
   } else if (mode === MODE_NEW_PROJ_ROLES) {
-    if (dir) { e.preventDefault(); roleGridMove(dir); }
+    if (e.key === 'ArrowDown') {
+      const grid = surfaceEl.querySelector('.role-grid');
+      if (grid) {
+        const cols = grid._cols || 4;
+        const n = ring.elements.length;
+        const lastRow = Math.max(0, Math.ceil(n / cols) - 1);
+        const r = Math.floor(ring.index / cols);
+        if (r >= lastRow && enterShortcuts()) { e.preventDefault(); return; }
+      }
+      e.preventDefault(); roleGridMove('down');
+    } else if (dir) { e.preventDefault(); roleGridMove(dir); }
     else if (e.code === 'Space')  { e.preventDefault(); toggleFocusedRole(); }
     else if (e.key === 'Enter')   { e.preventDefault(); advanceFromRolePicker(); }
     else if (e.key === 'Escape')  { e.preventDefault(); renderProjects(); }
   } else if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); enterShortcuts(); return; }
     if (e.key === 'Enter')        { e.preventDefault(); confirmCapture(); }
     else if (e.key === 'Escape')  { e.preventDefault(); goBackInCreateFlow(); }
   }
