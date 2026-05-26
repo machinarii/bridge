@@ -1067,6 +1067,7 @@ async function renderChatHistory(container, agent) {
 function _setL2Shortcuts() {
   setShortcuts([
     { gamepad: 'r2',      keyboard: 'V', label: 'Hold to talk', action: () => startPTT() },
+    {                     keyboard: '/', label: 'Type prompt',  action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     { gamepad: 'l1',      keyboard: '[', label: 'Prev agent',   action: () => cycleAgent(-1) },
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
     { gamepad: 'options', keyboard: 'F', label: 'Explorer',     action: () => toggleFileExplorer() },
