@@ -513,12 +513,10 @@ body[data-mode="zoom"] #surface {
 }
 #shortcuts-rail .sc.focused .label { opacity: 1; color: var(--fg); }
 #primary-shortcut {
-  display: inline-flex; align-items: center; gap: 0.65rem;
+  display: inline-flex; align-items: center; gap: 0.5rem;
   color: var(--fg-dim);
   font-size: 0.85em;
   flex: 0 0 auto;
-  /* Sits as the last child inside #action-bar — no margin, the parent
-   * flex gap separates it from the verb buttons. */
   margin-left: 0;
 }
 #primary-shortcut .sc {
@@ -535,26 +533,29 @@ body[data-mode="zoom"] #surface {
   background: rgba(255,255,255,0.08);
 }
 #action-bar {
-  display: inline-flex; justify-content: flex-end; align-items: center; gap: 12px;
+  display: inline-flex; justify-content: flex-end; align-items: center; gap: 0.5rem;
   flex: 0 0 auto;
+  background: rgba(20,22,28,0.92);
+  padding: 4px 8px;
+  border-radius: 999px;
 }
 #action-bar .action {
-  display: inline-flex; align-items: center; gap: 10px;
-  padding: 10px 16px;
-  background: var(--bg-elev);
-  border-radius: 10px;
-  border: 2px solid transparent;
-  font-size: 0.92em;
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  background: transparent;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-size: 0.85em;
   cursor: pointer;
-  color: var(--fg);
+  color: var(--fg-dim);
   font-family: inherit;
-  transition: border-color 120ms, background 120ms, transform 120ms;
+  font-weight: 300;
+  transition: border-color 120ms, background 120ms, color 120ms;
 }
 #action-bar .action.focused {
   border-color: var(--focus);
-  background: #2a3a52;
-  transform: translateY(-3px);
-  box-shadow: 0 8px 22px -6px rgba(0,0,0,0.55), 0 0 18px 4px rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.08);
+  color: var(--fg);
 }
 .glyph {
   display: inline-flex; align-items: center; justify-content: center;
