@@ -603,6 +603,9 @@ function updatePickerShortcuts() {
 /** Open the focused project, wait for the morph to land, then start
  *  PTT so the user can talk to the lead immediately. */
 async function talkToFocusedLead() {
+  // No-op when "+ New" is focused — there's no lead to talk to.
+  const idx = ring.index ?? pickerIndex;
+  if (idx >= projects.length) return;
   await openFocused();
   startPTT();
 }
@@ -2023,12 +2026,16 @@ window.addEventListener('keydown', (e) => {
       e.preventDefault();
       slideToAdjacentProject(e.key === ']' ? +1 : -1);
     } else if (e.key === 'ArrowDown') {
-      // Only descend into the rail when the cursor is on the bottom row.
+      // Descend into the rail when the cursor is on the last row that
+      // has actual content (not the grid's nominal last row — sparse
+      // grids may have empty rows below).
       const grid = surfaceEl.querySelector('.project-picker');
       if (grid) {
-        const cols = grid._cols, rows = grid._rows;
+        const cols = grid._cols;
+        const n = ring.elements.length;
+        const lastRow = Math.max(0, Math.ceil(n / cols) - 1);
         const r = Math.floor(ring.index / cols);
-        if (r === rows - 1 && enterShortcuts()) { e.preventDefault(); return; }
+        if (r >= lastRow && enterShortcuts()) { e.preventDefault(); return; }
       }
       e.preventDefault(); pickerMove(dir);
     } else if (dir) { e.preventDefault(); pickerMove(dir); }
@@ -2087,9 +2094,11 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown') {
       const grid = surfaceEl.querySelector('.agent-grid');
       if (grid) {
-        const cols = grid._cols, rows = grid._rows;
+        const cols = grid._cols;
+        const n = ring.elements.length;
+        const lastRow = Math.max(0, Math.ceil(n / cols) - 1);
         const r = Math.floor(ring.index / cols);
-        if (r === rows - 1 && enterShortcuts()) { e.preventDefault(); return; }
+        if (r >= lastRow && enterShortcuts()) { e.preventDefault(); return; }
       }
       e.preventDefault(); gridMove('down');
     } else if (dir) { e.preventDefault(); gridMove(dir); }
