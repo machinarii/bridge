@@ -1800,6 +1800,12 @@ gp.addEventListener('press', (e) => {
   const b = e.detail.button;
   if (b === 'l2') { speakFocusedAgentName(); return; }
 
+  // Settings modal takes over gamepad while open.
+  if (settingsOpen) {
+    handleSettingsGamepad(b);
+    return;
+  }
+
   if (mode === MODE_PROJECTS) {
     if (b === 'left' || b === 'right' || b === 'up' || b === 'down') {
       pickerMove(b);
@@ -2017,13 +2023,151 @@ async function openSettings() {
   populateMcpList(s.MCP_PLUGINS || []);
   settingsGitEnabledEl.checked = !!s.GIT_AUTOSAVE;
   settingsGitIntervalEl.value = Number(s.GIT_AUTOSAVE_INTERVAL_MIN || 5);
-  setTimeout(() => settingsApiKeyEl.focus(), 0);
+  // Land focus on the first tab so the user can immediately navigate
+  // with arrows / d-pad.
+  setTimeout(() => settingsTabEls[0]?.focus(), 0);
 }
 
 function closeSettings() {
   settingsModalEl.hidden = true;
   settingsOpen = false;
 }
+
+/** Every focusable in the modal, in visual order: tabs → active-pane
+ *  controls → action-row buttons. */
+function settingsFocusables() {
+  const tabs = settingsTabEls;
+  const activePane = settingsPaneEls.find(p => !p.hidden);
+  const paneFocusables = activePane
+    ? [...activePane.querySelectorAll('input, select, button, [tabindex]:not([tabindex="-1"])')]
+        .filter(el => !el.disabled && el.offsetParent !== null)
+    : [];
+  const actions = [settingsCancelEl, settingsSaveEl].filter(Boolean);
+  return [...tabs, ...paneFocusables, ...actions];
+}
+
+function focusNextInModal(delta) {
+  const items = settingsFocusables();
+  if (items.length === 0) return;
+  const i = items.indexOf(document.activeElement);
+  const next = items[(i + delta + items.length) % items.length];
+  next?.focus();
+}
+
+/* Gamepad input for the settings modal. Mirrors the keyboard model:
+ * dpad navigates, cross activates, circle closes. */
+function handleSettingsGamepad(button) {
+  const active = document.activeElement;
+  const isTab = settingsTabEls.includes(active);
+  if (button === 'circle') { closeSettings(); return; }
+  if (button === 'cross') {
+    if (active === settingsCancelEl) { closeSettings(); return; }
+    if (active === settingsSaveEl)   { saveSettings(); return; }
+    if (active && active.tagName === 'BUTTON') { active.click(); return; }
+    if (active && active.type === 'checkbox')  { active.checked = !active.checked; return; }
+    // Default: treat as Save.
+    saveSettings();
+    return;
+  }
+  if (isTab && (button === 'left' || button === 'right')) {
+    const i = settingsTabEls.indexOf(active);
+    const next = settingsTabEls[(i + (button === 'right' ? 1 : -1) + settingsTabEls.length) % settingsTabEls.length];
+    selectSettingsTab(next.dataset.tab);
+    next.focus();
+    return;
+  }
+  if (isTab && button === 'down') {
+    const items = settingsFocusables();
+    const firstPane = items.find(el => !settingsTabEls.includes(el) && el !== settingsCancelEl && el !== settingsSaveEl);
+    (firstPane || settingsSaveEl)?.focus();
+    return;
+  }
+  if (button === 'up')   { focusNextInModal(-1); return; }
+  if (button === 'down') { focusNextInModal(+1); return; }
+  if ((button === 'left' || button === 'right') && (active === settingsCancelEl || active === settingsSaveEl)) {
+    (active === settingsSaveEl ? settingsCancelEl : settingsSaveEl)?.focus();
+    return;
+  }
+}
+
+/* Modal-scoped keyboard handler. */
+settingsModalEl?.addEventListener('keydown', (e) => {
+  if (!settingsOpen) return;
+
+  // Escape closes from anywhere in the modal.
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSettings(); return; }
+
+  const active = document.activeElement;
+  const isTab = settingsTabEls.includes(active);
+
+  // Left/Right cycles tabs when a tab is focused.
+  if (isTab && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    e.preventDefault(); e.stopPropagation();
+    const i = settingsTabEls.indexOf(active);
+    const next = settingsTabEls[(i + (e.key === 'ArrowRight' ? 1 : -1) + settingsTabEls.length) % settingsTabEls.length];
+    selectSettingsTab(next.dataset.tab);
+    next.focus();
+    return;
+  }
+
+  // Down from a tab enters the active pane.
+  if (isTab && e.key === 'ArrowDown') {
+    e.preventDefault(); e.stopPropagation();
+    const items = settingsFocusables();
+    const firstPane = items.find(el => !settingsTabEls.includes(el) && el !== settingsCancelEl && el !== settingsSaveEl);
+    (firstPane || settingsSaveEl)?.focus();
+    return;
+  }
+
+  // Up from a pane control returns to the tab strip.
+  if (!isTab && e.key === 'ArrowUp') {
+    const items = settingsFocusables();
+    const i = items.indexOf(active);
+    const prev = items[i - 1];
+    if (prev && settingsTabEls.includes(prev)) {
+      e.preventDefault(); e.stopPropagation();
+      settingsTabEls.find(t => t.getAttribute('aria-selected') === 'true')?.focus();
+      return;
+    }
+    // Otherwise step backward in the list.
+    e.preventDefault(); e.stopPropagation();
+    focusNextInModal(-1);
+    return;
+  }
+
+  // Down within pane: next focusable.
+  if (!isTab && e.key === 'ArrowDown') {
+    e.preventDefault(); e.stopPropagation();
+    focusNextInModal(+1);
+    return;
+  }
+
+  // Left/Right within pane on buttons cycles between Cancel and Save.
+  if (!isTab && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+      (active === settingsCancelEl || active === settingsSaveEl)) {
+    e.preventDefault(); e.stopPropagation();
+    (active === settingsSaveEl ? settingsCancelEl : settingsSaveEl)?.focus();
+    return;
+  }
+
+  // Enter on Cancel/Save activates them; Enter on an input triggers save
+  // unless we're on a button (which has its own click handler).
+  if (e.key === 'Enter') {
+    if (active === settingsCancelEl) { e.preventDefault(); e.stopPropagation(); closeSettings(); return; }
+    if (active === settingsSaveEl)   { e.preventDefault(); e.stopPropagation(); saveSettings(); return; }
+    if (active && active.tagName === 'BUTTON') { e.preventDefault(); e.stopPropagation(); active.click(); return; }
+    if (active && (active.tagName === 'INPUT' && active.type !== 'checkbox')) {
+      e.preventDefault(); e.stopPropagation(); saveSettings(); return;
+    }
+    if (active && active.type === 'checkbox') { e.preventDefault(); e.stopPropagation(); active.checked = !active.checked; return; }
+  }
+
+  // Space toggles checkboxes (HTML default already does this, but make
+  // it explicit so it doesn't bubble out to the surface PTT handler).
+  if (e.key === ' ' && active && active.type === 'checkbox') {
+    e.stopPropagation();
+  }
+});
 
 async function saveSettings() {
   const updates = {};
@@ -2072,14 +2216,12 @@ settingsBtnEl?.addEventListener('keydown', (e) => {
 });
 settingsSaveEl?.addEventListener('click', () => saveSettings());
 settingsCancelEl?.addEventListener('click', () => closeSettings());
-settingsModalEl?.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { e.preventDefault(); closeSettings(); }
-  else if (e.key === 'Enter' && document.activeElement?.tagName !== 'BUTTON') {
-    e.preventDefault(); saveSettings();
-  }
-});
 
 window.addEventListener('keydown', (e) => {
+  // Settings modal owns the keyboard while it's open — let its own
+  // handler take care of Esc / Tab / arrows / Enter.
+  if (settingsOpen) return;
+
   if (document.activeElement === typedInput) {
     if (e.key === 'Enter') {
       const t = typedInput.value.trim();
