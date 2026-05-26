@@ -284,49 +284,43 @@ function playZoomOutTo(target, rect) {
     .catch(() => {});
 }
 
-/* Seamless back nav: snapshot current surface as a floating clone, render
- * the new view underneath immediately, then animate the clone shrinking
- * into the destination rect. The user always sees BOTH views, with the
- * old one collapsing into a tile of the new one. */
-function backZoomWithSnapshot(toRect, renderNewView) {
-  if (!toRect) { renderNewView(); return Promise.resolve(); }
+/* Seamless back nav. The overlay is an EMPTY card sized like the
+ * current surface (with surface's bg/border copied as inline style)
+ * so no inner text/UI is visible during the shrink. We render the
+ * destination view first, then optionally recompute the target rect
+ * from the just-rendered destination so the overlay lands on the
+ * actual tile (not a stale rect cached at navigate-forward time).
+ *
+ * `resolveToRect` may be:
+ *   - a function returning the target rect (called after renderNewView)
+ *   - a DOMRect (used as-is)
+ *   - undefined (the animation is skipped). */
+function backZoomWithSnapshot(resolveToRect, renderNewView) {
   const sRect = surfaceEl.getBoundingClientRect();
-  const overlay = surfaceEl.cloneNode(true);
-  overlay.removeAttribute('id');
-  overlay.style.position = 'fixed';
-  overlay.style.left = `${sRect.left}px`;
-  overlay.style.top = `${sRect.top}px`;
-  overlay.style.width = `${sRect.width}px`;
-  overlay.style.height = `${sRect.height}px`;
-  overlay.style.margin = '0';
-  overlay.style.padding = getComputedStyle(surfaceEl).padding;
-  overlay.style.pointerEvents = 'none';
-  overlay.style.zIndex = '50';
+  // Card-only overlay: same size + position as the surface, with the
+  // surface's own backdrop. No children — so no text to animate.
+  const overlay = document.createElement('div');
+  const cs = getComputedStyle(surfaceEl);
+  Object.assign(overlay.style, {
+    position: 'fixed',
+    left: `${sRect.left}px`, top: `${sRect.top}px`,
+    width: `${sRect.width}px`, height: `${sRect.height}px`,
+    margin: '0', pointerEvents: 'none', zIndex: '50',
+    background: cs.background,
+    border: cs.border,
+    borderRadius: cs.borderRadius,
+    boxShadow: 'none',
+  });
   document.body.appendChild(overlay);
 
-  // Hide the overlay's inner UI/text instantly, but keep the FIRST
-  // inner container visible — that's the one carrying the colored
-  // backdrop (.agent-view at L2, .agent-grid at L1). zoom-shell-only's
-  // descendant selector would have hidden it too, killing the shape
-  // entirely. Strip focus state separately.
-  overlay.classList.remove('focused');
-  overlay.querySelectorAll('.focused').forEach(d => d.classList.remove('focused'));
-  const inner = overlay.firstElementChild;
-  if (inner) {
-    for (const c of inner.children) c.style.opacity = '0';
-    inner.style.outline = 'none';
-    inner.style.boxShadow = 'none';
-  }
-
-  // Render the destination view underneath. Its content fades in
-  // gently; we deliberately do NOT animate #surface itself — the
-  // overlay above already covers it, so animating surface opacity
-  // produced a flicker when it transitioned from 0 to 1 in sync with
-  // the body/chrome swap.
+  // Render the destination view first so the recompute below can read
+  // the actual landing tile's rect.
   renderNewView();
   fadeInDestination(220);
-  // Animate the overlay via width/height/left/top so the corner radius
-  // stays naturally constant (no transform-scale artifacts).
+
+  const toRect = typeof resolveToRect === 'function' ? resolveToRect() : resolveToRect;
+  if (!toRect) { overlay.remove(); return Promise.resolve(); }
+
   const a = overlay.animate(
     [
       { offset: 0,    left: `${sRect.left}px`, top: `${sRect.top}px`,
@@ -911,11 +905,19 @@ function _setL2Shortcuts() {
 async function exitZoom() {
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
-  const toRect = popZoomRect();
-  await backZoomWithSnapshot(toRect, () => {
-    mode = MODE_GRID;
-    renderGrid();
-  });
+  const fromAgentId = currentAgent()?.id;
+  popZoomRect();
+  await backZoomWithSnapshot(
+    () => {
+      if (!fromAgentId) return null;
+      const tile = surfaceEl.querySelector(`[data-agent-id="${fromAgentId}"]`);
+      return tile?.getBoundingClientRect() || null;
+    },
+    () => {
+      mode = MODE_GRID;
+      renderGrid();
+    }
+  );
 }
 
 function cycleAgent(delta) {
@@ -1132,11 +1134,21 @@ async function exitToProjects() {
   stopSpeaking();
   closeFileViewer();
   if (fileExplorerOpen) closeFileExplorer();
-  const toRect = popZoomRect();
-  await backZoomWithSnapshot(toRect, () => {
-    activeProject = null;
-    renderProjects();
-  });
+  const fromProjectId = activeProject?.id;
+  popZoomRect(); // discard stale cached rect; we'll compute fresh
+  await backZoomWithSnapshot(
+    () => {
+      // After renderProjects(), find the matching tile in the freshly
+      // laid-out picker and target its actual rect.
+      if (!fromProjectId) return null;
+      const tile = surfaceEl.querySelector(`[data-project-id="${fromProjectId}"]`);
+      return tile?.getBoundingClientRect() || null;
+    },
+    () => {
+      activeProject = null;
+      renderProjects();
+    }
+  );
 }
 async function toggleFocusedAgentEnabled() {
   if (mode !== MODE_GRID || !activeProject) return;
