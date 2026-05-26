@@ -81,12 +81,13 @@ kbd {
 }
 
 #baseplate {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   padding: 24px 32px;
   gap: 20px;
 }
+#baseplate > #footer-rail { margin-top: auto; }
 
 #context-strip {
   display: flex;
@@ -186,6 +187,8 @@ kbd {
   overflow: hidden;
   display: flex; flex-direction: column;
   position: relative;
+  /* Auto height — sizes to its content, doesn't fill the viewport. */
+  flex: 0 0 auto;
 }
 /* L2 lets .agent-view BE the visible container — no nested chrome. */
 body[data-mode="zoom"] #surface {
@@ -233,6 +236,7 @@ body[data-mode="zoom"] #surface {
     radial-gradient(ellipse 140% 90% at 50% -10%, color-mix(in oklab, var(--tile-color, #6ea8ff) 28%, transparent) 0%, transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
   padding: 1rem;
+  min-height: 130px;
   display: flex; flex-direction: column; justify-content: flex-start;
   cursor: pointer;
   overflow: hidden;
@@ -520,6 +524,7 @@ body[data-mode="zoom"] #surface {
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.06);
   padding: 1rem;
+  min-height: 150px;
   background:
     radial-gradient(ellipse 140% 90% at 50% -10%, rgba(110,168,255,0.22) 0%, transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
