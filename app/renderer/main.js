@@ -598,11 +598,19 @@ function createSurfaceCloseButton(onClose) {
   btn.textContent = '×';
   btn.addEventListener('click', onClose);
   btn.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClose(); }
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
-      e.preventDefault();
+    // Must stopPropagation — otherwise window's bubble handler runs the
+    // mode-specific Enter action (openFocused/enterZoom) immediately
+    // after onClose, which re-opens the project the user just exited.
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault(); e.stopPropagation();
+      onClose();
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+      e.preventDefault(); e.stopPropagation();
       btn.blur();
       ring.paint();
+    } else if (e.key === 'Escape') {
+      e.preventDefault(); e.stopPropagation();
+      onClose();
     }
   });
   return btn;
