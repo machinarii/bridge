@@ -1480,6 +1480,15 @@ const fileViewerBodyEl  = fileViewerEl.querySelector('.file-viewer-body');
 const fileViewerCloseEl = fileViewerEl.querySelector('.file-viewer-close');
 let fileViewerOpen      = false;
 fileViewerCloseEl?.addEventListener('click', () => closeFileViewer());
+// Right-arrow off the × button: move focus to the surface itself so
+// Enter closes the viewer. Left-arrow returns focus to the ×.
+fileViewerCloseEl?.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    fileViewerCloseEl.blur();
+    setSurfaceCloseFocus(true);
+  }
+});
 
 async function openFocusedFile() {
   const e = fileEntries[fileFocus];
@@ -1508,6 +1517,15 @@ function closeFileViewer() {
   fileViewerEl.hidden = true;
   fileViewerOpen = false;
   document.body.dataset.fileViewer = 'closed';
+  setSurfaceCloseFocus(false);
+}
+
+/** When the user arrows right off the viewer × button, the surface
+ *  itself becomes the focus target — pressing Enter closes the viewer. */
+let surfaceCloseFocused = false;
+function setSurfaceCloseFocus(on) {
+  surfaceCloseFocused = !!on;
+  document.body.dataset.surfaceCloseFocus = on ? 'true' : 'false';
 }
 function currentAgent() { return activeProject?.agents?.[zoomedIndex] || null; }
 
@@ -1724,6 +1742,13 @@ window.addEventListener('keydown', (e) => {
   } else if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
     if (e.key === 'Enter')        { e.preventDefault(); confirmCapture(); }
     else if (e.key === 'Escape')  { e.preventDefault(); goBackInCreateFlow(); }
+  }
+
+  // Surface holds "close viewer" focus — Enter closes; Left returns to ×.
+  if (surfaceCloseFocused) {
+    if (e.key === 'Enter')      { e.preventDefault(); closeFileViewer(); return; }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); setSurfaceCloseFocus(false); fileViewerCloseEl?.focus(); return; }
+    if (e.key === 'Escape')     { e.preventDefault(); closeFileViewer(); return; }
   }
 
   // File viewer (right panel) — Esc closes it before any back navigation.
