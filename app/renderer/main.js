@@ -367,6 +367,24 @@ let newProjRoleIds = [];          // toggled during step 1
 let newProjName    = '';          // captured during step 2
 let newProjGoal    = '';          // captured during step 3
 
+/* ---------- Nav state persistence (survives page refresh) ---------- */
+const NAV_KEY = 'bridge:nav';
+function saveNavState() {
+  try {
+    sessionStorage.setItem(NAV_KEY, JSON.stringify({
+      mode,
+      projectId: activeProject?.id || null,
+      gridIndex,
+      zoomedIndex,
+      pickerIndex,
+    }));
+  } catch {}
+}
+function readNavState() {
+  try { return JSON.parse(sessionStorage.getItem(NAV_KEY) || 'null'); }
+  catch { return null; }
+}
+
 /* ---------- Bootstrap ---------- */
 async function loadProjects() {
   const [pj, rj] = await Promise.all([fetch('/projects'), fetch('/roles')]);
@@ -422,6 +440,7 @@ function renderProjects() {
   document.documentElement.style.setProperty('--agent-color', '#6ea8ff');
   setBreadcrumbs([{ label: 'Projects' }]);
   surfaceEl.innerHTML = '';
+  saveNavState();
 
   // Heading at top-left of the surface, like the project detail screen.
   const heading = document.createElement('header');
@@ -697,6 +716,7 @@ function renderGrid() {
   document.documentElement.style.setProperty('--agent-color', '#6ea8ff');
   setBreadcrumbs([{ label: 'Projects' }, { label: activeProject.name }]);
   surfaceEl.innerHTML = '';
+  saveNavState();
 
   // Project heading inside the container — top-left, above the grid.
   const heading = document.createElement('header');
@@ -833,6 +853,7 @@ function renderZoom(specOverride) {
   const agent = currentAgent();
   if (!agent) return renderGrid();
   document.body.dataset.mode = mode;
+  saveNavState();
   document.documentElement.style.setProperty('--agent-color', agent.color);
   // L2 breadcrumb keeps the agent context out — the page header already
   // shows "<Name> · <Role>". Just trail back to the project.
@@ -1791,12 +1812,28 @@ window.addEventListener('keyup', (e) => {
 /* ---------- Boot ---------- */
 (async () => {
   await loadProjects();
-  renderProjects();
+  // Restore the last screen the user was on (survives page refresh).
+  const saved = readNavState();
+  let restored = false;
+  if (saved?.projectId) {
+    const p = projects.find(pp => pp.id === saved.projectId);
+    if (p) {
+      activeProject = withLeadFirst(p);
+      gridIndex   = saved.gridIndex   || 0;
+      zoomedIndex = saved.zoomedIndex || 0;
+      if (saved.mode === MODE_ZOOM) { renderZoom(); restored = true; }
+      else if (saved.mode === MODE_GRID) { renderGrid(); restored = true; }
+    }
+  }
+  if (!restored) {
+    if (saved?.pickerIndex) pickerIndex = saved.pickerIndex;
+    renderProjects();
+  }
   staggerInCards();
   staggerInFooter();
   setIndicator('idle', 'Connected');
   startConnectionPing();
-  console.log('[bridge] L0 ready. ✕ open project, "+ New" to create.');
+  console.log('[bridge] booted into', mode);
 })();
 
 /* Ping /health every 5 s — flip the indicator to red on failure, back to
