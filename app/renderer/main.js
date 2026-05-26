@@ -936,7 +936,7 @@ function updateGridShortcuts() {
     { gamepad: 'r2', keyboard: 'V', label: 'Hold to talk', action: () => startPTT() },
     { gamepad: 'l1', keyboard: '[', label: 'Prev project', action: () => cycleProject(-1) },
     { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
-    { gamepad: 'options', keyboard: 'F', label: 'Explorer', action: () => toggleFileExplorer() },
+    { gamepad: 'options', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
     {                    keyboard: 'S', label: 'Skills',   action: () => toggleSkillsDrawer() },
   ];
   if (!isLeadFocused) {
@@ -1118,7 +1118,7 @@ function _setL2Shortcuts() {
     {                     keyboard: '/', label: 'Type prompt',  action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     { gamepad: 'l1',      keyboard: '[', label: 'Prev agent',   action: () => cycleAgent(-1) },
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
-    { gamepad: 'options', keyboard: 'F', label: 'Explorer',     action: () => toggleFileExplorer() },
+    { gamepad: 'options', keyboard: 'E', label: 'Explorer',     action: () => toggleFileExplorer() },
     {                     keyboard: 'S', label: 'Skills',       action: () => toggleSkillsDrawer() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
@@ -1990,7 +1990,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  if (e.key === '\\' || e.key === 'f' || e.key === 'F') {
+  if (e.key === '\\' || e.key === 'e' || e.key === 'E') {
     // Only L1 / L2 actually have the explorer; toggleFileExplorer is a
     // no-op outside those modes.
     e.preventDefault();
