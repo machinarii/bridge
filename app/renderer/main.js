@@ -675,6 +675,14 @@ function renderGrid() {
   setBreadcrumbs([{ label: 'Projects' }, { label: activeProject.name }]);
   surfaceEl.innerHTML = '';
 
+  // Project heading inside the container — top-left, above the grid.
+  const heading = document.createElement('header');
+  heading.className = 'project-heading';
+  heading.innerHTML = `
+    <h2 class="project-title">${escapeHtml(activeProject.name)}</h2>
+    <p class="project-goal">${escapeHtml(activeProject.goal || '')}</p>`;
+  surfaceEl.appendChild(heading);
+
   const { cols, rows } = gridLayout(activeProject.agents.length);
   const grid = document.createElement('div');
   grid.className = 'agent-grid';
@@ -1497,9 +1505,9 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (mode === MODE_PROJECTS) {
-    if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+    if (e.key === '[' || e.key === ']') {
       e.preventDefault();
-      slideToAdjacentProject(e.key === 'ArrowRight' ? +1 : -1);
+      slideToAdjacentProject(e.key === ']' ? +1 : -1);
     } else if (e.key === 'ArrowDown') {
       // Only descend into the rail when the cursor is on the bottom row.
       const grid = surfaceEl.querySelector('.project-picker');
