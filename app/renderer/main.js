@@ -937,6 +937,7 @@ function updateGridShortcuts() {
     { gamepad: 'l1', keyboard: '[', label: 'Prev project', action: () => cycleProject(-1) },
     { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
     { gamepad: 'options', keyboard: 'F', label: 'Explorer', action: () => toggleFileExplorer() },
+    {                    keyboard: 'S', label: 'Skills',   action: () => toggleSkillsDrawer() },
   ];
   if (!isLeadFocused) {
     items.push({ gamepad: 'square', keyboard: 'Space', label: 'Agent on / off',
