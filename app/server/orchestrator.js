@@ -3,6 +3,7 @@ import { appendTurn, getContext } from './scratchpad.js';
 import { getProject } from './projects.js';
 import { readProjectCharter } from './charters.js';
 import { getRole } from './roles.js';
+import { getModelForRole } from './models.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -27,7 +28,7 @@ Stay in role and on-goal. Speak briefly, in first person when relevant. The user
 
 Your job: classify the user's intent and return a single JSON object describing the tile surface to render. No prose, no markdown, no code fences. JSON only.
 
-There are exactly three intent kinds:
+There are four intent kinds:
 
 1. take_note — the user wants to save a note. Output:
    { "intent": "take_note", "template": "compose", "context": "New note", "title": "Save this note?",
@@ -47,6 +48,12 @@ There are exactly three intent kinds:
      "body": "<concise spoken-friendly answer>",
      "actions": [{ "verb": "Back", "glyph": "circle", "action": { "type": "cancel" } }] }
 
+4. delegate — only when the task is plainly outside your role and would be better handled by a specific teammate (e.g. engineer wanting QA to write tests, PM punting code questions to engineer). Use sparingly. Output:
+   { "intent": "delegate", "to_role": "<roleId from team>", "task": "<one sentence task for the teammate>",
+     "context": "Delegating", "title": "Routing to <role label>",
+     "body": "<short note for the user explaining why>",
+     "actions": [{ "verb": "Back", "glyph": "circle", "action": { "type": "cancel" } }] }
+
 Rules: single JSON object. No markdown, no commentary. "body" is read aloud — keep speakable. Allowed glyphs: cross | circle | square | triangle.`;
 }
 
@@ -63,7 +70,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom }) 
     const spec = fallbackSpec(text, 'OPENROUTER_API_KEY missing — using local classifier.');
     return hydrateSpec(spec, { project, agent, text });
   }
-  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.7';
+  const model = getModelForRole(agent.role);
 
   const history = getContext(agentId).messages.slice(0, -1);
   const messages = [

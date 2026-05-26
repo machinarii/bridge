@@ -1879,74 +1879,144 @@ document.getElementById('brand')?.addEventListener('click', (e) => {
 });
 
 /* ---------- Settings modal ---------- */
-const settingsBtnEl     = document.getElementById('settings-btn');
-const settingsModalEl   = document.getElementById('settings-modal');
-const settingsApiKeyEl  = document.getElementById('settings-api-key');
-const settingsApiMetaEl = document.getElementById('settings-api-key-current');
-const settingsModelEl   = document.getElementById('settings-model');
-const settingsSaveEl    = document.getElementById('settings-save');
-const settingsCancelEl  = document.getElementById('settings-cancel');
+const settingsBtnEl       = document.getElementById('settings-btn');
+const settingsModalEl     = document.getElementById('settings-modal');
+const settingsApiKeyEl    = document.getElementById('settings-api-key');
+const settingsApiMetaEl   = document.getElementById('settings-api-key-current');
+const settingsModelEl     = document.getElementById('settings-model');
+const settingsRoleModelsEl= document.getElementById('settings-role-models');
+const settingsMcpListEl   = document.getElementById('settings-mcp-list');
+const settingsMcpAddEl    = document.getElementById('settings-mcp-add');
+const settingsGitEnabledEl= document.getElementById('settings-git-enabled');
+const settingsGitIntervalEl = document.getElementById('settings-git-interval');
+const settingsSaveEl      = document.getElementById('settings-save');
+const settingsCancelEl    = document.getElementById('settings-cancel');
+const settingsTabEls      = [...document.querySelectorAll('.settings-tab')];
+const settingsPaneEls     = [...document.querySelectorAll('.settings-pane')];
 let settingsOpen = false;
+let settingsModelsList = []; // shared OpenRouter model list
+let settingsRolesList = []; // [{ id, label }]
+let settingsMcpEntries = []; // [{ id, name, enabled }]
 
-let _settingsModelsLoaded = false;
+function selectSettingsTab(name) {
+  for (const t of settingsTabEls) t.setAttribute('aria-selected', String(t.dataset.tab === name));
+  for (const p of settingsPaneEls) p.hidden = (p.dataset.tab !== name);
+}
+settingsTabEls.forEach(t => t.addEventListener('click', () => selectSettingsTab(t.dataset.tab)));
 
-async function populateModelSelect(currentId) {
-  // Always seed with the current model so the dropdown has something
-  // sensible even if the OpenRouter fetch fails.
-  settingsModelEl.innerHTML = '';
-  if (currentId) {
+function buildModelOptions(currentId, includeUseDefault = false) {
+  const frag = document.createDocumentFragment();
+  if (includeUseDefault) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = '— Use default —';
+    if (!currentId) opt.selected = true;
+    frag.appendChild(opt);
+  }
+  let matched = false;
+  for (const m of settingsModelsList) {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = m.name && m.name !== m.id ? `${m.name} — ${m.id}` : m.id;
+    if (m.id === currentId) { opt.selected = true; matched = true; }
+    frag.appendChild(opt);
+  }
+  if (currentId && !matched) {
     const opt = document.createElement('option');
     opt.value = currentId;
-    opt.textContent = currentId;
+    opt.textContent = `${currentId} (current)`;
     opt.selected = true;
-    settingsModelEl.appendChild(opt);
+    frag.prepend(opt);
   }
+  return frag;
+}
+
+function populateModelSelect(currentId) {
+  settingsModelEl.innerHTML = '';
+  settingsModelEl.appendChild(buildModelOptions(currentId, false));
+}
+
+function populateRoleModels(byRole) {
+  settingsRoleModelsEl.innerHTML = '';
+  for (const role of settingsRolesList) {
+    const row = document.createElement('div');
+    row.className = 'role-model-row';
+    const label = document.createElement('div');
+    label.className = 'role-label';
+    label.textContent = role.label;
+    const select = document.createElement('select');
+    select.dataset.role = role.id;
+    select.appendChild(buildModelOptions(byRole[role.id] || '', true));
+    row.append(label, select);
+    settingsRoleModelsEl.appendChild(row);
+  }
+}
+
+function populateMcpList(entries) {
+  settingsMcpEntries = (entries || []).slice();
+  settingsMcpListEl.innerHTML = '';
+  if (settingsMcpEntries.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'settings-meta';
+    empty.textContent = 'No MCP plugins registered yet.';
+    settingsMcpListEl.appendChild(empty);
+    return;
+  }
+  for (const p of settingsMcpEntries) {
+    const row = document.createElement('div');
+    row.className = 'mcp-row';
+    const name = document.createElement('div');
+    name.className = 'mcp-name';
+    name.textContent = p.name || p.id;
+    const meta = document.createElement('div');
+    meta.className = 'mcp-meta';
+    meta.textContent = p.id;
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!p.enabled;
+    cb.addEventListener('change', () => { p.enabled = cb.checked; });
+    row.append(name, meta, cb);
+    settingsMcpListEl.appendChild(row);
+  }
+}
+
+async function ensureModelsList() {
+  if (settingsModelsList.length) return;
   try {
     const r = await fetch('/settings/models');
-    if (!r.ok) throw new Error(`models ${r.status}`);
-    const { models } = await r.json();
-    settingsModelEl.innerHTML = '';
-    let matched = false;
-    for (const m of models) {
-      const opt = document.createElement('option');
-      opt.value = m.id;
-      opt.textContent = m.name === m.id ? m.id : `${m.name} — ${m.id}`;
-      if (m.id === currentId) { opt.selected = true; matched = true; }
-      settingsModelEl.appendChild(opt);
-    }
-    if (currentId && !matched) {
-      // The configured model isn't in the upstream list (custom / unlisted).
-      // Add it on top so it stays selectable.
-      const opt = document.createElement('option');
-      opt.value = currentId;
-      opt.textContent = `${currentId} (current)`;
-      opt.selected = true;
-      settingsModelEl.prepend(opt);
-    }
-    _settingsModelsLoaded = true;
-  } catch (err) {
-    console.warn('[settings] model list fetch failed', err);
-  }
+    if (r.ok) settingsModelsList = (await r.json()).models || [];
+  } catch (err) { console.warn('[settings] model list fetch failed', err); }
+}
+
+async function ensureRolesList() {
+  if (settingsRolesList.length) return;
+  try {
+    const r = await fetch('/roles');
+    if (r.ok) settingsRolesList = (await r.json()).roles || [];
+  } catch (err) { console.warn('[settings] roles fetch failed', err); }
 }
 
 async function openSettings() {
   if (settingsOpen) return;
   settingsOpen = true;
   settingsModalEl.hidden = false;
+  selectSettingsTab('general');
   settingsApiKeyEl.value = '';
   settingsApiMetaEl.textContent = '';
-  let current = '';
+  let s = {};
   try {
     const r = await fetch('/settings');
-    if (r.ok) {
-      const s = await r.json();
-      settingsApiMetaEl.textContent = s.OPENROUTER_API_KEY_SET
-        ? `Current: ${s.OPENROUTER_API_KEY} — leave blank to keep.`
-        : 'No key set.';
-      current = s.OPENROUTER_MODEL || '';
-    }
+    if (r.ok) s = await r.json();
   } catch {}
-  await populateModelSelect(current);
+  settingsApiMetaEl.textContent = s.OPENROUTER_API_KEY_SET
+    ? `Current: ${s.OPENROUTER_API_KEY} — leave blank to keep.`
+    : 'No key set.';
+  await Promise.all([ensureModelsList(), ensureRolesList()]);
+  populateModelSelect(s.OPENROUTER_MODEL || '');
+  populateRoleModels(s.OPENROUTER_MODEL_BY_ROLE || {});
+  populateMcpList(s.MCP_PLUGINS || []);
+  settingsGitEnabledEl.checked = !!s.GIT_AUTOSAVE;
+  settingsGitIntervalEl.value = Number(s.GIT_AUTOSAVE_INTERVAL_MIN || 5);
   setTimeout(() => settingsApiKeyEl.focus(), 0);
 }
 
@@ -1961,7 +2031,17 @@ async function saveSettings() {
   if (apiKey) updates.OPENROUTER_API_KEY = apiKey;
   const model = (settingsModelEl.value || '').trim();
   if (model) updates.OPENROUTER_MODEL = model;
-  if (Object.keys(updates).length === 0) { closeSettings(); return; }
+
+  const byRole = {};
+  for (const sel of settingsRoleModelsEl.querySelectorAll('select')) {
+    const v = sel.value.trim();
+    if (v) byRole[sel.dataset.role] = v;
+  }
+  updates.OPENROUTER_MODEL_BY_ROLE = byRole;
+  updates.MCP_PLUGINS = settingsMcpEntries;
+  updates.GIT_AUTOSAVE = !!settingsGitEnabledEl.checked;
+  updates.GIT_AUTOSAVE_INTERVAL_MIN = Math.max(1, Math.min(120, Number(settingsGitIntervalEl.value) || 5));
+
   try {
     const r = await fetch('/settings', {
       method: 'PUT',
@@ -1974,6 +2054,14 @@ async function saveSettings() {
   }
   closeSettings();
 }
+
+settingsMcpAddEl?.addEventListener('click', () => {
+  const id = prompt('MCP plugin id (e.g. anthropic/filesystem)?');
+  if (!id) return;
+  const name = prompt('Display name?', id) || id;
+  settingsMcpEntries.push({ id: id.trim(), name: name.trim(), enabled: true });
+  populateMcpList(settingsMcpEntries);
+});
 
 settingsBtnEl?.addEventListener('click', (e) => { e.stopPropagation(); openSettings(); });
 settingsBtnEl?.addEventListener('keydown', (e) => {

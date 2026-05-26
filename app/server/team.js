@@ -10,6 +10,7 @@ import { getProject } from './projects.js';
 import { getRole } from './roles.js';
 import { interpretIntent } from './orchestrator.js';
 import { appendTurn, getContext } from './scratchpad.js';
+import { getModelForRole, getDefaultModel } from './models.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const FANOUT_CAP = 5;
@@ -20,6 +21,7 @@ const ASSIGNEE_TIMEOUT_MS = 20_000;
 const SHARED_FROM_MAX = 3;
 const SHARED_SNIPPET_MAX_CHARS = 240;
 const DIGEST_MAX_CHARS = 120;
+const MAX_DELEGATION_DEPTH = 3;
 
 export function parseRoutingOutput(raw) {
   const cleaned = String(raw).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
@@ -91,8 +93,8 @@ export async function runTeamVoice({ projectId, text }) {
       },
     };
   }
-  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.7';
   const lead = project.agents.find(a => a.id === project.leadAgentId);
+  const leadModel = getModelForRole(lead.role);
   const others = project.agents.filter(a => a.id !== lead.id && a.enabled);
 
   const rosterWithDigest = others.map(a =>
@@ -110,13 +112,19 @@ export async function runTeamVoice({ projectId, text }) {
     `If no one applies, return assignments:[] and put your direct answer in summary_intent.`;
 
   appendTurn(lead.id, 'user', `[team-voice] ${text}`);
-  const routingRaw = await callOpenRouterJSON({ apiKey, model, prompt: routingPrompt, timeoutMs: ROUTING_TIMEOUT_MS });
+  const routingRaw = await callOpenRouterJSON({ apiKey, model: leadModel, prompt: routingPrompt, timeoutMs: ROUTING_TIMEOUT_MS });
   const routing = parseRoutingOutput(routingRaw);
   const { kept, dropped } = applyCostCap(routing.assignments, FANOUT_CAP);
   if (dropped.length) console.log(`[team] cost cap dropped ${dropped.length} assignments`);
 
+  /* perAgent records the final (terminal) spec from each agent that
+   * contributed. delegationLog captures every hop for telemetry. */
   const perAgent = {};
-  await Promise.all(kept.map(async (asg) => {
+  const delegationLog = [];
+
+  /* Resolve a single assignment, following any delegate hops up to the
+   * depth limit. Returns the terminal spec (intent != 'delegate'). */
+  async function runWithDelegation(asg, depth) {
     try {
       const spec = await Promise.race([
         interpretIntent({
@@ -128,11 +136,44 @@ export async function runTeamVoice({ projectId, text }) {
         new Promise((_, rej) => setTimeout(() => rej(new Error('assignee timeout')), ASSIGNEE_TIMEOUT_MS)),
       ]);
       perAgent[asg.agentId] = spec;
+
+      if (spec?.intent !== 'delegate') return spec;
+      if (depth >= MAX_DELEGATION_DEPTH) {
+        console.warn(`[team] delegation depth ${depth} hit; halting chain`);
+        return spec;
+      }
+      const toRoleId = String(spec.to_role || '').trim();
+      const target = project.agents.find(a => a.role === toRoleId && a.enabled);
+      const fromAgent = project.agents.find(a => a.id === asg.agentId);
+      if (!target) {
+        console.warn(`[team] delegate to ${toRoleId} failed: no enabled agent for that role`);
+        return spec;
+      }
+      const newTask = String(spec.task || asg.task).slice(0, 400);
+      delegationLog.push({
+        depth,
+        fromAgentId: asg.agentId, fromRole: fromAgent?.role,
+        toAgentId: target.id, toRole: target.role,
+        task: newTask,
+      });
+      const nextAsg = {
+        agentId: target.id,
+        task: newTask,
+        sharedFrom: [{
+          fromAgentName: fromAgent?.name || '',
+          fromRole: getRole(fromAgent?.role)?.label || '',
+          snippet: (spec.body || '').slice(0, SHARED_SNIPPET_MAX_CHARS),
+        }],
+      };
+      return runWithDelegation(nextAsg, depth + 1);
     } catch (err) {
       console.warn(`[team] assignee ${asg.agentId} failed:`, err.message);
       perAgent[asg.agentId] = null;
+      return null;
     }
-  }));
+  }
+
+  await Promise.all(kept.map(asg => runWithDelegation(asg, 0)));
 
   const perAgentText = Object.entries(perAgent).map(([aid, spec]) => {
     const a = project.agents.find(x => x.id === aid);
@@ -146,7 +187,7 @@ export async function runTeamVoice({ projectId, text }) {
     `Compose a single response to the user that synthesizes their work. 1-3 sentences, spoken-friendly. ` +
     `Output the standard answer tile-spec JSON: ` +
     `{"intent":"answer","template":"reader","context":"Team","title":"<short>","body":"<text>","actions":[{"verb":"Back","glyph":"circle","action":{"type":"cancel"}}]}`;
-  const synthRaw = await callOpenRouterJSON({ apiKey, model, prompt: synthPrompt, timeoutMs: SYNTHESIS_TIMEOUT_MS });
+  const synthRaw = await callOpenRouterJSON({ apiKey, model: leadModel, prompt: synthPrompt, timeoutMs: SYNTHESIS_TIMEOUT_MS });
   let summary;
   try { summary = JSON.parse(synthRaw.trim().replace(/^```(?:json)?/i,'').replace(/```$/, '')); }
   catch {
@@ -160,5 +201,5 @@ export async function runTeamVoice({ projectId, text }) {
   appendTurn(lead.id, 'assistant', summary.body || '');
 
   return { routing: { assignments: kept, summary_intent: routing.summary_intent, dropped: dropped.length },
-           perAgent, summary };
+           perAgent, delegations: delegationLog, summary };
 }

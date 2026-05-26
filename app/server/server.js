@@ -9,6 +9,9 @@ import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, getContext } from './scratchpad.js';
 import { runTeamVoice } from './team.js';
+import {
+  notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
+} from './autosave.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -32,9 +35,15 @@ app.use(express.static(RENDERER_DIR));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
-/* Read/write a small subset of .env. Only OPENROUTER_API_KEY and
- * OPENROUTER_MODEL are exposed. The key is returned masked. */
-const SETTINGS_KEYS = ['OPENROUTER_API_KEY', 'OPENROUTER_MODEL'];
+/* Read/write a small subset of .env. The key is returned masked. */
+const SETTINGS_KEYS = [
+  'OPENROUTER_API_KEY',
+  'OPENROUTER_MODEL',
+  'OPENROUTER_MODEL_BY_ROLE',  // JSON: { roleId: modelId }
+  'MCP_PLUGINS',                // JSON: [{ id, name, enabled }]
+  'GIT_AUTOSAVE',               // "on" | "off"
+  'GIT_AUTOSAVE_INTERVAL_MIN',  // integer
+];
 
 function maskKey(s) {
   if (!s) return '';
@@ -61,11 +70,20 @@ function writeEnvFile(updates) {
   for (const [k, v] of Object.entries(updates)) process.env[k] = v;
 }
 
+function parseJsonEnv(name, fallback) {
+  try { return JSON.parse(process.env[name] || ''); }
+  catch { return fallback; }
+}
+
 app.get('/settings', (_req, res) => {
   res.json({
     OPENROUTER_API_KEY: maskKey(process.env.OPENROUTER_API_KEY || ''),
     OPENROUTER_API_KEY_SET: !!process.env.OPENROUTER_API_KEY,
     OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.7',
+    OPENROUTER_MODEL_BY_ROLE: parseJsonEnv('OPENROUTER_MODEL_BY_ROLE', {}),
+    MCP_PLUGINS: parseJsonEnv('MCP_PLUGINS', []),
+    GIT_AUTOSAVE: (process.env.GIT_AUTOSAVE || 'off') === 'on',
+    GIT_AUTOSAVE_INTERVAL_MIN: Number(process.env.GIT_AUTOSAVE_INTERVAL_MIN || 5),
   });
 });
 
@@ -98,13 +116,19 @@ app.put('/settings', (req, res) => {
   try {
     const updates = {};
     for (const k of SETTINGS_KEYS) {
-      if (typeof req.body?.[k] === 'string' && req.body[k].length > 0) {
-        updates[k] = req.body[k];
-      }
+      const v = req.body?.[k];
+      if (v === undefined || v === null) continue;
+      // Allow objects/arrays — serialize to JSON for .env storage.
+      if (typeof v === 'object') updates[k] = JSON.stringify(v);
+      else if (typeof v === 'boolean') updates[k] = v ? 'on' : 'off';
+      else if (typeof v === 'number') updates[k] = String(v);
+      else if (typeof v === 'string' && v.length > 0) updates[k] = v;
     }
     if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'no updates' });
     writeEnvFile(updates);
-    res.json({ ok: true, OPENROUTER_MODEL: process.env.OPENROUTER_MODEL });
+    // If git autosave just turned on, reschedule the timer.
+    rescheduleAutosave();
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: String(err?.message || err) });
   }
@@ -128,10 +152,16 @@ app.post('/projects', async (req, res) => {
   try {
     const { name, goal, roleIds } = req.body || {};
     const p = await createProject({ name, goal, roleIds });
+    initProjectRepo(p.id).then(() => notifyStateChange(p.id, 'Project created'));
     res.json(p);
   } catch (err) {
     res.status(400).json({ error: String(err?.message || err) });
   }
+});
+
+app.get('/projects/:pid/autosave', async (req, res) => {
+  if (!getProject(req.params.pid)) return res.status(404).json({ error: 'unknown project' });
+  res.json(await autosaveStatus(req.params.pid));
 });
 
 app.patch('/projects/:pid/agents/:aid', (req, res) => {
@@ -160,7 +190,9 @@ app.post('/projects/:pid/notes', (req, res) => {
   if (!getProject(req.params.pid)) return res.status(404).json({ error: 'unknown project' });
   const body = String(req.body?.body || '').trim();
   if (!body) return res.status(400).json({ error: 'empty note' });
-  res.json(appendNote(req.params.pid, body));
+  const note = appendNote(req.params.pid, body);
+  notifyStateChange(req.params.pid, 'Note added');
+  res.json(note);
 });
 
 app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
@@ -236,6 +268,7 @@ app.get('/projects/:pid/file/*', (req, res) => {
 });
 
 migrateLegacyOnce();
+rescheduleAutosave();
 
 app.listen(PORT, () => {
   console.log(`[bridge] orchestrator listening on http://localhost:${PORT}`);
