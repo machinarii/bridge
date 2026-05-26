@@ -753,7 +753,7 @@ function updateGridShortcuts() {
     { gamepad: 'r2', keyboard: 'V', label: `Talk to ${lead?.name || 'Lead'}`, action: () => startPTT() },
   ];
   if (!isLeadFocused) {
-    items.push({ gamepad: 'square', keyboard: 'Space', label: 'Agent On / Off',
+    items.push({ gamepad: 'square', keyboard: 'Space', label: 'Agent on / off',
                  action: () => toggleFocusedAgentEnabled() });
   }
   items.push({ gamepad: 'options', keyboard: 'F', label: 'Explorer',
