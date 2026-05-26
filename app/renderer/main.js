@@ -706,7 +706,8 @@ function renderGrid() {
     <p class="project-goal">${escapeHtml(activeProject.goal || '')}</p>`;
   surfaceEl.appendChild(heading);
 
-  const { cols, rows } = gridLayout(activeProject.agents.length);
+  // Fixed 4×2 layout — matches the project picker on L0.
+  const cols = 4, rows = 2;
   const grid = document.createElement('div');
   grid.className = 'agent-grid';
   grid.style.setProperty('--grid-cols', cols);
