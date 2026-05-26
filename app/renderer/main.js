@@ -371,13 +371,41 @@ function backZoomWithSnapshot(resolveToRect, renderNewView) {
   return a.finished.catch(() => {}).then(() => { overlay.remove(); });
 }
 
+/* ---------- Shortcut press feedback ----------
+ * When the user presses a key or gamepad button bound to an on-screen
+ * chip / action-bar button, briefly pulse that chip so the press
+ * registers visually. */
+function flashChip(el) {
+  if (!el) return;
+  el.classList.remove('pressed');
+  void el.offsetWidth; // restart animation
+  el.classList.add('pressed');
+  setTimeout(() => el.classList.remove('pressed'), 320);
+}
+function flashShortcutByKey(key) {
+  const map = { ' ': 'Space', 'Escape': 'Esc', 'Enter': 'Enter', 'Tab': 'Tab' };
+  let label = map[key];
+  if (!label) label = key.length === 1 ? key.toUpperCase() : key;
+  for (const kbd of document.querySelectorAll('.glyph.for-keyboard')) {
+    if (kbd.textContent === label) flashChip(kbd.closest('.sc, .action'));
+  }
+}
+function flashShortcutByGamepad(button) {
+  for (const g of document.querySelectorAll(`.glyph.for-gamepad[data-glyph="${button}"]`)) {
+    flashChip(g.closest('.sc, .action'));
+  }
+}
+
 /* ---------- Input-mode tracker ---------- */
 function setInputMode(m) {
   if (document.body.dataset.inputMode !== m) document.body.dataset.inputMode = m;
 }
 // Boot in gamepad mode; flip to keyboard as soon as the user touches a key or mouse.
 setInputMode('gamepad');
-window.addEventListener('keydown', () => setInputMode('keyboard'), true);
+window.addEventListener('keydown', (e) => {
+  setInputMode('keyboard');
+  if (!e.repeat) flashShortcutByKey(e.key);
+}, true);
 window.addEventListener('mousemove', () => setInputMode('keyboard'), true);
 
 /* ---------- App state ---------- */
@@ -1676,6 +1704,7 @@ gp.addEventListener('connected', () => {
 });
 gp.addEventListener('press', (e) => {
   setInputMode('gamepad');
+  flashShortcutByGamepad(e.detail.button);
   const b = e.detail.button;
   if (b === 'l2') { speakFocusedAgentName(); return; }
 
