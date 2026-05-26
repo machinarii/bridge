@@ -949,6 +949,22 @@ async function exitZoom() {
   );
 }
 
+/** Slide to the next / previous project from L1 (project detail). */
+function cycleProject(delta) {
+  if (mode !== MODE_GRID || projects.length < 2 || !activeProject) return;
+  if (inflightController) { inflightController.abort(); inflightController = null; }
+  stopSpeaking();
+  const curIdx = projects.findIndex(p => p.id === activeProject.id);
+  const nextIdx = (curIdx + delta + projects.length) % projects.length;
+  if (nextIdx === curIdx) return;
+  slideAgent(delta, () => {
+    activeProject = withLeadFirst(projects[nextIdx]);
+    gridIndex = 0;
+    zoomedIndex = 0;
+    renderGrid();
+  });
+}
+
 function cycleAgent(delta) {
   if (mode !== MODE_ZOOM || !activeProject) return;
   if (inflightController) { inflightController.abort(); inflightController = null; }
@@ -1613,6 +1629,8 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'Enter') { e.preventDefault(); enterZoom(); }
     else if (e.key === 'Escape') { e.preventDefault(); exitToProjects(); }
     else if (e.code === 'Space') { e.preventDefault(); toggleFocusedAgentEnabled(); }
+    else if (e.key === '[')      { e.preventDefault(); cycleProject(-1); }
+    else if (e.key === ']')      { e.preventDefault(); cycleProject(+1); }
   } else if (mode === MODE_ZOOM) {
     if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')      { e.preventDefault(); ring.move(-1); }
     else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); ring.move(+1); }
