@@ -1562,14 +1562,17 @@ function rebuildSkillsList() {
 }
 
 function showNewSkillModal() {
+  syncExplorerHeights();
   newSkillInputEl.value = '';
   newSkillModalEl.hidden = false;
   newSkillModalOpen = true;
+  document.body.dataset.creationPanel = 'open';
   setTimeout(() => newSkillInputEl.focus(), 0);
 }
 function hideNewSkillModal() {
   newSkillModalEl.hidden = true;
   newSkillModalOpen = false;
+  document.body.dataset.creationPanel = 'closed';
 }
 function commitNewSkill() {
   const desc = newSkillInputEl.value.trim();
@@ -1598,14 +1601,17 @@ const newFolderCreateEl  = document.getElementById('new-folder-create');
 let newFolderModalOpen = false;
 
 function showNewFolderModal() {
+  syncExplorerHeights();
   newFolderInputEl.value = '';
   newFolderModalEl.hidden = false;
   newFolderModalOpen = true;
+  document.body.dataset.creationPanel = 'open';
   setTimeout(() => newFolderInputEl.focus(), 0);
 }
 function hideNewFolderModal() {
   newFolderModalEl.hidden = true;
   newFolderModalOpen = false;
+  document.body.dataset.creationPanel = 'closed';
 }
 function commitNewFolder() {
   const name = newFolderInputEl.value.trim();
