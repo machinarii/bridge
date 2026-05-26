@@ -191,6 +191,38 @@ kbd {
   flex: 1 1 auto;
   min-height: 0;
 }
+/* ===== Top-right × close button on L1 / L2 surfaces ===== */
+.surface-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 32px; height: 32px;
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.22);
+  color: var(--fg);
+  border-radius: 6px;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Source Sans 3', sans-serif;
+  font-weight: 300;
+  z-index: 5;
+  transition: background 120ms, border-color 120ms;
+}
+.surface-close:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.36);
+}
+.surface-close:focus,
+.surface-close:focus-visible {
+  outline: 1px solid var(--focus, #ffffff);
+  outline-offset: 2px;
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.36);
+}
+
 /* When the file viewer is open and the user has arrowed right off the
  * × close button, the surface itself becomes the focus target so
  * pressing Enter closes the viewer. */
