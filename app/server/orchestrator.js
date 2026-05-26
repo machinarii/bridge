@@ -63,7 +63,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom }) 
     const spec = fallbackSpec(text, 'OPENROUTER_API_KEY missing — using local classifier.');
     return hydrateSpec(spec, { project, agent, text });
   }
-  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4.5';
+  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.7';
 
   const history = getContext(agentId).messages.slice(0, -1);
   const messages = [
