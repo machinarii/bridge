@@ -836,6 +836,10 @@ function updateGridShortcuts() {
     items.push({ gamepad: 'square', keyboard: 'Space', label: 'Agent on / off',
                  action: () => toggleFocusedAgentEnabled() });
   }
+  items.push({ gamepad: 'l1', keyboard: '[', label: 'Prev project',
+               action: () => cycleProject(-1) });
+  items.push({ gamepad: 'r1', keyboard: ']', label: 'Next project',
+               action: () => cycleProject(+1) });
   items.push({ gamepad: 'options', keyboard: 'F', label: 'Explorer',
                action: () => toggleFileExplorer() });
   setShortcuts(items);
