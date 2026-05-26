@@ -85,7 +85,10 @@ function renderConfirm(spec) {
 
 export function renderActionBar(actions = []) {
   const bar = document.getElementById('action-bar');
-  bar.innerHTML = '';
+  // Remove only the verb buttons; leave #primary-shortcut (the Enter/
+  // Select chip lives inside the action-bar and persists across renders).
+  bar.querySelectorAll('.action').forEach(el => el.remove());
+  const primary = bar.querySelector('#primary-shortcut');
   const buttons = [];
   for (const a of actions) {
     const glyphChar = GLYPH_SHAPES[a.glyph] || '';
@@ -96,7 +99,10 @@ export function renderActionBar(actions = []) {
       el('span', {}, a.verb),
     );
     btn._action = a;
-    bar.appendChild(btn);
+    // Insert verb buttons before the primary-shortcut chip so it stays
+    // at the far right.
+    if (primary) bar.insertBefore(btn, primary);
+    else bar.appendChild(btn);
     buttons.push(btn);
   }
   return buttons;

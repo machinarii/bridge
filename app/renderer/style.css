@@ -466,7 +466,9 @@ body[data-mode="zoom"] #surface {
   color: var(--fg-dim);
   font-size: 0.85em;
   flex: 0 0 auto;
-  margin-right: 0.85rem;
+  /* Sits as the last child inside #action-bar — no margin, the parent
+   * flex gap separates it from the verb buttons. */
+  margin-left: 0;
 }
 #primary-shortcut .sc {
   display: inline-flex; align-items: center; gap: 0.4rem;
