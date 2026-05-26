@@ -730,6 +730,26 @@ body[data-mode="zoom"] #surface {
   transform: translateY(-3px);
 }
 .role-tile.focused::before { opacity: 0; }
+.role-tile[data-locked="true"] .role-toggle {
+  /* checkmark stays checked; cursor is not-allowed to indicate it can't toggle */
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+.role-tile .lead-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 2.3rem; /* leave room for the checkbox to the right */
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.20);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-weight: 400;
+  line-height: 1.4;
+}
 .role-label  { font-weight: 400; position: relative; }
 .role-sample { font-size: 0.85rem; opacity: 0.7; margin-top: 0.2rem; position: relative; }
 .role-toggle {
