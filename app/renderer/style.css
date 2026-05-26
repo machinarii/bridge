@@ -327,6 +327,19 @@ body[data-mode="zoom"] #surface {
   opacity: 0.7;
 }
 .agent-view > * { position: relative; }
+.agent-view .agent-view-hint {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--fg-dim);
+  font-weight: 300;
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  opacity: 0.55;
+  white-space: nowrap;
+}
+.agent-view .agent-view-hint kbd { font-size: 0.9em; }
 @keyframes zoomIn {
   from { transform: scale(0.92); opacity: 0; }
   to   { transform: scale(1);    opacity: 1; }
