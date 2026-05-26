@@ -673,7 +673,12 @@ async function renderNewProjectRoles() {
     const data = await r.json();
     window._roles = data.roles;
   }
-  const roles = window._roles;
+  // PM stays at the top-left; everything else is alphabetized by label.
+  const roles = [...window._roles].sort((a, b) => {
+    if (a.id === 'pm') return -1;
+    if (b.id === 'pm') return 1;
+    return a.label.localeCompare(b.label);
+  });
 
   const wrap = document.createElement('section');
   wrap.className = 'role-picker';
