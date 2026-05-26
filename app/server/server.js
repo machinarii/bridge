@@ -2,7 +2,7 @@ import express from 'express';
 import { migrateLegacyOnce } from './scratchpad.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { listRoles } from './roles.js';
 import { listProjects, getProject, createProject, setAgentEnabled } from './projects.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
@@ -31,6 +31,59 @@ app.use('/assets', express.static(ASSETS_DIR, { maxAge: '1d', immutable: true })
 app.use(express.static(RENDERER_DIR));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+/* Read/write a small subset of .env. Only OPENROUTER_API_KEY and
+ * OPENROUTER_MODEL are exposed. The key is returned masked. */
+const SETTINGS_KEYS = ['OPENROUTER_API_KEY', 'OPENROUTER_MODEL'];
+
+function maskKey(s) {
+  if (!s) return '';
+  if (s.length <= 8) return '••••';
+  return `${s.slice(0, 4)}…${s.slice(-4)}`;
+}
+
+function readEnvFile() {
+  if (!existsSync(envPath)) return {};
+  const out = {};
+  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (m) out[m[1]] = m[2];
+  }
+  return out;
+}
+
+function writeEnvFile(updates) {
+  const current = readEnvFile();
+  const merged = { ...current, ...updates };
+  const lines = Object.entries(merged).map(([k, v]) => `${k}=${v}`);
+  writeFileSync(envPath, lines.join('\n') + '\n', 'utf8');
+  // Update process.env so the running orchestrator picks up new values.
+  for (const [k, v] of Object.entries(updates)) process.env[k] = v;
+}
+
+app.get('/settings', (_req, res) => {
+  res.json({
+    OPENROUTER_API_KEY: maskKey(process.env.OPENROUTER_API_KEY || ''),
+    OPENROUTER_API_KEY_SET: !!process.env.OPENROUTER_API_KEY,
+    OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.7',
+  });
+});
+
+app.put('/settings', (req, res) => {
+  try {
+    const updates = {};
+    for (const k of SETTINGS_KEYS) {
+      if (typeof req.body?.[k] === 'string' && req.body[k].length > 0) {
+        updates[k] = req.body[k];
+      }
+    }
+    if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'no updates' });
+    writeEnvFile(updates);
+    res.json({ ok: true, OPENROUTER_MODEL: process.env.OPENROUTER_MODEL });
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
 
 app.get('/roles', (_req, res) => {
   res.json({ roles: listRoles() });

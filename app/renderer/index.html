@@ -27,6 +27,13 @@
         </svg>
         <span class="brand-name">Bridge</span>
       </a>
+      <button id="settings-btn" type="button" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18">
+          <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        </svg>
+      </button>
       <div id="shortcuts-rail" aria-label="Navigation shortcuts"></div>
       <div id="action-bar">
         <div id="primary-shortcut" aria-label="Primary action"></div>
@@ -47,6 +54,25 @@
     </header>
     <div class="skills-list"></div>
   </aside>
+
+  <div id="settings-modal" hidden role="dialog" aria-labelledby="settings-title">
+    <div class="settings-card">
+      <h3 id="settings-title">Settings</h3>
+      <label class="settings-field">
+        <span>OpenRouter API key</span>
+        <input type="password" id="settings-api-key" placeholder="sk-or-..." autocomplete="off" />
+        <small id="settings-api-key-current" class="settings-meta"></small>
+      </label>
+      <label class="settings-field">
+        <span>Default model</span>
+        <input type="text" id="settings-model" placeholder="anthropic/claude-opus-4.7" autocomplete="off" />
+      </label>
+      <div class="settings-row">
+        <button type="button" id="settings-cancel">Cancel</button>
+        <button type="button" id="settings-save">Save</button>
+      </div>
+    </div>
+  </div>
 
   <aside id="file-viewer" class="drawer left wide" hidden>
     <header>
