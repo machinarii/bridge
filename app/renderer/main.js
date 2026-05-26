@@ -1399,6 +1399,9 @@ async function exitToProjects() {
   stopSpeaking();
   closeFileViewer();
   if (fileExplorerOpen) closeFileExplorer();
+  if (skillsDrawerOpen) closeSkillsDrawer();
+  if (newFolderModalOpen) hideNewFolderModal();
+  if (newSkillModalOpen) hideNewSkillModal();
   const fromProjectId = activeProject?.id;
   popZoomRect(); // discard stale cached rect; we'll compute fresh
   await backZoomWithSnapshot(
