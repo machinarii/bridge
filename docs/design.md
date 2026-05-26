@@ -13,40 +13,57 @@ Bridge is a fullscreen Chrome command surface for running multiple **projects**,
 each staffed by a crew of role-typed **agents**. There are three navigation
 levels:
 
-- **L0 — Project picker.** Fixed 4×2 grid. One of the eight cells is always
-  the **+ New project** tile (positioned after the last existing project).
-- **L1 — Agent grid.** Reflow grid (1×1 → 4×4 depending on team size) of the
-  active project's role agents. The PM (or TPM if no PM) is marked as lead.
-- **L2 — Agent zoom.** Single-agent view with prompt/response tiles, history
-  drawer, and file explorer drawer.
+- **L0 — Project picker.** Fixed 4×2 grid (8 cells). One of the cells is
+  always the **+ New project** tile (positioned after the last existing
+  project).
+- **L1 — Agent grid.** Fixed 4×2 grid (8 cells). PM is locked into the
+  top-left cell as the lead. Remaining roles are alphabetized by label.
+- **L2 — Agent zoom.** Single-agent view with **inline chat history**
+  (iMessage-style bubbles), centered hold-to-speak hint, prompt text
+  field below the surface, plus optional Explorer / Skills drawers.
 
-The user moves down a level by selecting; up a level with back. Every
-forward/back navigation is animated as a FLIP-style zoom (see §6).
+The user moves down a level by selecting; up a level with **Esc** / the
+**X close button** at the top-right of the surface. Every forward/back
+navigation is a FLIP-style morph (see §6).
+
+**Nav state persists across reloads** via `sessionStorage['bridge:nav']`.
+Refreshing returns you to the last screen you were on (L0 / L1 / L2),
+including the active project and focused tile.
 
 ---
 
 ## 2. Visual language
 
-### 2.1 Tile system — one style, three screens
+### 2.1 Tile system
 
 The same tile primitive is used on the project picker (L0), the agent grid
 (L1), and the role picker (create-flow step 1). Identical structure:
 
 - **Shape.** 12 px corner radius, 1 px faint resting border
   (`rgba(255,255,255,0.06)`).
-- **Background.** A futuristic "faded radial" — the tile's accent color
-  (project = brand blue, agent = role color) fades from the **top center**
-  outward via `radial-gradient(... at 50% -10%, color 28%, transparent 60%)`,
-  layered over a faint vertical glass gradient. A `::before` overlay adds a
-  subtle top-edge highlight in the same color.
-- **No hard colored borders.** Earlier versions used a 4 px colored top
-  stripe; this was replaced with the radial wash for a quieter, more
-  futuristic feel.
+- **Background.**
+  - **L0 project tiles** carry the **per-project radial wash** in their own
+    hashed accent color (top-center fade, see §4).
+  - **L1 agent tiles** are **neutral** — they sit on top of the project's
+    color-tinted L1 surface backdrop, so the color story is already told
+    by the container. Inside, the tiles read in plain glass.
+  - **Role picker tiles** carry no color (selection is the only signal).
+- **+ New project tile.** Plain 1 px faint border, no background fill.
 
-### 2.2 Selected state
+### 2.2 L1 surface backdrop (per-project color)
+
+At L1 only, `#surface` paints a soft radial wash in the active project's
+accent color (top-center → transparent). The agent tiles themselves stay
+neutral, so the project-color identity reads as "the room you're in," not
+"the tiles within it."
+
+L0 keeps the picker neutral; L2 keeps the surface neutral (the chat already
+carries enough signal).
+
+### 2.3 Selected state
 
 The selection cursor is the same across every screen — tiles, list rows,
-action-bar buttons, drawer entries. Composition (inside-out):
+action-bar buttons, drawer entries, close button. Composition (inside-out):
 
 1. Tile body
 2. Faint resting border (1 px, ~6 % white)
@@ -55,61 +72,38 @@ action-bar buttons, drawer entries. Composition (inside-out):
 4. Soft blurred outer glow — `box-shadow: ..., 0 0 22px 6px rgba(255,255,255,0.22)`
 5. Depth drop-shadow
 
-When selected, the tile's **colored** radial wash is neutralized to grayscale
-(same pattern, just `rgba(255,255,255,0.18)` instead of the tile color). This
-reads as "this one is lifted into the foreground"; the resting state keeps
-the colored backdrop so the visual hierarchy still encodes role/project color.
+Selection neutralizes any colored radial wash on the tile to grayscale, so
+the focused tile reads as "lifted into the foreground." Resting tiles keep
+their color so hierarchy is still encoded.
 
-Focus token: `--focus: #ffffff;` (was yellow `#ffd35a` originally — switched
-to white).
+Focus token: `--focus: #ffffff`.
 
-### 2.3 Header (always visible)
+### 2.4 Surface close (top-right of L1 and L2)
 
-| Slot | Content |
+A 32 × 32 **X** button sits at the top-right of every nested screen (L1 and
+L2). It is **fully keyboard / d-pad reachable**: tab-navigable, takes the
+same focus treatment as a tile, and Enter on it returns one level up.
+
+Implementation notes:
+- Click and keydown handlers `stopPropagation()` so the surface-wide Enter
+  dispatcher doesn't re-fire the open action.
+- `body[data-surface-close-focus="true"]` tags the surface during focus so
+  the rest of the UI can dim if needed.
+
+### 2.5 Footer rail (always visible)
+
+There is **no top header**. The bottom rail is the only persistent UI.
+It's a single flex row with three regions:
+
+| Region | Content |
 |---|---|
-| Top-left (always) | **Bridge** logo + wordmark in plain white. |
-| Fill | Breadcrumbs (right-aligned, no center content). |
-| Far right | Connection indicator. |
+| **Left — `#brand`** | The Bridge lockup: SVG nodes-and-arc mark + "Bridge" wordmark in plain white Source Sans 3 SemiBold (600). Clickable; returns to L0. |
+| **Center — `#shortcuts-rail`** | Persistent navigation reference for the current screen — chips like `○ Back`, `[ ] Cycle agent`, `E Explorer`, `S Skills`. Each chip renders both gamepad and keyboard forms; CSS hides the inactive one via `body[data-input-mode]`. Updated on every screen change via `setShortcuts(items)`. |
+| **Right — `#action-bar`** | A **dark, 10 px rounded-rect pill** containing the **primary shortcut** (`#primary-shortcut`, e.g. `Enter Select`) and any per-screen action verbs (`Save`, `Cancel`, etc.). `#primary-shortcut` sits at the far right inside the pill. |
 
-**Logo.** Inline SVG of two filled nodes joined by an arc — a visual
-shorthand for "bridge between things." Stroke and fills are plain `#ffffff`.
-No gradient. The brand link is clickable and returns to L0.
-
-**Wordmark.** "Bridge" in **Source Sans 3** SemiBold (600), plain white,
-slightly tracked (`letter-spacing: 0.02em`).
-
-**Breadcrumbs.** Trail back to the project, but **omit the agent leaf at
-L2** — the agent name and role are already in the L2 page header
-(`Cassidy   Product Manager`). So:
-
-- L0: `PROJECTS`
-- L1: `PROJECTS › FALCON`
-- L2: `PROJECTS › FALCON`
-- Create flow: `PROJECTS › NEW PROJECT › ROLES / NAME / GOAL`
-
-- Separator between levels: chevron `›` (U+203A), 0.35 opacity, ~1.1 em.
-- Current crumb is full-strength white; ancestors are dimmed.
-- Uppercase, tracked, 0.8 em.
-
-**Connection indicator.** Pill at far right with a colored dot. Text reads
-**Connected** at rest (replaces older "Ready"), **Listening…** during PTT,
-**Thinking…** during model calls, **<error reason>** in error.
-
-### 2.4 Footer rail (always visible)
-
-The bottom rail has two regions sharing a flex row:
-
-- **Left — `#shortcuts-rail`.** Persistent navigation reference for the
-  current screen: chips like `✕ Open`, `○ Back`, `△ History`. Each chip
-  renders both gamepad and keyboard forms; CSS hides the inactive one
-  via `body[data-input-mode]`. Updated on every screen change via
-  `setShortcuts(items)`.
-- **Right — `#action-bar`.** Tile-specific action verbs (`Save`,
-  `Cancel`, `Open`, `Done`, etc.) returned by the orchestrator or by
-  the current view. Focusable, included in the FocusRing.
-
-This is the **only persistent surface** for showing user shortcuts, so
-the user always knows what's pressable.
+This is the only persistent surface for showing user shortcuts, so the user
+always knows what's pressable. There is no longer a connection / status
+indicator at the top — status surfaces inline as a small banner when needed.
 
 ---
 
@@ -117,35 +111,25 @@ the user always knows what's pressable.
 
 Primary family: **Barlow Condensed** (Google Fonts), weights 200–700.
 Secondary family: **Source Sans 3** (Google Fonts), weights 300–600 —
-used only for the brand wordmark and keyboard key chips (Enter, Esc,
-Space, T, [, ], v, /, \\, etc.) where a clean upright DIN-style sans
-reads better than the condensed body face.
+used for the brand wordmark and keyboard key chips (Enter, Esc, Space, v,
+/, `[`, `]`, etc.) where a clean upright DIN-style sans reads better than
+the condensed body face.
 
-**Only two weights are used** — Light (300) for body / hints / metadata, and
-Regular (400) for headings, brand, tile names, breadcrumbs, and key chips.
-No Medium, SemiBold, or Bold anywhere.
+Two weights:
 
 | Use | Weight |
 |---|---|
-| Body text, hints, metadata | 300 (Light) |
-| Headings, tile names, brand, breadcrumbs, key chips | 400 (Regular) |
+| Body text, hints, metadata, chat bubbles | 300 (Light) |
+| Headings, tile names, brand, key chips | 400 (Regular) |
 
 ### 3.1 Type per screen
 
 - **L0 project tile.** Name 1.4 rem / 400; meta "N agents" 0.9 rem / 300
   with 0.25 rem gap below the name.
 - **L1 agent tile.** Name 1.4 rem / 400; role label directly under name
-  0.9 rem / 300 with 0.25 rem gap; status row (Idle / Thinking…) bottom
-  of tile.
-- **L2 agent header.** Name 1.4 em / 400 in plain white (no gradient);
-  role label to the **right** of the name with 0.75 rem gap,
-  1 em / 300, dim color.
-- **Status indicator** (top-right of header): "Connected" at rest,
-  "Listening…", "Thinking…", error string.
-
-Sentence case across the UI. Status labels: `Idle`, `Thinking…`, `Off`,
-`Connected` — never lowercase, never ALL CAPS in JS (breadcrumbs are
-uppercased via CSS).
+  0.9 rem / 300 with 0.25 rem gap.
+- **L2 agent header.** Name 1.4 em / 400 stacked over the role label
+  0.9 em / 300 (subtitle-style, mirroring the project landing page).
 
 ---
 
@@ -157,15 +141,24 @@ uppercased via CSS).
 --bg-elev-2: #1c2632
 --fg:        #e7ecf3
 --fg-dim:    #8b97a8
---accent:    #6ea8ff   (default brand blue)
---accent-2:  #9cf2c1
---warn:      #ffb86b
---danger:    #ff7b86
 --focus:     #ffffff   (selection outline)
 ```
 
-Each role has its own color used as the agent tile's accent (radial wash +
-chip in the breadcrumb). The role catalog defines 14 distinct colors.
+### 4.1 Per-project palette
+
+There is no per-role color anymore. Each **project** is assigned one of
+**12** hashed palette colors via `getProjectColor(project)`:
+
+```
+PROJECT_PALETTE[i] = h(project.id) % 12
+```
+
+The color is applied to:
+- The project tile's radial wash on **L0**.
+- The L1 surface backdrop (`#surface` radial wash) on **L1**.
+- The agent tiles themselves stay **neutral**.
+
+Color stays stable for the lifetime of a project: same hash → same swatch.
 
 ---
 
@@ -177,7 +170,7 @@ languages never share the screen at the same time.
 ### 5.1 Input mode detection
 
 - `document.body.dataset.inputMode` toggles between `gamepad` and `keyboard`.
-- **Boots in `gamepad` mode** (was previously keyboard).
+- Boots in `gamepad` mode.
 - Flips to `keyboard` on the first keypress or mouse move.
 - Flips to `gamepad` on any gamepad button press or R2 PTT.
 - CSS hides the wrong affordance via:
@@ -185,27 +178,26 @@ languages never share the screen at the same time.
   body[data-input-mode="keyboard"] .for-gamepad  { display: none !important; }
   body[data-input-mode="gamepad"]  .for-keyboard { display: none !important; }
   ```
-- The DOM renders **both** keyboard and gamepad hints; CSS hides one.
 
 ### 5.2 Keyboard model
 
-The whole UI is reducible to three keys plus arrows:
-
 | Key | Meaning |
 |---|---|
-| **Enter** | Select / advance (open project, enter agent, advance role picker, confirm capture, open file/history entry, fire focused action) |
-| **Esc** | Back one level / close drawer |
+| **Enter** | Select / advance |
+| **Esc** | Back one level / close drawer / close panel |
 | **Space** | Toggle on/off (role in role picker, agent enabled at L1) |
-| **Arrows** | 2D grid navigation |
+| **Arrows** | Navigate the grid; at L1 also cycle agents within row |
+| **`[` / `]`** | Cycle agent at L2 (slide animation); cycle project at L1 |
 | **Hold v** | Voice push-to-talk |
-| **[** / **]** | Switch agent within L2 |
-| **t** | History drawer |
-| **\\** | File explorer drawer |
-| **/** | Typed text fallback |
+| **/** | Type a prompt inline (focuses the prompt text field below the surface) |
+| **E** | File **Explorer** drawer (was `F` / `\`) |
+| **S** | **Skills** drawer |
 | **Opt + ←/→** | Slide focus between projects on L0 (see §6.3) |
 
-PTT was previously on Space; it moved to `v` so Space can be the universal
-on/off toggle.
+The Explorer and Skills drawers are **mutually exclusive**: pressing `E`
+while Skills is open swaps it out, and vice versa.
+
+History is no longer a drawer — chat history renders inline at L2 (§7.1).
 
 ### 5.3 Gamepad model (DualSense)
 
@@ -214,186 +206,216 @@ on/off toggle.
 | **Cross ✕** | Select / advance |
 | **Circle ○** | Back |
 | **Square ☐** | Toggle on/off |
-| **Triangle △** | History drawer (L2) / advance from role picker |
+| **Triangle △** | Advance from role picker |
 | **D-pad / left stick** | Navigate |
 | **R2 (hold)** | Voice push-to-talk |
-| **L1 / R1** | Switch agent within L2 |
-| **Options** | File explorer drawer |
+| **L1 / R1** | Cycle agent at L2 / cycle project at L1 |
+| **Options** | Files / Explorer |
 
 ### 5.4 Affordance rendering
 
 - **Action bar buttons.** Each button renders two glyphs in the DOM — a
   colored PlayStation glyph (`.for-gamepad`) and a neutral keycap label
-  (`.for-keyboard`). The PS glyphs are colored per the data-glyph rules
-  (`cross #6ea8ff`, `circle #ff7b86`, etc.). The keyboard chips are
-  **explicitly NOT colorized** — `color: var(--fg) !important;` overrides
-  the per-glyph color rules so keys read in neutral white.
-- **Keyboard chips.** Flat: transparent background, single 1 px white
-  outline at 22% opacity, 5 px corners, monospace, 600 weight. No gradient,
-  no inner highlight, no drop-shadow.
+  (`.for-keyboard`).
+- **Keyboard chips.** Flat: transparent background, 1 px white outline at
+  22 % opacity, 5 px corners, Source Sans 3 / SemiBold. No gradient.
 - **Gamepad glyphs.** Circular (26 × 26), 1.5 px ring, colored per button.
+- **Pressed feedback.** When a shortcut key is pressed, only the small
+  key-label container highlights — not the entire chip row.
 
 ---
 
 ## 6. Motion
 
-Bridge's nav transitions are modeled after the **markdown-cards
-StackTile → FlashCard** pattern: a real DOM element flies and grows
-through space; siblings dim; the destination view appears beneath at
-the exact size and position the element lands at. There are no
-free-floating overlay snapshots that fade through each other.
+Bridge's nav transitions are modeled after the markdown-cards StackTile →
+FlashCard pattern: a real DOM element flies and grows through space;
+siblings dim; the destination view appears beneath at the exact size and
+position the element lands at.
 
 ### 6.1 Forward zoom (L0 → L1, L1 → L2) — `forwardMorph`
 
 1. Capture the focused source tile's bounding rect; push onto `zoomStack`.
-2. **Clone the source tile** into `document.body` as `position: fixed`
-   at the source rect.
-3. **Fade out** the clone's content (its children) over ~110 ms — only
-   the tile's shape/backdrop will animate, so text doesn't distort with
-   the container scale.
-4. **Fade other sibling tiles to 0** so the lifted clone is alone on
-   screen; the original source tile is hidden so the clone reads as it.
-5. Animate the clone's `transform` from identity → translate + scale
-   such that the source rect tweens into the **target surface rect**;
-   320 ms with `cubic-bezier(.2,.8,.2,1)`.
-6. **Counter-scale `border-radius` and `border-width`** in the same
-   keyframes so the visible corner radius (~12 px) stays constant
-   instead of stretching with the scale.
-7. Once the morph settles, the destination view renders **beneath** the
-   empty clone shell at full surface size.
-8. Fade in the destination content (~160 ms) and simultaneously fade
-   the clone out (~120 ms); remove the clone and restore the dimmed
-   siblings' inline styles.
+2. Clone the source tile into `document.body` as `position: fixed` at the
+   source rect.
+3. Fade out the clone's children (~110 ms) so only the shape morphs.
+4. Fade other siblings to 0; hide the original source tile so the clone
+   reads as it.
+5. Animate the clone's `width/height/left/top` from the source rect to the
+   **surface content rect** (after subtracting `#surface` padding), 320 ms
+   with `cubic-bezier(.2,.8,.2,1)`.
+6. Counter-scale `border-radius` and `border-width` so visible corners
+   stay constant.
+7. At ~170 ms in (≈ 50 % of the morph), render the destination view
+   beneath the empty clone and fade it in over ~160 ms; the clone fades
+   out over its last ~120 ms.
 
-Total wall-clock: ~480 ms.
+Total wall-clock: ~480 ms. The cross-fade midpoint is what makes the
+destination feel like it "emerges" from inside the morphing card rather
+than appearing as a separate cut.
 
 ### 6.2 Back zoom (L1 → L0, L2 → L1) — `backZoomWithSnapshot`
 
-1. Pop the destination rect off `zoomStack` (where the originating tile
-   sat when we went forward).
-2. **Clone the current `#surface`** as a `position: fixed` overlay at
-   the surface's exact rect.
-3. **Fade out the overlay's inner content** (children of its first
-   inner container) over ~110 ms, leaving its colored container
-   visible. Same reason as forward: no text distortion.
-4. Render the destination view inside `#surface` immediately — the user
+1. Pop the destination rect off `zoomStack`.
+2. Build an **empty card overlay** with the surface's exact bg/border
+   copied inline (no descendant content — avoids text bleed through).
+3. Render the destination view inside `#surface` immediately — the user
    sees it underneath the overlay.
-5. Fade in the freshly rendered destination content over ~160 ms.
-6. Animate the overlay shrinking toward the destination rect over
-   320 ms with `cubic-bezier(.4,0,.6,1)`. Holds opacity 1 for the first
-   85 % of the animation so the shape collapses visibly; the last 15 %
-   fades to 0 to hide the seam on removal.
-7. Counter-scale `border-radius` and `border-width` so visible corners
-   stay constant during the shrink.
-8. Remove the overlay.
+4. Animate the overlay shrinking from the surface rect → destination rect
+   (320 ms, `cubic-bezier(.4,0,.6,1)`). Holds opacity 1 for the first
+   85 %, fades to 0 at 85–100 %.
+5. Counter-scale border-radius / border-width during the shrink.
+6. **Cancel the animation explicitly** (`a.cancel()` after `a.finished`)
+   to clear any leftover transform/opacity — otherwise the surface stays
+   stuck on the end frame.
 
-Visually: the user sees the previous view physically collapsing into
-the destination tile while the destination view is alive underneath.
+The destination rect is recomputed via a `resolveToRect` callback **after**
+the destination renders, so the morph lands on the actual tile position.
 
-The brand link (top-left) clicking from L2 chains `exitZoom()` →
-`exitToProjects()`.
+### 6.3 Carousel slide on L0 and L1
 
-### 6.3 Carousel slide on L0 (Opt + ←/→)
+- **L0 (project picker).** `Opt + ←/→` cycles linearly through
+  `[project_0, …, project_n, + New]` with a 48 px translate + opacity slide
+  on the newly focused tile (220 ms). Landing on **+ New** pops a centered
+  "Create project" card (`min(520px, 70vw)`, dashed border, scale-in).
+- **L1 (agent grid).** `[ / ]` (or L1/R1) slides the whole agent surface
+  out and the next project's surface in via `slideAgent(delta, doSwap)` —
+  used for both **agent cycling at L2** and **project cycling at L1**.
 
-In addition to grid arrow navigation, **Option + ←/→** treats the picker as
-a 1-D carousel: it cycles focus linearly through `[project_0, project_1, …,
-+ New]`, with a slide-in animation on the newly focused tile (translate
-48 px + opacity, 220 ms).
-
-When the slide lands on **+ New**, the tile escapes the grid layout and pops
-to a **centered create card** (`.centered-create`): `position: fixed`,
-`min(520px, 70vw)` square, dashed white border, scale-in animation, dimmed
-+ slight-blur backdrop on the other tiles. Pressing Enter on it starts the
-create flow.
-
-This is most useful when there's only one project: a single Opt+→ from that
-project lands directly on a centered Create card in the middle of the
-screen — a clearer affordance than the small "+ New" cell.
-
-Regular arrow navigation, click, or mode change clears the centered-create
-state.
+Regular arrows / clicks clear the centered-create overlay.
 
 ---
 
-## 7. Drawers
+## 7. Inline content surfaces
 
-Two side drawers exist; they're mutually exclusive (opening one auto-closes
-the other).
+### 7.1 L2 chat history (inline, iMessage-style)
 
-### 7.1 History drawer (L2 only, right)
+History is no longer a side drawer. At L2 the surface itself is the chat
+transcript:
 
-- Triangle / `t` at L2 opens.
-- 360 px wide, fixed right, between the header and action bar.
-- Lists prior turns newest-first via
-  `GET /projects/:pid/agents/:aid/history`.
-- Each entry: small uppercase role label + 120-char snippet of content.
-- Arrow keys navigate; Cross/Enter opens a turn as a fullscreen reader tile;
-  Circle/Esc/Triangle closes.
-- Focused entry: 3 px inset white left-bar.
+- `.chat-scroll` contains alternating `.bubble.user` and `.bubble.agent`
+  bubbles, newest at the bottom, scrollable.
+- The top edge of `.chat-scroll` uses a CSS **mask-image gradient** that
+  fades the oldest content into the surface bg — content vanishes into
+  the upper edge as it scrolls past, no hard cut.
+- A centered "Hold v to speak" hint sits in the surface center when the
+  chat is empty. It vanishes the instant any bubble appears via
+  `.agent-view:has(.chat-scroll > .bubble) .agent-view-hint { display: none; }`.
+- The prompt text field (`#ptt-typed`) sits **below** the surface
+  container, never above. Placeholder copy: **"Type a prompt and press
+  enter"**.
 
-### 7.2 File explorer (L1 / L2, left)
+### 7.2 File Explorer drawer (L1 / L2, left)
 
-- Options / `\\` toggles. Not available on L0.
-- 280 px wide, fixed left.
+- Toggle: `E` / Options. Not available on L0.
+- 280 px wide, fixed left, styled as a **rounded card** with the surface's
+  border and 1 px outline, same corner radius. Sits between the surface-top
+  and surface-bottom CSS variables (`--surface-top`, `--surface-bottom`,
+  JS-synced via `syncExplorerHeights()`).
 - Sections: **Charters** (one per agent role), **Notes** (newest first),
   and a singleton `project.md`.
-- Selecting a file renders its content inline as a reader tile (silent;
-  no TTS).
-- Surface shifts 280 px right when the file drawer is open
-  (`body[data-file-drawer="open"] #surface { margin-left: 280px; }`).
-- Focused entry: 4 px white left border.
+- Selecting a file renders its content inline as a **file viewer**
+  (`#file-viewer`) — see §7.3.
+- Arrow keys navigate entries; Enter opens; Esc closes.
+
+### 7.3 File viewer
+
+- 44 vw wide, min 320 px, rounded card at the same top/bottom rails as the
+  file drawer. When the drawer is also open, it sits at `left:
+  calc(1.5rem + 280px + 0.75rem)`; otherwise at `left: 1.5rem`.
+- **Slide-in animation.** On open, the panel slides 24 px from the left
+  with a 240 ms ease-out (`viewer-slide-in` keyframes).
+- **Push-not-resize.** When the viewer opens, `#surface` translates right
+  via `transform: translateX(calc(44vw + 1rem))` — the surface keeps its
+  full width, its right edge simply slides past the viewport. `#surface`
+  has a 240 ms transition on `transform` so the slide is animated. **Not
+  a margin change** — the surface does not narrow.
+- Top-right X close button is keyboard-focusable; Enter/Space/Esc all
+  close the viewer. Handlers `stopPropagation()` so the surface-wide Enter
+  dispatcher doesn't re-fire.
+- ArrowRight from inside the explorer hops focus to the viewer's X button.
+
+### 7.4 Skills drawer
+
+- Toggle: `S`.
+- 280 px wide, fixed left, same rounded-card style as the file drawer.
+- Mirrors the file drawer's open/close behavior. Skills and Explorer are
+  **mutually exclusive** — opening one closes the other.
+- Lists Claude skills available to the project. (The `+` add affordance
+  and AI-generated creation panel were trialled but removed; skills are
+  read-only for now.)
 
 ---
 
 ## 8. Copy conventions
 
-- **Members → Agents.** The word "members" is not used. Per-project
-  headcount renders as `N agent` / `N agents`.
-- **Sentence case for status.** `Idle`, `Thinking…`, `Off`, `Connected`,
-  `Saving…`, `Listening…`, `No speech detected`, `Speak or type a name`.
-- **Verbs as labels for action bar.** `Save`, `Open`, `Back`, `Cancel`,
-  `Done`, `Toggle`, `Next`, `Disable`.
-- **Hints stay one line.** Idle and capture hints show different copy per
-  input mode:
-  - gamepad: "Hold R2 and speak."
-  - keyboard: "Hold v and speak — or press / to type."
+- **Sentence case** for all UI strings. First word starts with one capital;
+  the rest lowercase. Exceptions: proper nouns (Claude, Cassidy, iOS, PM).
+  Never Title Case, never ALL CAPS in JS. (Stored as a project memory
+  rule.)
+- **Members → Agents.** Per-project headcount renders as `N agent` /
+  `N agents`.
+- **Status labels.** `Idle`, `Thinking…`, `Off`, `Saving…`, `Listening…`,
+  `No speech detected`.
+- **Verbs as labels for the action-bar pill.** `Select`, `Back`, `Save`,
+  `Open`, `Cancel`, `Done`, `Toggle`.
+- **Hints stay one line.** L2 idle hint:
+  - gamepad: "Hold R2 to speak."
+  - keyboard: "Hold v to speak."
+- **Prompt field placeholder.** "Type a prompt and press enter."
 
 ---
 
 ## 9. Layout invariants
 
-- Header (`#context-strip`) and action bar (`#action-bar`) are persistent
-  rails; everything navigation/level-specific happens inside `#surface`.
+- The footer rail (`#footer-rail`) is the only persistent UI band.
+  Everything navigation/level-specific happens inside `#surface`.
 - `#surface` is `display: flex; flex-direction: column;` and its content
-  fills the viewport minus the header/footer.
-- All grid views (project picker, agent grid, role picker) honor
-  `height: calc(100vh - 8rem)` so tiles fill the available space without
-  scrolling at typical viewport sizes.
-- Drawers float above the surface (z-index 60); the centered-create card
-  floats above tiles (z-index 80); the team-voice summary banner floats
-  above everything (z-index 70).
+  fills the viewport minus the footer.
+- **CSS variables `--surface-top` and `--surface-bottom`** are written by
+  JS (`syncExplorerHeights()`) so left-side panels (Explorer, file viewer,
+  Skills) align to the surface's exact top and bottom edges regardless of
+  viewport size.
+- All grid views (L0, L1, role picker) honor a fixed 4×2 layout with
+  generous cell sizes; no internal scrolling at typical viewport sizes.
+- Drawers float above the surface (z-index 60); the file viewer at z-index
+  55; the centered-create card at z-index 80.
+- **Persistent nav state.** On every navigation, `saveNavState()` writes
+  `bridge:nav` to sessionStorage; on boot `readNavState()` restores it.
 
 ---
 
 ## 10. Role picker specifics
 
-The create-flow role picker (step 1 of 3) is its own screen, but its
-tiles use the same visual treatment as L0 and L1 tiles plus a small
-checkbox in the top-right corner.
+10 roles total, single-instance per project. Role roster (alphabetized
+after PM):
 
-- **Grid.** `.role-grid` is a 4-column CSS grid with `grid-auto-rows:
-  1fr` inside a flex container, so the 14 role tiles fill the available
-  vertical space. Each tile has `min-height: 110px` so the name + sample
-  never clip when rows are short.
-- **Checkbox.** Top-right of each tile, absolutely positioned. It's a
-  CSS-drawn rounded square (5 px corners, 1.5 px outline at 55 % white)
-  that **fills to white with a dark angled checkmark** when checked.
-  Replaces the earlier Unicode `☐ / ☑` glyphs which depend on system
-  font for shape consistency.
-- **Activation.** **Enter** advances (Triangle on gamepad); **Space**
-  toggles the focused role (Cross on gamepad). The label "Roles" lives
-  in the breadcrumb; the bottom-right shortcuts rail lists the
-  available actions.
+```
+pm (Product Manager, locked-in lead)  ← top-left, always
+designer
+data_sci
+engineer
+marketing
+qa
+security
+tech_writer
+tpm
+ux_research
+```
+
+(Removed in the trim: data engineer, devops, ML engineer, support.)
+
+- **Grid.** `.role-grid` is a 4-column CSS grid with `grid-auto-rows: 1fr`.
+- **Checkbox.** Top-right of each tile, absolutely positioned. CSS-drawn
+  rounded square (5 px corners, 1.5 px outline at 55 % white) that fills to
+  white with a dark angled checkmark when checked. Checkmark is 14 %
+  thicker than the stock CSS check; `x: -2`.
+- **PM is locked.** Renders with `data-locked="true"`: checkbox at 45 %
+  opacity, grayed checkmark, cannot be toggled off. (Disabled means
+  grayed, **not** removed.)
+- **Activation.** Enter advances (Triangle on gamepad); Space toggles the
+  focused role.
+
+---
 
 ## 11. Smart-TV HCI compliance
 
@@ -401,205 +423,164 @@ Bridge is designed for couch / 10-foot operation with a gamepad as the
 primary input. The interaction model deliberately mirrors three
 overlapping platform conventions:
 
-- **Apple tvOS Human Interface Guidelines** — focus engine, parallax
-  motion, large rest sizes, "no text input on the surface."
-- **Google TV** (a.k.a. Android TV) **design principles** — flat
-  grids, persistent action affordances, voice-first secondary nav.
-- **Xbox One/Series UX guidelines** ("Cortana / Fluent for gaming") —
-  ABXY mapping, safe-area discipline, "focus is sacred," shoulder
-  buttons reserved for traversal/cycling.
+- **Apple tvOS HIG** — focus engine, parallax motion, large rest sizes,
+  no on-surface text input.
+- **Google TV (Android TV) design principles** — flat grids, persistent
+  action affordances, voice-first secondary nav.
+- **Xbox UX guidelines** — ABXY mapping, safe-area discipline, "focus is
+  sacred," shoulder buttons reserved for traversal/cycling.
 
-Where the three platforms disagree, Bridge falls back to **what's
-common to all three**. The non-negotiable TV-HCI rules and how Bridge
-satisfies each:
+Where the three platforms disagree, Bridge falls back to what's common to
+all three.
 
-### 11.1 Focus must be unmistakable from across the room
+### 11.1 Focus is unmistakable from across the room
 - Single clearly-focused element at all times — never "no focus."
-- White (`--focus: #ffffff`) **1 px outline with `outline-offset: 2px`**
-  (sits just outside the 1 px resting border so two rings are visible),
-  plus a **22 px blurred outer glow**, plus a **−3 px lift** transform,
-  plus a **grayscale radial wash** on the otherwise color-tinted tile
-  backdrop. Multi-channel: shape + glow + translation + color shift.
-- The same focus treatment is applied to all focusable surfaces (tiles,
-  action-bar buttons, list rows, drawer entries) so the cursor reads
-  consistently no matter where it is.
+- White (`--focus: #ffffff`) **1 px outline with `outline-offset: 2px`**,
+  plus a 22 px blurred outer glow, plus a −3 px lift transform, plus a
+  grayscale wash on otherwise color-tinted tile backdrops. Multi-channel:
+  shape + glow + translation + color shift.
+- Identical treatment on all focusable surfaces (tiles, action-bar pill,
+  drawer entries, surface-close X).
 
 ### 11.2 D-pad first, predictable traversal
-- Five buttons control everything: `D-pad`, `Cross` (select),
-  `Circle` (back), `Square` (toggle on/off), `Triangle` (advance /
-  drawer), plus shoulders for cycling and `Options` for the explorer.
-- **Cross-platform mapping** (Bridge renders PS5 glyphs in
-  `body[data-input-mode="gamepad"]`):
-
-  | Bridge / PS5  | Xbox  | Switch | Role                           |
-  |---|---|---|---|
-  | Cross  `✕`    | A     | B      | Primary select / advance       |
-  | Circle `○`    | B     | A      | Back / cancel                  |
-  | Square `□`    | X     | Y      | Toggle on/off                  |
-  | Triangle `△`  | Y     | X      | Context / drawer / advance     |
-  | L1 / R1       | LB/RB | L/R    | Cycle through agents at L2     |
-  | L2 / R2       | LT/RT | ZL/ZR  | (L2 unused; R2 hold = voice)   |
-  | Options       | View  | −      | Files / explorer               |
-
-  This matches Xbox's "**A accepts, B cancels**" axiom, the inverse of
-  Switch's button layout. The product never relies on a button's
-  *physical position*; only on its semantic role (select / back /
-  toggle / context). On a non-PS controller the user re-learns
-  "Cross = A" once and the model carries forward.
-- 2-D grid navigation reads `cols × rows` from the rendered grid so
-  arrows never produce surprise jumps. Wrap is intentional and matches
-  Apple TV's "stay-on-row" feel.
-- `enterZoom` and `exitToProjects` push/pop **`zoomStack`** so back nav
-  always lands the focus on the exact tile you came from — spatial
-  continuity is preserved (the "Quick Resume" principle from Xbox).
-- Linear "between-projects" carousel via `Opt + ←/→` (`slideToAdjacent
-  Project`) mirrors tvOS's "swipe between spaces" affordance and
-  Xbox's LB/RB tab-cycling pattern.
+- Five buttons control everything: D-pad, Cross (select), Circle (back),
+  Square (toggle), Triangle (advance), plus L1/R1 for cycling and Options
+  for the explorer.
+- 4×2 grids at L0 and L1 keep arrow traversal cycle-stable — no surprise
+  row jumps.
+- `zoomStack` records the source rect on every forward zoom; back nav
+  lands focus on the exact tile you came from (spatial continuity).
+- `slideAgent(delta)` doubles as the cycling animation for **agents at L2**
+  *and* **projects at L1**.
 
 ### 11.3 Glanceable, low-density information
-- One job per screen: project picker (L0), agent grid (L1), single
-  agent (L2). No mixed-purpose screens.
-- Tiles show **one strong title** and at most one secondary line
-  (project name + "N agents"; agent name + role). All metadata is
-  Light 300; only the title is Regular 400.
-- `gridLayout(n)` reflows from 1×1 → 4×4 so tile sizes stay generous
-  even at full team size (14 roles → 4 cols × 4 rows max).
+- One job per screen.
+- Tiles show one strong title and at most one secondary line.
+- 4×2 grids mean each cell stays generous at any team size.
 
 ### 11.4 No keyboard required, voice over typed input
-- The primary input for free-form content is **push-to-talk**: hold
-  R2 (gamepad) or `v` (keyboard) and speak. Typed text is a
-  fallback bound to `/` and only used when speech is unavailable.
-- Capture screens for project name + goal accept either PTT or typed —
-  the user is never *required* to type.
-- The orchestrator's prompts are designed for **spoken-friendly**
-  output: `body` is 1–3 sentences and never includes controller
-  affordances inline (those live in `actions`).
+- Primary input for free-form content is push-to-talk (R2 / `v`).
+- Typed text is a fallback bound to `/` — the prompt field sits below
+  the surface, never on it.
 
 ### 11.5 Spatial continuity through motion
-- Forward (L0 → L1, L1 → L2) and back navigation **morph the source
-  tile itself** — Apple-TV-style "this tile became the next screen."
-  The destination view appears beneath at the exact size and position
-  the morph lands at, so there is no perceived cut.
-- Zoom uses `width/height/left/top` animation (not `transform: scale`)
-  so border-radius and stroke widths stay constant — corners don't
-  warp during the transition.
-- The **content of the morphing shell is hidden synchronously** via
-  `.zoom-shell-only` so text/UI doesn't visibly distort with the
-  resize.
-- Carousel slide on L0 (Opt + arrows) uses a brief 48 px translate
-  animation; centered "+ Create project" card pops with a scale.
-- `.focused` outline and outer glow are stripped during a zoom — focus
-  state isn't an animated property.
+- Forward and back navigation morph the source tile itself.
+- Zoom uses `width/height/left/top` (not `transform: scale`) so corners
+  don't warp.
+- Cross-fade at ~170 ms (≈ 50 % of the morph) so destination content
+  "emerges" through the morph rather than cutting in.
+- File viewer opens with a 24 px slide-in and the surface slides right
+  by `44vw + 1rem` over 240 ms — not a snap.
 
 ### 11.6 Affordance discoverability
-- Persistent **shortcuts rail** (bottom-left) and **action bar**
-  (bottom-right) are visible on every screen so the user always sees
-  what's pressable — Apple TV's "Top Shelf" + "tab bar" equivalent.
-- Both **gamepad** and **keyboard** glyphs are rendered to the DOM;
-  CSS hides the inactive one via `body[data-input-mode]`. The active
-  scheme is auto-detected: defaults to gamepad, swaps to keyboard on
-  first keypress / mouse move. The user never sees an irrelevant
-  control.
-- Inline `<kbd>` chips appear in idle / capture hints alongside the
-  spoken affordance ("Hold R2 and speak" / "Hold v and speak — or
-  press / to type").
+- Persistent footer rail is visible on every screen — brand left,
+  shortcuts mid, action-pill right — so the user always sees what's
+  pressable.
+- Both gamepad and keyboard glyphs are rendered to the DOM; CSS hides
+  the inactive scheme via `body[data-input-mode]`.
+- Surface-close X is always visible at the top-right of L1 / L2.
 
-### 11.7 Sufficient padding, safe zone, no edge content
-- `#baseplate` uses 24 px / 32 px outer padding and a 20 px gap
-  between the header, surface, and footer — content stays comfortably
-  inside a TV overscan-safe area (Apple tvOS recommends 60 px / 90 px
-  margins on a 1080p canvas; Xbox spec is 5 % "TV-safe" on each side,
-  approximately matched here at 1080p; Google TV likewise calls for
-  48 dp minimum).
-- Drawers (`#file-drawer` 280 px left, `#file-viewer` 44 vw left)
-  shift the main surface margin so nothing is occluded by the
-  overlapping pane.
-- The footer rail enforces a minimum 56 px height so chips stay
-  finger / cursor-sized — meets Xbox's "44 dp minimum touch target"
-  and Apple's "minimum 70 pt focusable" rules at couch distance.
+### 11.7 Sufficient padding, safe zone
+- `#baseplate` uses 24 / 32 px outer padding and a 20 px gap above the
+  footer rail.
+- Drawers and the file viewer are rounded cards inset from the viewport
+  edges; nothing touches the safe-area boundary.
 
-### 11.8 Glanceable status, audible feedback
-- `#listening-indicator` at far-right of the header reports the
-  current state in plain words: **Connected** at rest, **Listening…**
-  during PTT, **Thinking…** during model calls, **`<error reason>`**
-  on failure. Animated dot for live states.
-- Agent grid tiles encode busy / disabled / lead state in glyphs
-  AND a pulsing dot so the user can see it from across the room.
-- TTS (`speak()`) reads the latest assistant body aloud on
-  `reader/answer` specs and the team-voice summary; users get audio
-  confirmation without looking at the screen.
+### 11.8 Glanceable status
+- Status surfaces inline (banner / bubble) rather than via a top header
+  badge. Listening/thinking pulse on the focused tile.
 
 ### 11.9 High-contrast type, readable from 3 m
-- Body type **22 px Light 300** (Barlow Condensed) on `--bg #0b0f14`.
-  Headings 1.4 em / 400. Brand wordmark uses **Source Sans 3**
-  Medium / SemiBold for legibility at the smallest sizes (the
-  top-left lockup).
-- Meets each platform's "minimum at 10 feet" rule: Apple tvOS calls
-  for **17 pt body minimum**, Google TV for **14 sp**, Xbox UX for
-  **24 px equivalent for primary body text**; Bridge's 22 px Light
-  body, 1.4 em / 400 headings exceed all three.
-- All foreground text uses `--fg #e7ecf3` (WCAG AAA contrast against
-  the bg). Metadata uses `--fg-dim #8b97a8` (still > 4.5:1).
-- No font weight below Light (300); no italics; no thin hairlines —
-  all sub-pixel rendering risks are avoided.
+- Body type 22 px Light 300 (Barlow Condensed) on `--bg #0b0f14`.
+- Headings 1.4 em / 400. Brand wordmark in Source Sans 3 SemiBold for
+  legibility at the smallest size.
+- All foreground text uses `--fg #e7ecf3` (WCAG AAA against bg). Metadata
+  uses `--fg-dim #8b97a8` (still > 4.5:1).
 
 ### 11.10 Single primary action; no hidden gestures
-- Every screen exposes its primary action explicitly via the
-  action-bar button at the bottom-right (e.g., "Save", "Back",
-  "Open"). The keyboard chip + gamepad glyph are rendered together
-  so the user always knows what `Enter` / `✕` does *now*.
-- No swipe-only or long-press-only navigation — everything is
-  reachable with D-pad + select + back. Xbox's "no hidden actions"
-  rule (every interactable must show its button glyph in the help
-  rail) is honored by the persistent shortcuts rail.
-- Drawers can be toggled via the same key that opens them
-  (`F` / `Options` / `\\` for the explorer); no hidden close gesture.
+- Every screen exposes its primary action in the `#primary-shortcut` slot
+  inside the action-bar pill.
+- Drawers can be toggled with the same key that opens them (`E` /
+  `Options` / `S`); no hidden close gesture.
 
-### 11.11 Loading & uncertainty (Xbox "tell the user something")
-- Long-running calls (model interpret, team voice) immediately flip
-  the connection indicator to **`Thinking…`** (pulsing accent dot)
-  and, for team voice, mark the lead agent tile as busy with the
-  pulsing-dot animation. The user is never staring at a static
-  screen wondering whether the press registered.
-- Network errors fall through to the indicator (red **Error**) and
-  the relevant view re-renders with a reader tile explaining the
-  failure — never a silent no-op.
-- Connection health is polled (`/health` every 5 s) and surfaced
-  in the indicator as **Connected** (green) / **Disconnected** (red).
-- TTS reads the latest assistant body aloud — eyes-off audible
-  feedback per all three platforms' accessibility guidance.
+### 11.11 Loading & uncertainty
+- Long-running calls flag the focused / lead agent tile with a pulsing
+  dot. Errors fall through to a reader-style banner inline.
 
-## 12. Things that were considered and rejected
+---
 
+## 12. Things considered and rejected
+
+- **Header / top breadcrumb bar.** Removed entirely. Brand moved to the
+  footer-left; status surfaces inline. Frees the top edge for the
+  surface-close X and keeps one persistent UI band instead of two.
+- **Per-role tile colors.** Replaced with per-project color applied to
+  the **L1 surface backdrop** rather than the agent tiles, so the room
+  carries the color and the tiles can stay neutral.
+- **History drawer at L2.** Replaced with inline iMessage-style chat
+  bubbles inside the surface, with a mask-fade top edge.
+- **`F` / `\` for Explorer.** Rebound to **`E`** — easier to reach and
+  doesn't collide with backslash on non-US layouts.
+- **`+` button inside the Explorer / Skills drawers.** Trialled with
+  Enter / Space activation, right-side creation panel, dictate button —
+  removed for now. Drawers are read-only.
+- **Resizing the surface when the file viewer opens.** Replaced with
+  `transform: translateX` so the surface keeps its full width and simply
+  slides past the right edge.
+- **PM checkbox removed when locked.** Replaced with a grayed-out 45 %
+  opacity check; user confirmed "disabled means grayed, not removed."
+- **Background colors on role-picker buttons.** Removed; the L1 surface
+  carries the project color instead.
+- **"Hold v and speak — or press / to type" hint.** Trimmed to "Hold v
+  to speak" centered on the surface, shown only when chat is empty.
+- **Pill-shaped action bar.** Now a darker rounded-rectangle with a 10 px
+  radius — reads as a contained band rather than free-floating chips.
+- **Primary-shortcut centered or left-aligned.** Moved to the **far right**
+  of the action pill so the most-used key (Enter Select) is the rightmost
+  visual anchor on the rail.
 - **Yellow focus outline (`#ffd35a`).** Replaced with white — felt cheap
   next to the muted backdrop.
 - **Hard 4 px colored top border on tiles.** Replaced with the radial wash.
-- **Pill-shaped keyboard chips.** Replaced with rounded-rect keycap, then
-  with the current flat outlined chips when the keycap shading felt overly
-  textured.
-- **Gradient on logo and wordmark** (green→blue→purple). Replaced with plain
-  white.
+- **Gradient on logo and wordmark** (green→blue→purple). Replaced with
+  plain white.
 - **Thick body weights (Bold 700, ExtraBold 800).** Dropped — Bridge uses
   Light (300) by default and tops out at Regular (400).
-- **Dosis font family.** Loaded briefly from `app/assets/fonts/dosis/`,
-  then replaced with Barlow Condensed from Google Fonts.
-- **Role roster on L0 tiles.** Briefly showed "Product Manager ·
-  Engineer · QA" instead of "N agents"; reverted — agent count is more
-  scannable on the home grid.
-- **`fill: 'forwards'` left on zoom-out animation.** Caused the screen
-  to go blank on Esc because the cancelled animation kept its end
-  transform/opacity stuck on `surfaceEl`. Fixed by `a.cancel()` after
-  `a.finished` resolves.
-- **Plain overlay-snapshot zoom (no content fade).** Felt "transparent
-  overlay floating on top" rather than physical motion. Solved by
-  fading the source content before the transform and fading
-  destination content in after, so only container shapes morph.
+- **Dosis font family.** Replaced with Barlow Condensed.
+- **Role roster on L0 tiles** ("Product Manager · Engineer · QA").
+  Reverted to "N agents" — more scannable on the home grid.
+- **`fill: 'forwards'` on the zoom-out animation.** Caused blank-screen
+  on Esc because the cancelled animation kept its end transform stuck on
+  `#surface`. Fixed by `a.cancel()` after `a.finished`.
+- **Plain overlay-snapshot zoom (no content fade).** Felt like a
+  transparent overlay floating; solved by fading source content before
+  the transform and fading destination content in mid-morph.
+- **Descendant opacity-hiding during back zoom.** Caused text bleed-
+  through; replaced with an empty card overlay carrying the surface's
+  bg/border copied inline.
 - **`◉ ○` radio glyph for role toggle.** Replaced with checkbox
-  semantics (☐ ☑) and then with a CSS-drawn rounded checkbox for
-  consistent rendering.
+  semantics, then with the current CSS-drawn rounded checkbox.
 - **Agent · role crumb on L2.** Was redundant with the page header;
   trimmed.
-- **`#action-bar` as the only persistent footer surface.** Action
-  verbs were the only shortcuts shown; added `#shortcuts-rail` to its
-  left so navigation references (Esc Back, [ Prev, etc.) are always
-  visible.
+
+---
+
+## 13. Implementation anchors
+
+For maintainers, the key functions to read in `app/renderer/main.js`:
+
+| Concern | Function |
+|---|---|
+| Hash project → palette color | `getProjectColor(project)` |
+| Sort agents with PM first | `withLeadFirst(project)` |
+| Forward morph | `forwardMorph(sourceEl, sourceRect, targetRect, renderDest)` |
+| Back zoom | `backZoomWithSnapshot(resolveToRect, renderNewView)` |
+| Carousel slide (agents / projects) | `slideAgent(delta, doSwap)` |
+| Set rail content | `setShortcuts(items)`, `setPrimaryShortcut(item)` |
+| Per-screen rail content | `updateGridShortcuts()`, `_setL2Shortcuts()`, `updatePickerShortcuts()` |
+| Drawer toggles | `toggleFileExplorer()`, `toggleSkillsDrawer()` |
+| Surface push when viewer opens | CSS `body[data-file-viewer="open"] #surface { transform: translateX(...) }` |
+| Persisted nav | `saveNavState()`, `readNavState()` |
+| Surface close X | `renderGrid()` / `renderZoom()` — `.surface-close` button |
+
+OpenRouter model used: `anthropic/claude-opus-4.7` (set in `app/server/.env`
+as `OPENROUTER_MODEL`).
