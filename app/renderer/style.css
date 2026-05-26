@@ -1032,7 +1032,16 @@ body[data-skills-drawer="open"] #surface { margin-left: calc(280px + 1rem); }
   transition: background 120ms, border-color 120ms;
 }
 #new-folder-btn:hover,
+#new-folder-btn:focus,
 #new-folder-btn:focus-visible {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.36);
+  outline: 1px solid var(--focus, #ffffff);
+  outline-offset: 2px;
+}
+#new-skill-btn:hover,
+#new-skill-btn:focus,
+#new-skill-btn:focus-visible {
   background: rgba(255,255,255,0.08);
   border-color: rgba(255,255,255,0.36);
   outline: 1px solid var(--focus, #ffffff);

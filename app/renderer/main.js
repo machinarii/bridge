@@ -1587,7 +1587,16 @@ function commitNewSkill() {
   hideNewSkillModal();
   rebuildSkillsList();
 }
-newSkillBtnEl?.addEventListener('click', () => showNewSkillModal());
+newSkillBtnEl?.addEventListener('click', (e) => { e.stopPropagation(); showNewSkillModal(); });
+newSkillBtnEl?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault(); e.stopPropagation();
+    showNewSkillModal();
+  } else if (e.key === 'Escape') {
+    e.preventDefault(); e.stopPropagation();
+    newSkillBtnEl.blur();
+  }
+});
 newSkillCancelEl?.addEventListener('click', () => hideNewSkillModal());
 newSkillCreateEl?.addEventListener('click', () => commitNewSkill());
 newSkillDictateEl?.addEventListener('click', () => { startPTT(); });
@@ -1625,7 +1634,24 @@ function commitNewFolder() {
   hideNewFolderModal();
   rebuildFileEntries();
 }
-newFolderBtnEl?.addEventListener('click', () => showNewFolderModal());
+newFolderBtnEl?.addEventListener('click', (e) => { e.stopPropagation(); showNewFolderModal(); });
+newFolderBtnEl?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault(); e.stopPropagation();
+    showNewFolderModal();
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault(); e.stopPropagation();
+    newFolderBtnEl.blur();
+    explorerFocused = true;
+    fileFocus = 0;
+    paintFileFocus();
+  } else if (e.key === 'Escape') {
+    e.preventDefault(); e.stopPropagation();
+    newFolderBtnEl.blur();
+    explorerFocused = true;
+    paintFileFocus();
+  }
+});
 newFolderCancelEl?.addEventListener('click', () => hideNewFolderModal());
 newFolderCreateEl?.addEventListener('click', () => commitNewFolder());
 newFolderDictateEl?.addEventListener('click', () => { startPTT(); });
@@ -1985,7 +2011,17 @@ window.addEventListener('keydown', (e) => {
   // File explorer (overlay at L1/L2) intercepts navigation while the
   // explorer holds focus. Right-arrow exits the explorer to the right.
   if (fileExplorerOpen && explorerFocused) {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')       { e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
+    if (e.key === 'ArrowUp') {
+      if (fileFocus === 0 && newFolderBtnEl) {
+        e.preventDefault();
+        explorerFocused = false;
+        fileEntries.forEach(el => el.classList.remove('focused'));
+        newFolderBtnEl.focus();
+        return;
+      }
+      e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return;
+    }
+    if (e.key === 'ArrowLeft')                               { e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
     if (e.key === 'ArrowDown')                               { e.preventDefault(); fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
     if (e.key === 'ArrowRight') {
       e.preventDefault();
