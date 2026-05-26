@@ -783,7 +783,8 @@ body[data-mode="zoom"] #surface {
   border-left-color: var(--focus, #ffffff);
   border-left-width: 4px;
 }
-body[data-file-drawer="open"] #surface { margin-left: calc(280px + 1rem); }
+/* Explorer overlays the surface — surface stays full width and the
+ * portion under the explorer is simply cut off behind it. */
 
 /* ===== File viewer panel (left of the prompt container) ===== */
 /* Without this, display:flex on the rule below wins over the `hidden`
@@ -862,9 +863,8 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   line-height: 1.55;
   color: var(--fg);
 }
-/* Surface shrinks from the LEFT to make room for the viewer. */
-body[data-file-viewer="open"] #surface { margin-left: calc(44vw + 1rem); }
-body[data-file-viewer="open"][data-file-drawer="open"] #surface { margin-left: calc(280px + 44vw + 1.5rem); }
+/* Surface is NOT resized when the viewer opens — the viewer overlays
+ * the left portion of the surface; whatever sits underneath is hidden. */
 
 /* ===== Team summary banner (L1 PTT result) ===== */
 .team-summary {
