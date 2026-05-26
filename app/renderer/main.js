@@ -11,6 +11,7 @@ const typedWrap       = document.getElementById('ptt-typed');
 const typedInput      = document.getElementById('typed-input');
 const shortcutsRailEl = document.getElementById('shortcuts-rail');
 const primaryShortcutEl = document.getElementById('primary-shortcut');
+const backShortcutEl   = document.getElementById('back-shortcut');
 
 /** Set the persistent shortcuts rail at bottom-right. Pass an array of
  *  { gamepad, keyboard, label, action } — both glyphs render and CSS
@@ -24,45 +25,61 @@ let shortcutFocusIdx = -1; // -1 means focus is not in the rail
  * rail: every clickable chip in #shortcuts-rail, then #primary-shortcut,
  * then every #action-bar .action button. */
 function footerFocusables() {
+  // Order matches the visible footer rail: rail chips → back → primary
+  // → action-bar buttons → gear.
   const rail = [...shortcutsRailEl.querySelectorAll('.sc')];
+  const back = [...backShortcutEl.querySelectorAll('.sc')];
   const primary = [...primaryShortcutEl.querySelectorAll('.sc')];
   const actions = [...document.querySelectorAll('#action-bar .action')];
   const gear = document.getElementById('settings-btn');
-  return [...rail, ...primary, ...actions, ...(gear ? [gear] : [])];
+  return [...rail, ...back, ...primary, ...actions, ...(gear ? [gear] : [])];
 }
+
+const GAMEPAD_GLYPHS = { cross: '✕', circle: '○', square: '□', triangle: '△' };
+
+function buildChip(it) {
+  const wrap = document.createElement('span');
+  wrap.className = 'sc';
+  if (it.action) {
+    wrap.style.cursor = 'pointer';
+    wrap.addEventListener('click', () => it.action());
+  }
+  if (it.gamepad) {
+    const g = document.createElement('span');
+    g.className = 'glyph for-gamepad';
+    g.dataset.glyph = it.gamepad;
+    g.textContent = GAMEPAD_GLYPHS[it.gamepad] || it.gamepad;
+    wrap.appendChild(g);
+  }
+  if (it.keyboard) {
+    const k = document.createElement('span');
+    k.className = 'glyph for-keyboard';
+    k.dataset.glyph = it.gamepad || '';
+    k.textContent = it.keyboard;
+    wrap.appendChild(k);
+  }
+  const l = document.createElement('span');
+  l.className = 'label';
+  l.textContent = it.label;
+  wrap.appendChild(l);
+  return wrap;
+}
+
 function setShortcuts(items) {
   shortcutsRailEl.innerHTML = '';
+  backShortcutEl.innerHTML = '';
   shortcutItems = items || [];
   shortcutFocusIdx = -1;
-  const GAMEPAD = { cross: '✕', circle: '○', square: '□', triangle: '△' };
-  shortcutItems.forEach((it, i) => {
-    const wrap = document.createElement('span');
-    wrap.className = 'sc';
-    wrap.dataset.idx = String(i);
-    if (it.action) {
-      wrap.style.cursor = 'pointer';
-      wrap.addEventListener('click', () => it.action());
+  // Any chip bound to Circle / Esc → routed into the back slot inside
+  // the action-bar pill so the visible order is Back, Select, Settings.
+  let backItem = null;
+  for (const it of shortcutItems) {
+    if (!backItem && (it.gamepad === 'circle' || it.keyboard === 'Esc')) {
+      backItem = it; continue;
     }
-    if (it.gamepad) {
-      const g = document.createElement('span');
-      g.className = 'glyph for-gamepad';
-      g.dataset.glyph = it.gamepad;
-      g.textContent = GAMEPAD[it.gamepad] || it.gamepad;
-      wrap.appendChild(g);
-    }
-    if (it.keyboard) {
-      const k = document.createElement('span');
-      k.className = 'glyph for-keyboard';
-      k.dataset.glyph = it.gamepad || '';
-      k.textContent = it.keyboard;
-      wrap.appendChild(k);
-    }
-    const l = document.createElement('span');
-    l.className = 'label';
-    l.textContent = it.label;
-    wrap.appendChild(l);
-    shortcutsRailEl.appendChild(wrap);
-  });
+    shortcutsRailEl.appendChild(buildChip(it));
+  }
+  if (backItem) backShortcutEl.appendChild(buildChip(backItem));
 }
 
 function paintShortcutFocus() {

@@ -795,22 +795,26 @@ body[data-mode="zoom"] #surface {
 }
 .glyph.pressed { animation: shortcutPress 280ms cubic-bezier(.2,.8,.2,1); }
 #shortcuts-rail .sc.focused .label { opacity: 1; color: var(--fg); }
-#primary-shortcut {
+#primary-shortcut,
+#back-shortcut {
   display: inline-flex; align-items: center; gap: 0.5rem;
   color: var(--fg-dim);
   font-size: 0.85em;
   flex: 0 0 auto;
   margin-left: 0;
 }
-#primary-shortcut .sc {
+#primary-shortcut .sc,
+#back-shortcut .sc {
   display: inline-flex; align-items: center; gap: 0.4rem;
   white-space: nowrap;
   padding: 0.25rem 0.5rem;
   border-radius: 6px;
   transition: background 120ms, outline-color 120ms;
 }
-#primary-shortcut .sc .label { font-weight: 300; opacity: 0.7; }
-#primary-shortcut .sc.focused {
+#primary-shortcut .sc .label,
+#back-shortcut .sc .label { font-weight: 300; opacity: 0.7; }
+#primary-shortcut .sc.focused,
+#back-shortcut .sc.focused {
   outline: 2px solid var(--focus, #ffffff);
   outline-offset: 3px;
   background: rgba(255,255,255,0.14);
