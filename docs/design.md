@@ -420,7 +420,7 @@ ux_research
 ## 11. Smart-TV HCI compliance
 
 Bridge is designed for couch / 10-foot operation with a gamepad as the
-primary input. The interaction model deliberately mirrors three
+primary input. The interaction model deliberately mirrors four
 overlapping platform conventions:
 
 - **Apple tvOS HIG** — focus engine, parallax motion, large rest sizes,
@@ -429,6 +429,34 @@ overlapping platform conventions:
   action affordances, voice-first secondary nav.
 - **Xbox UX guidelines** — ABXY mapping, safe-area discipline, "focus is
   sacred," shoulder buttons reserved for traversal/cycling.
+- **Steam OS / Big Picture / Steam Deck** — chunky tap targets, generous
+  rounded corners, persistent action footer, gamepad-first text fields.
+
+### 11.0 Steam OS sizing guidelines
+
+Bridge adopts Steam Big Picture's minimum-size rules so the UI is
+comfortable on a TV at 3 m and on a 7" Steam-Deck-style portable.
+These are enforced via CSS variables in `:root`:
+
+```
+--steam-input-h:  48px   /* minimum input/select/dropdown height */
+--steam-button-h: 56px   /* minimum button height */
+--steam-body-fs:  17px   /* minimum body text in interactive elements */
+--steam-radius:   12px   /* minimum corner radius on interactive surfaces */
+```
+
+Applied to:
+
+- Every text input, select, dropdown, password field — min 48 px tall,
+  17 px text, 12 px corners.
+- Every modal button (Save, Cancel, etc.) — min 56 px tall, 120 px wide,
+  17 px text.
+- The inline prompt field (`#typed-input`) — same sizing as Steam Deck's
+  on-screen text input row.
+
+The footer rail's action-bar chips are intentionally smaller (~36 px)
+because they're persistent and selection is by glyph, not tap target —
+this is the same compromise Steam makes with its bottom button hints.
 
 Where the three platforms disagree, Bridge falls back to what's common to
 all three.
@@ -564,6 +592,79 @@ all three.
 
 ---
 
+## 12.5 Orchestration capabilities
+
+Modeled on Roo Code's orchestrator + mode mechanics. Live wiring lives
+in `app/server/team.js`, `orchestrator.js`, and `models.js`.
+
+### 12.5.1 Delegate-and-resume
+
+The standard tile-spec contract grows a fourth intent: `delegate`. When
+an assignee decides their role isn't best-suited, they emit:
+
+```json
+{ "intent": "delegate", "to_role": "engineer", "task": "<one sentence>",
+  "context": "Delegating", "title": "Routing to Engineer",
+  "body": "<short note>", "actions": [...] }
+```
+
+`runTeamVoice` follows each delegate hop: the originating assignee's
+`body` is forwarded as `sharedFrom` context to the target agent, and the
+chain continues until a non-delegate spec is returned or the depth cap
+(`MAX_DELEGATION_DEPTH = 3`) is hit. Every hop is recorded in the
+returned `delegations[]` array for telemetry.
+
+### 12.5.2 Per-role model pinning
+
+Each role can pin its own OpenRouter model via the settings panel.
+Stored as a JSON map in `.env`:
+
+```
+OPENROUTER_MODEL_BY_ROLE={"pm":"anthropic/claude-opus-4.7","engineer":"anthropic/claude-sonnet-4.6"}
+```
+
+Resolution: `getModelForRole(roleId)` in `app/server/models.js` consults
+the map first and falls back to `OPENROUTER_MODEL` (then to the
+hard-coded default `anthropic/claude-opus-4.7`). Called from
+`orchestrator.interpretIntent` and from `team.runTeamVoice` for the
+lead's routing + synthesis prompts.
+
+### 12.5.3 Git auto-save
+
+Each project gets its own git repo at `app/state/<projectId>/`. On
+project creation the server calls `initProjectRepo(id)`. The autosave
+module (`app/server/autosave.js`):
+
+- **On-change commit (debounced).** API endpoints that mutate state
+  (notes, agent spec, team voice, project create) call
+  `notifyStateChange(projectId, message)`. A 5-second debounce
+  coalesces bursts, then commits any dirty files with the supplied
+  message.
+- **Periodic sweep.** Every `GIT_AUTOSAVE_INTERVAL_MIN` minutes
+  (default 5), `commitAllDirty()` walks every project and commits
+  drift. The interval is configurable in the settings panel.
+- **Toggle.** `GIT_AUTOSAVE=on|off` in `.env`, surfaced as a checkbox
+  in the **Git** tab of the settings modal.
+- **Status.** `GET /projects/:pid/autosave` returns `{ enabled,
+  hasRepo, dirty, lastCommit }` for the UI.
+
+The per-project repo is local-only — no remote, no push. Users can
+inspect history with `git -C app/state/<pid> log`.
+
+### 12.5.4 MCP plugin registry
+
+Settings → **MCP** lists every registered MCP plugin with an enable
+toggle. Persisted as JSON in `.env`:
+
+```
+MCP_PLUGINS=[{"id":"anthropic/filesystem","name":"Filesystem","enabled":true}]
+```
+
+Currently just the registry + UI scaffold; actual MCP connection /
+tool exposure is a follow-up.
+
+---
+
 ## 13. Implementation anchors
 
 For maintainers, the key functions to read in `app/renderer/main.js`:
@@ -583,4 +684,12 @@ For maintainers, the key functions to read in `app/renderer/main.js`:
 | Surface close X | `renderGrid()` / `renderZoom()` — `.surface-close` button |
 
 OpenRouter model used: `anthropic/claude-opus-4.7` (set in `app/server/.env`
-as `OPENROUTER_MODEL`).
+as `OPENROUTER_MODEL`); per-role overrides via `OPENROUTER_MODEL_BY_ROLE`.
+
+| Capability | Module |
+|---|---|
+| Per-role model resolution | `app/server/models.js` (`getModelForRole`) |
+| Delegate-and-resume loop | `app/server/team.js` (`runWithDelegation`) |
+| Git autosave + periodic sweep | `app/server/autosave.js` |
+| Settings endpoints | `app/server/server.js` (`GET /settings`, `PUT /settings`, `GET /settings/models`) |
+| MCP registry | settings → MCP tab + `MCP_PLUGINS` env JSON |

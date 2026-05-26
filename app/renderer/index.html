@@ -58,17 +58,51 @@
   <div id="settings-modal" hidden role="dialog" aria-labelledby="settings-title">
     <div class="settings-card">
       <h3 id="settings-title">Settings</h3>
-      <label class="settings-field">
-        <span>OpenRouter API key</span>
-        <input type="password" id="settings-api-key" placeholder="sk-or-..." autocomplete="off" />
-        <small id="settings-api-key-current" class="settings-meta"></small>
-      </label>
-      <label class="settings-field">
-        <span>Default model</span>
-        <select id="settings-model">
-          <option value="" disabled>Loading models…</option>
-        </select>
-      </label>
+
+      <div class="settings-tabs" role="tablist">
+        <button type="button" class="settings-tab" data-tab="general" role="tab" aria-selected="true">General</button>
+        <button type="button" class="settings-tab" data-tab="models" role="tab" aria-selected="false">Models</button>
+        <button type="button" class="settings-tab" data-tab="mcp" role="tab" aria-selected="false">MCP</button>
+        <button type="button" class="settings-tab" data-tab="git" role="tab" aria-selected="false">Git</button>
+      </div>
+
+      <section class="settings-pane" data-tab="general">
+        <label class="settings-field">
+          <span>OpenRouter API key</span>
+          <input type="password" id="settings-api-key" placeholder="sk-or-..." autocomplete="off" />
+          <small id="settings-api-key-current" class="settings-meta"></small>
+        </label>
+        <label class="settings-field">
+          <span>Default model</span>
+          <select id="settings-model">
+            <option value="" disabled>Loading models…</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="settings-pane" data-tab="models" hidden>
+        <p class="settings-meta">Optionally pin a model per role. Leave on “Use default” to inherit.</p>
+        <div id="settings-role-models"></div>
+      </section>
+
+      <section class="settings-pane" data-tab="mcp" hidden>
+        <p class="settings-meta">Enable or disable installed MCP plugins for this app.</p>
+        <div id="settings-mcp-list"></div>
+        <button type="button" id="settings-mcp-add" class="settings-link">+ Add MCP plugin</button>
+      </section>
+
+      <section class="settings-pane" data-tab="git" hidden>
+        <label class="settings-field settings-field--row">
+          <span>Auto-save project state to git</span>
+          <input type="checkbox" id="settings-git-enabled" />
+        </label>
+        <label class="settings-field">
+          <span>Interval (minutes)</span>
+          <input type="number" min="1" max="120" step="1" id="settings-git-interval" />
+        </label>
+        <small class="settings-meta">A per-project git repo is created under <code>app/state/&lt;projectId&gt;</code>. Major state changes commit immediately; the interval commits anything missed.</small>
+      </section>
+
       <div class="settings-row">
         <button type="button" id="settings-cancel">Cancel</button>
         <button type="button" id="settings-save">Save</button>

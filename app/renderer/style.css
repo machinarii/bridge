@@ -148,27 +148,154 @@ kbd {
   display: flex; align-items: center; justify-content: center;
   z-index: 100;
 }
+/* ===== Steam OS sizing tokens =====
+ * Mirror Big Picture / Steam Deck: inputs and buttons sit at couch
+ * distance, so minimum 48 px input height and 56 px button height,
+ * 17 px body text, 12 px corners. */
+:root {
+  --steam-input-h:  48px;
+  --steam-button-h: 56px;
+  --steam-body-fs:  17px;
+  --steam-radius:   12px;
+}
+
 .settings-card {
-  width: min(420px, 90vw);
+  width: min(520px, 92vw);
   background: var(--bg-elev);
   border: 1px solid #1d2734;
   border-radius: var(--radius);
-  padding: 1.5rem 1.5rem 1.25rem;
-  display: flex; flex-direction: column; gap: 1rem;
+  padding: 1.75rem 1.75rem 1.5rem;
+  display: flex; flex-direction: column; gap: 1.25rem;
 }
-.settings-card h3 { margin: 0; font-weight: 400; font-size: 1.1rem; }
+.settings-card h3 { margin: 0; font-weight: 400; font-size: 1.3rem; }
+
+.settings-tabs {
+  display: flex; gap: 0.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  margin-bottom: 0.25rem;
+}
+.settings-tab {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 120ms, border-color 120ms, background 120ms;
+}
+.settings-tab[aria-selected="true"] {
+  color: var(--fg);
+  border-bottom-color: var(--focus);
+}
+.settings-tab:focus,
+.settings-tab:focus-visible,
+.settings-tab.focused {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  background: rgba(255,255,255,0.06);
+  color: var(--fg);
+}
+
+.settings-pane[hidden] { display: none !important; }
+.settings-pane {
+  display: flex; flex-direction: column; gap: 1rem;
+  max-height: 50vh; overflow-y: auto;
+  padding-right: 4px;
+}
+
+.settings-field--row {
+  flex-direction: row; align-items: center; justify-content: space-between;
+}
+.settings-field--row input[type="checkbox"] {
+  appearance: none;
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.32);
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  position: relative;
+  min-height: 0;
+}
+.settings-field--row input[type="checkbox"]:checked {
+  background: var(--focus);
+  border-color: var(--focus);
+}
+.settings-field--row input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 7px; top: 4px;
+  width: 8px; height: 14px;
+  border: solid #131a23;
+  border-width: 0 2.6px 2.6px 0;
+  transform: rotate(45deg);
+}
+
+.settings-link {
+  appearance: none;
+  background: transparent;
+  border: 1px dashed rgba(255,255,255,0.28);
+  border-radius: var(--steam-radius);
+  color: var(--fg-dim);
+  padding: 0.6rem 1rem;
+  font-family: inherit;
+  font-size: var(--steam-body-fs);
+  cursor: pointer;
+  min-height: var(--steam-button-h);
+  transition: color 120ms, border-color 120ms, background 120ms;
+}
+.settings-link:hover,
+.settings-link:focus,
+.settings-link:focus-visible {
+  color: var(--fg);
+  border-color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.05);
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.role-model-row,
+.mcp-row {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.4rem 0;
+}
+.role-model-row .role-label,
+.mcp-row .mcp-name {
+  flex: 1 1 auto; color: var(--fg); font-weight: 400; font-size: var(--steam-body-fs);
+}
+.role-model-row select {
+  flex: 0 0 60%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: var(--steam-radius);
+  min-height: var(--steam-input-h);
+  padding: 0.45rem 1rem;
+  color: var(--fg);
+  font-size: var(--steam-body-fs);
+  font-family: inherit;
+  appearance: none;
+}
+.mcp-row {
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.mcp-row .mcp-meta { color: var(--fg-dim); font-size: 0.85rem; }
+
 .settings-field {
-  display: flex; flex-direction: column; gap: 0.35rem;
-  font-size: 0.85rem; font-weight: 300; color: var(--fg-dim);
+  display: flex; flex-direction: column; gap: 0.45rem;
+  font-size: 0.95rem; font-weight: 300; color: var(--fg-dim);
 }
 .settings-field input,
 .settings-field select {
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.18);
-  border-radius: 8px;
-  padding: 0.55rem 0.8rem;
+  border-radius: var(--steam-radius);
+  min-height: var(--steam-input-h);
+  padding: 0.55rem 1rem;
   color: var(--fg);
-  font-size: 1rem;
+  font-size: var(--steam-body-fs);
   font-family: inherit;
   outline: none;
   appearance: none;
@@ -196,11 +323,14 @@ kbd {
   background: transparent;
   border: 1px solid rgba(255,255,255,0.22);
   color: var(--fg);
-  border-radius: 6px;
-  padding: 0.45rem 1rem;
+  border-radius: var(--steam-radius);
+  min-height: var(--steam-button-h);
+  min-width: 120px;
+  padding: 0.6rem 1.4rem;
   cursor: pointer;
   font-family: inherit;
-  font-weight: 300;
+  font-weight: 400;
+  font-size: var(--steam-body-fs);
   transition: background 120ms, border-color 120ms;
 }
 .settings-row button:hover,
@@ -730,13 +860,16 @@ body[data-mode="zoom"] #surface {
   display: block;
   background: rgba(20,22,28,0.97);
   border: 1px solid rgba(255,255,255,0.22);
-  border-radius: 10px;
-  padding: 10px 14px;
+  border-radius: var(--steam-radius);
+  min-height: var(--steam-input-h);
+  padding: 10px 18px;
+  display: flex; align-items: center;
 }
 #ptt-typed[hidden] { display: none !important; }
 #typed-input {
   width: 100%; background: transparent; border: none; color: var(--fg);
-  font-size: 1.1em; outline: none; font-family: inherit;
+  font-size: var(--steam-body-fs); outline: none; font-family: inherit;
+  min-height: calc(var(--steam-input-h) - 20px);
 }
 
 /* ===== L0 Project picker (reflow grid, same shape as L1) ===== */
