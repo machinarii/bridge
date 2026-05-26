@@ -521,9 +521,32 @@ function renderProjects() {
   ring.paint();
 
   renderActionBar([]); // no separate "Open" verb — covered by Select chip
-  setShortcuts([]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => openFocused() });
+  updatePickerShortcuts();
+}
+
+/** On L0, the shortcuts rail reflects the focused project's lead so
+ *  the user can talk to that project's PM from the home screen.
+ *  Hidden when "+ New" is focused. */
+function updatePickerShortcuts() {
+  if (mode !== MODE_PROJECTS) return;
+  const idx = ring.index ?? pickerIndex;
+  const focused = idx < projects.length ? projects[idx] : null;
+  if (!focused) { setShortcuts([]); return; }
+  const lead = focused.agents.find(a => a.id === focused.leadAgentId);
+  const leadName = lead?.name || 'Lead';
+  setShortcuts([
+    { gamepad: 'r2', keyboard: 'V', label: `Talk to ${leadName}`,
+      action: () => talkToFocusedLead() },
+  ]);
+}
+
+/** Open the focused project, wait for the morph to land, then start
+ *  PTT so the user can talk to the lead immediately. */
+async function talkToFocusedLead() {
+  await openFocused();
+  startPTT();
 }
 
 /** Move the lead agent to index 0 so it always renders top-left on L1. */
@@ -1207,6 +1230,7 @@ function slideToAdjacentProject(delta) {
   ring.index = next;
   pickerIndex = next;
   ring.paint();
+  updatePickerShortcuts();
 
   const tile = tiles[next];
   if (!tile) return;
@@ -1229,6 +1253,7 @@ function clearCenteredCreate() {
 
 function pickerMove(dir) {
   clearCenteredCreate();
+  // (focus changes; defer the shortcut update until after the move below)
   const grid = surfaceEl.querySelector('.project-picker');
   if (!grid) return;
   const cols = grid._cols, rows = grid._rows;
@@ -1246,6 +1271,7 @@ function pickerMove(dir) {
   ring.index = next;
   pickerIndex = next;
   ring.paint();
+  updatePickerShortcuts();
 }
 async function exitToProjects() {
   if (inflightController) { inflightController.abort(); inflightController = null; }
@@ -1611,7 +1637,12 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   // Hold 'v' for push-to-talk (voice).
-  if (e.key === 'v' && !e.repeat) { e.preventDefault(); startPTT(); return; }
+  if (e.key === 'v' && !e.repeat) {
+    e.preventDefault();
+    if (mode === MODE_PROJECTS) talkToFocusedLead();
+    else startPTT();
+    return;
+  }
 
   if (e.key === '\\' || e.key === 'f' || e.key === 'F') {
     // Only L1 / L2 actually have the explorer; toggleFileExplorer is a
