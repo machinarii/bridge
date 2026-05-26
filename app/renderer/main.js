@@ -692,7 +692,7 @@ async function renderNewProjectRoles() {
     t.innerHTML = `
       <div class="role-label">${role.label}</div>
       <div class="role-sample">${sample}</div>
-      ${locked ? '' : `<div class="role-toggle" data-checked="${newProjRoleIds.includes(role.id)}"></div>`}`;
+      <div class="role-toggle" data-checked="${newProjRoleIds.includes(role.id)}" ${locked ? 'data-locked="true"' : ''}></div>`;
     t.addEventListener('click', () => { ring.moveTo(el => el === t); toggleFocusedRole(); });
     grid.appendChild(t);
     tileEls.push(t);
