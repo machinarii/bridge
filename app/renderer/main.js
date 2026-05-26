@@ -688,11 +688,11 @@ async function renderNewProjectRoles() {
     t.dataset.roleId = role.id;
     if (role.id === 'pm') t.dataset.locked = 'true';
     t.style.setProperty('--tile-color', role.color);
+    const locked = role.id === 'pm';
     t.innerHTML = `
       <div class="role-label">${role.label}</div>
       <div class="role-sample">${sample}</div>
-      <div class="role-toggle" data-checked="${newProjRoleIds.includes(role.id)}"></div>
-      ${role.id === 'pm' ? '<span class="lead-badge" title="Lead — always on">Lead</span>' : ''}`;
+      ${locked ? '' : `<div class="role-toggle" data-checked="${newProjRoleIds.includes(role.id)}"></div>`}`;
     t.addEventListener('click', () => { ring.moveTo(el => el === t); toggleFocusedRole(); });
     grid.appendChild(t);
     tileEls.push(t);
@@ -720,16 +720,12 @@ function toggleFocusedRole() {
   if (!cur) return;
   const id = cur.dataset.roleId;
   if (!id) return;
-  if (id === 'pm') {
-    // PM is the lead by default and cannot be deselected.
-    setIndicator('error', 'PM is the lead');
-    setTimeout(() => setIndicator('idle', 'Connected'), 1200);
-    return;
-  }
+  if (id === 'pm') return; // PM is the locked-in lead; no toggle, no message
   const idx = newProjRoleIds.indexOf(id);
   if (idx >= 0) newProjRoleIds.splice(idx, 1);
   else newProjRoleIds.push(id);
-  cur.querySelector('.role-toggle').dataset.checked = String(newProjRoleIds.includes(id));
+  const toggle = cur.querySelector('.role-toggle');
+  if (toggle) toggle.dataset.checked = String(newProjRoleIds.includes(id));
 }
 
 function roleGridMove(dir) {
