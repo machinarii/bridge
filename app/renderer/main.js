@@ -1011,9 +1011,9 @@ async function renderChatHistory(container, agent) {
 
 function _setL2Shortcuts() {
   setShortcuts([
-    { gamepad: 'l1',      keyboard: '[', label: 'Prev',     action: () => cycleAgent(-1) },
-    { gamepad: 'r1',      keyboard: ']', label: 'Next',     action: () => cycleAgent(+1) },
-    { gamepad: 'options', keyboard: 'F', label: 'Explorer', action: () => toggleFileExplorer() },
+    { gamepad: 'l1',      keyboard: '[', label: 'Prev agent', action: () => cycleAgent(-1) },
+    { gamepad: 'r1',      keyboard: ']', label: 'Next agent', action: () => cycleAgent(+1) },
+    { gamepad: 'options', keyboard: 'F', label: 'Explorer',   action: () => toggleFileExplorer() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => pressCross() });
