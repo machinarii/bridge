@@ -382,6 +382,8 @@ body[data-mode="zoom"] #surface {
   white-space: nowrap;
 }
 .agent-view .agent-view-hint kbd { font-size: 0.9em; }
+/* Hide the centered hint as soon as the chat has any bubble. */
+.agent-view:has(.chat-scroll > .bubble) .agent-view-hint { display: none; }
 @keyframes zoomIn {
   from { transform: scale(0.92); opacity: 0; }
   to   { transform: scale(1);    opacity: 1; }
