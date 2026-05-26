@@ -831,17 +831,14 @@ function updateGridShortcuts() {
   const isLeadFocused = focused?.id === activeProject.leadAgentId;
   const items = [
     { gamepad: 'r2', keyboard: 'V', label: `Talk to ${lead?.name || 'Lead'}`, action: () => startPTT() },
+    { gamepad: 'l1', keyboard: '[', label: 'Prev project', action: () => cycleProject(-1) },
+    { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
+    { gamepad: 'options', keyboard: 'F', label: 'Explorer', action: () => toggleFileExplorer() },
   ];
   if (!isLeadFocused) {
     items.push({ gamepad: 'square', keyboard: 'Space', label: 'Agent on / off',
                  action: () => toggleFocusedAgentEnabled() });
   }
-  items.push({ gamepad: 'l1', keyboard: '[', label: 'Prev project',
-               action: () => cycleProject(-1) });
-  items.push({ gamepad: 'r1', keyboard: ']', label: 'Next project',
-               action: () => cycleProject(+1) });
-  items.push({ gamepad: 'options', keyboard: 'F', label: 'Explorer',
-               action: () => toggleFileExplorer() });
   setShortcuts(items);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => enterZoom() });
