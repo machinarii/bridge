@@ -500,17 +500,14 @@ body[data-mode="zoom"] #surface {
   background: rgba(255,255,255,0.08);
 }
 
-/* Brief pulse when the shortcut's key (or gamepad button) is pressed.
- * Same animation works on shortcut chips and action-bar buttons. */
+/* Brief pulse on just the small key/glyph element when its shortcut
+ * fires — the rest of the chip stays put. */
 @keyframes shortcutPress {
-  0%   { background: rgba(255,255,255,0.30); transform: scale(1.06); }
-  60%  { background: rgba(255,255,255,0.14); transform: scale(1.02); }
-  100% { background: transparent;            transform: scale(1); }
+  0%   { background: rgba(255,255,255,0.45); transform: scale(1.18); border-color: rgba(255,255,255,0.85); }
+  60%  { background: rgba(255,255,255,0.18); transform: scale(1.06); }
+  100% { transform: scale(1); }
 }
-.sc.pressed,
-#action-bar .action.pressed {
-  animation: shortcutPress 280ms cubic-bezier(.2,.8,.2,1);
-}
+.glyph.pressed { animation: shortcutPress 280ms cubic-bezier(.2,.8,.2,1); }
 #shortcuts-rail .sc.focused .label { opacity: 1; color: var(--fg); }
 #primary-shortcut {
   display: inline-flex; align-items: center; gap: 0.5rem;

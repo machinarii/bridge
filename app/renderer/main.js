@@ -387,12 +387,12 @@ function flashShortcutByKey(key) {
   let label = map[key];
   if (!label) label = key.length === 1 ? key.toUpperCase() : key;
   for (const kbd of document.querySelectorAll('.glyph.for-keyboard')) {
-    if (kbd.textContent === label) flashChip(kbd.closest('.sc, .action'));
+    if (kbd.textContent === label) flashChip(kbd);
   }
 }
 function flashShortcutByGamepad(button) {
   for (const g of document.querySelectorAll(`.glyph.for-gamepad[data-glyph="${button}"]`)) {
-    flashChip(g.closest('.sc, .action'));
+    flashChip(g);
   }
 }
 
