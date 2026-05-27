@@ -852,10 +852,15 @@ async function renderNewProjectRoles() {
   };
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelRolePicker));
 
-  // Invisible row inside the picker — Cancel on the left of Continue,
-  // both right-aligned within the surface.
+  // Invisible row inside the picker — Back · Cancel · Continue,
+  // all right-aligned within the surface.
   const row = document.createElement('div');
   row.className = 'role-confirm-row';
+  const backBtn = document.createElement('button');
+  backBtn.type = 'button';
+  backBtn.className = 'role-cancel role-back';
+  backBtn.textContent = 'Back';
+  backBtn.addEventListener('click', tryCancelRolePicker);
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
   cancelBtn.className = 'role-cancel';
@@ -866,12 +871,12 @@ async function renderNewProjectRoles() {
   confirmBtn.className = 'role-confirm';
   confirmBtn.textContent = 'Continue';
   confirmBtn.addEventListener('click', () => advanceFromRolePicker());
-  row.append(cancelBtn, confirmBtn);
+  row.append(backBtn, cancelBtn, confirmBtn);
   wrap.appendChild(row);
 
   surfaceEl.appendChild(wrap);
 
-  ring.set([...tileEls, cancelBtn, confirmBtn]);
+  ring.set([...tileEls, backBtn, cancelBtn, confirmBtn]);
   ring.index = 0;
   ring.paint();
 
@@ -1070,6 +1075,7 @@ function renderNewProjectName() {
       ? ''
       : '<div class="lead-badge">Cadence will lead this team.</div>'}
     <div class="role-confirm-row">
+      <button type="button" class="role-cancel role-back" id="capture-back">Back</button>
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
       <button type="button" class="role-confirm" id="capture-done">Create project</button>
     </div>`;
@@ -1077,6 +1083,10 @@ function renderNewProjectName() {
   const tryCancelNameCapture = () => {
     maybeConfirmCancel(!!newProjName.trim(), () => { stopMicVisualizer(); renderProjects(); });
   };
+  t.querySelector('#capture-back')?.addEventListener('click', () => {
+    stopMicVisualizer();
+    renderNewProjectRoles();
+  });
   t.querySelector('#capture-cancel')?.addEventListener('click', tryCancelNameCapture);
   t.querySelector('#capture-done')?.addEventListener('click', () => confirmCapture());
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelNameCapture));
@@ -1106,6 +1116,7 @@ function renderNewProjectGoal() {
     <h2>What's the objective?</h2>
     <div class="capture-value ${newProjGoal ? 'has-value' : ''}">${captureValueInner(newProjGoal)}</div>
     <div class="role-confirm-row">
+      <button type="button" class="role-cancel role-back" id="capture-back">Back</button>
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
       <button type="button" class="role-confirm" id="capture-done">Create project</button>
     </div>`;
@@ -1113,6 +1124,10 @@ function renderNewProjectGoal() {
   const tryCancelGoalCapture = () => {
     maybeConfirmCancel(!!newProjGoal.trim(), () => { stopMicVisualizer(); renderProjects(); });
   };
+  t.querySelector('#capture-back')?.addEventListener('click', () => {
+    stopMicVisualizer();
+    renderNewProjectName();
+  });
   t.querySelector('#capture-cancel')?.addEventListener('click', tryCancelGoalCapture);
   t.querySelector('#capture-done')?.addEventListener('click', () => confirmCapture());
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelGoalCapture));
