@@ -1473,12 +1473,13 @@ body[data-mode="zoom"] #surface {
 }
 .capture-tile .placeholder { opacity: 0.4; }
 
-/* Pin Cancel + Create project to the bottom-right of the surface
- * instead of letting them sit in the centered flex column. */
+/* Pin Cancel + Create project to the bottom-right of the surface,
+ * matching the role-picker row position (1rem inset, same .role-cancel
+ * / .role-confirm padding). */
 .capture-tile .role-confirm-row {
   position: absolute;
-  right: 1.5rem;
-  bottom: 1.5rem;
+  right: 1rem;
+  bottom: 1rem;
 }
 
 /* ===== Mic visualizer (capture screens) ===== */
