@@ -141,6 +141,44 @@ kbd {
     0 0 16px 2px rgba(255,255,255,0.25);
 }
 
+#add-agent-modal[hidden] { display: none !important; }
+#add-agent-modal {
+  position: fixed; inset: 0;
+  background: rgba(8,11,14,0.62);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+.add-agent-card { width: min(640px, 92vw); }
+.add-agent-roles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.add-agent-roles .role-tile {
+  position: relative;
+  background: var(--bg-elev-2);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: var(--steam-radius);
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  display: flex; flex-direction: column; gap: 0.25rem;
+  min-height: 72px;
+  transition: background 120ms, border-color 120ms;
+}
+.add-agent-roles .role-tile .role-label { font-weight: 400; }
+.add-agent-roles .role-tile .role-sample { font-size: 0.85rem; opacity: 0.6; font-weight: 300; }
+.add-agent-roles .role-tile.focused,
+.add-agent-roles .role-tile:focus-visible {
+  outline: none;
+  background: rgba(255,255,255,0.10);
+  box-shadow:
+    0 0 0 2px var(--focus, #ffffff),
+    0 0 16px 2px rgba(255,255,255,0.25);
+}
+
 #settings-modal[hidden] { display: none !important; }
 #settings-modal {
   position: fixed; inset: 0;
@@ -548,6 +586,22 @@ body[data-mode="zoom"] #surface {
 .agent-tile .status .dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--fg-dim);
+}
+.agent-tile.add-agent {
+  /* Quiet dashed tile, no per-project color wash. */
+  background: transparent;
+  border-style: dashed;
+  border-color: rgba(255,255,255,0.18);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.35rem;
+  color: var(--fg-dim);
+}
+.agent-tile.add-agent::before { content: none; }
+.agent-tile.add-agent .add-symbol {
+  font-size: 2.2rem; line-height: 1; font-weight: 300;
+}
+.agent-tile.add-agent .add-label {
+  font-size: 0.95rem; font-weight: 400;
 }
 .agent-tile[data-disabled="true"] { opacity: 0.4; }
 .agent-tile[data-disabled="true"]::after {
