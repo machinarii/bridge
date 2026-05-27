@@ -11,10 +11,11 @@
  * Quitting the app cleans up the spawned child processes.
  */
 
-const { app, BrowserWindow, shell, Menu } = require('electron');
+const { app, BrowserWindow, shell, Menu, Notification } = require('electron');
 const path = require('node:path');
 const fs   = require('node:fs');
 const { spawn } = require('node:child_process');
+const { ensureStt } = require('./setup-stt');
 
 const PORT = Number(process.env.PORT || 4317);
 const STT_PORT = Number(process.env.PARAKEET_PORT || 8123);
@@ -43,23 +44,64 @@ async function startServer() {
   serverModule = require(serverPath);
 }
 
-function startSttIfAvailable() {
-  // Look for an installed venv at app/stt/.venv/. If present, spawn
-  // parakeet_server.py. Anyone who hasn't run the one-time install
-  // just keeps using webkitSpeechRecognition.
-  const sttDir = isDev()
-    ? path.resolve(__dirname, '..', 'stt')
-    : path.join(process.resourcesPath, 'stt');
-  const venvPython = path.join(sttDir, '.venv', 'bin', 'python');
-  const script     = path.join(sttDir, 'parakeet_server.py');
-  if (!fs.existsSync(venvPython) || !fs.existsSync(script)) {
-    console.log('[bridge] parakeet venv not found — skipping local STT spawn');
-    return;
+/* Boots the local Parakeet STT service.
+ *
+ * Two paths:
+ *   - Packaged app: uses the bundled python-build-standalone Python
+ *     under resourcesPath/python/. The first launch pip-installs the
+ *     deps into userData/stt-packages/, subsequent launches skip
+ *     straight to spawning. We notify the user once via the OS
+ *     notification center when setup finishes.
+ *   - Dev mode: still honors the legacy app/stt/.venv/ workflow so
+ *     `npm run dev` works without a packaged Python.
+ */
+async function startSttIfAvailable() {
+  // Dev mode: keep the legacy venv path so developers can iterate
+  // without building the embedded Python.
+  if (isDev()) {
+    const sttDir = path.resolve(__dirname, '..', 'stt');
+    const venvPython = path.join(sttDir, '.venv', 'bin', 'python');
+    const script     = path.join(sttDir, 'parakeet_server.py');
+    if (!fs.existsSync(venvPython) || !fs.existsSync(script)) {
+      console.log('[bridge] dev: parakeet venv not found at app/stt/.venv — skipping');
+      return;
+    }
+    return spawnParakeet({ cmd: venvPython, args: [script], cwd: sttDir });
   }
-  console.log('[bridge] launching parakeet at', script);
-  sttChild = spawn(venvPython, [script], {
-    cwd: sttDir,
-    env: { ...process.env, PARAKEET_PORT: String(STT_PORT) },
+
+  // Packaged: bundled Python + first-run pip install into userData.
+  try {
+    const userDataDir = app.getPath('userData');
+    const result = await ensureStt({
+      resourcesPath: process.resourcesPath,
+      userDataDir,
+      log: (line) => process.stdout.write(typeof line === 'string' ? line : String(line)),
+    });
+    if (!result) return; // bundled python not present
+    const setupTriggered = !fs.existsSync(path.join(result.pythonPath, 'stt-packages.ready'));
+    spawnParakeet({
+      cmd: result.python,
+      args: [result.script],
+      cwd: path.join(process.resourcesPath, 'stt'),
+      env: { PYTHONPATH: result.pythonPath, PARAKEET_PORT: String(STT_PORT) },
+    });
+    if (setupTriggered && Notification.isSupported()) {
+      // Only fires on the very first run; subsequent launches skip.
+      new Notification({
+        title: 'Bridge — Local STT ready',
+        body: 'Parakeet is set up and running locally.',
+      }).show();
+    }
+  } catch (err) {
+    console.warn('[bridge] STT setup failed:', err.message);
+  }
+}
+
+function spawnParakeet({ cmd, args, cwd, env = {} }) {
+  console.log('[bridge] launching parakeet at', args[0]);
+  sttChild = spawn(cmd, args, {
+    cwd,
+    env: { ...process.env, PARAKEET_PORT: String(STT_PORT), ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   sttChild.stdout.on('data', (d) => process.stdout.write(`[parakeet] ${d}`));
