@@ -579,10 +579,12 @@ function renderProjects() {
     grid.appendChild(tile);
     tileEls.push(tile);
   }
-  // "+ New" tile
+  // "+ New" tile — mirrors the "+ Add agent" tile on L1.
   const plus = document.createElement('div');
   plus.className = 'project-tile new-project';
-  plus.innerHTML = `<h2 class="name">+ New project</h2><div class="meta">Create a team</div>`;
+  plus.innerHTML = `
+    <div class="add-symbol">+</div>
+    <div class="add-label">New project</div>`;
   const plusIdx = tileEls.length;
   plus.addEventListener('click', () => { pickerIndex = plusIdx; ring.index = plusIdx; ring.paint(); openFocused(); });
   grid.appendChild(plus);

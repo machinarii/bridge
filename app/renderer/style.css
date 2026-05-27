@@ -984,10 +984,22 @@ body[data-mode="zoom"] #surface {
 }
 .project-tile.focused::before { opacity: 0; }
 .project-tile.new-project {
-  opacity: 0.85;
+  /* Mirrors .agent-tile.add-agent: quiet dashed tile, no color wash,
+   * centered "+" symbol with a small label underneath. */
   background: transparent;
+  border-style: dashed;
+  border-color: rgba(255,255,255,0.18);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.35rem;
+  color: var(--fg-dim);
 }
-.project-tile.new-project::before { background: none; }
+.project-tile.new-project::before { content: none; background: none; }
+.project-tile.new-project .add-symbol {
+  font-size: 2.2rem; line-height: 1; font-weight: 300;
+}
+.project-tile.new-project .add-label {
+  font-size: 0.95rem; font-weight: 400;
+}
 .project-tile .name { font-size: 1.4rem; margin: 0; }
 .project-tile .meta {
   opacity: 0.6;
