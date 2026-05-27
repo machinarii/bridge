@@ -270,27 +270,37 @@ kbd {
 }
 .settings-field--row input[type="checkbox"] {
   appearance: none;
-  width: 28px; height: 28px;
+  -webkit-appearance: none;
+  width: 32px; height: 32px;
   border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.32);
+  border: 1.75px solid rgba(255,255,255,0.45);
   background: rgba(255,255,255,0.04);
   cursor: pointer;
-  position: relative;
   min-height: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+  transition: background 120ms, border-color 120ms;
+}
+.settings-field--row input[type="checkbox"]:hover { border-color: rgba(255,255,255,0.65); }
+.settings-field--row input[type="checkbox"]:focus,
+.settings-field--row input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--focus, #ffffff);
+  outline-offset: 2px;
 }
 .settings-field--row input[type="checkbox"]:checked {
-  background: var(--focus);
-  border-color: var(--focus);
+  background-color: var(--focus, #ffffff);
+  border-color: var(--focus, #ffffff);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='none' stroke='%230b0f14' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' d='M3 8.5l3 3 7-7'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 20px 20px;
 }
-.settings-field--row input[type="checkbox"]:checked::after {
-  content: '';
-  position: absolute;
-  left: 7px; top: 4px;
-  width: 8px; height: 14px;
-  border: solid #131a23;
-  border-width: 0 2.6px 2.6px 0;
-  transform: rotate(45deg);
+.settings-git-state {
+  color: var(--fg-dim);
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
 }
+.settings-git-state[data-on="true"] { color: var(--fg); }
 
 .settings-link {
   appearance: none;
