@@ -2447,6 +2447,19 @@ gp.addEventListener('press', (e) => {
     return;
   }
   if (mode === MODE_ADD_AGENT) {
+    // D-pad Up from the top row, or D-pad Right from the rightmost
+    // column, hops onto the × close button.
+    if ((b === 'up' || b === 'right') && document.activeElement !== surfaceEl.querySelector('.surface-close')) {
+      const grid = surfaceEl.querySelector('.role-grid');
+      if (grid) {
+        const cols = grid._cols || 4;
+        const r = Math.floor(ring.index / cols);
+        const c = ring.index % cols;
+        if ((b === 'up' && r === 0) || (b === 'right' && c === cols - 1)) {
+          if (focusSurfaceClose()) return;
+        }
+      }
+    }
     if (b === 'down') {
       const grid = surfaceEl.querySelector('.role-grid');
       if (grid) {
