@@ -1042,7 +1042,7 @@ function renderNewProjectName() {
       : '<div class="lead-badge">Cadence will lead this team.</div>'}
     <div class="role-confirm-row">
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
-      <button type="button" class="role-confirm" id="capture-done">Done</button>
+      <button type="button" class="role-confirm" id="capture-done">Create project</button>
     </div>`;
   surfaceEl.appendChild(t);
   const tryCancelNameCapture = () => {
@@ -1074,7 +1074,7 @@ function renderNewProjectGoal() {
     <div class="capture-value ${newProjGoal ? 'has-value' : ''}">${captureValueInner(newProjGoal)}</div>
     <div class="role-confirm-row">
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
-      <button type="button" class="role-confirm" id="capture-done">Done</button>
+      <button type="button" class="role-confirm" id="capture-done">Create project</button>
     </div>`;
   surfaceEl.appendChild(t);
   const tryCancelGoalCapture = () => {
