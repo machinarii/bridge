@@ -1,5 +1,6 @@
 import { GamepadInput } from './gamepad.js';
 import { Speech, speak, stopSpeaking } from './speech.js';
+import { renderMarkdown, attachCodeCopyHandlers } from './md.js';
 import { FocusRing } from './focus.js';
 import { renderTile, renderActionBar } from './tiles.js';
 
@@ -1642,6 +1643,57 @@ function formatBubbleTime(at) {
   } catch { return ''; }
 }
 
+/* v2 — Claude-Code-style action cards rendered above the body in
+ * agent bubbles. Each entry in actions_taken looks like:
+ *   { kind: 'created'|'edited'|'ran'|'read'|'searched', label?, count?, items?, result? }
+ * Cards collapse to one row each; ones with `items` expand on click. */
+const ACTION_KIND = {
+  created:  { glyph: '+',  cls: 'created',  defaultLabel: 'Created' },
+  edited:   { glyph: '~',  cls: 'edited',   defaultLabel: 'Edited' },
+  deleted:  { glyph: '−',  cls: 'deleted',  defaultLabel: 'Deleted' },
+  ran:      { glyph: '▶',  cls: 'ran',      defaultLabel: 'Ran' },
+  read:     { glyph: '◉',  cls: 'read',     defaultLabel: 'Read' },
+  searched: { glyph: '⌕',  cls: 'searched', defaultLabel: 'Searched' },
+};
+
+function buildActionCards(actions) {
+  const wrap = document.createElement('div');
+  wrap.className = 'bubble-actions-taken';
+  for (const a of actions) {
+    const def = ACTION_KIND[a.kind] || { glyph: '•', cls: 'generic', defaultLabel: 'Did' };
+    const card = document.createElement('div');
+    card.className = `action-card action-${def.cls}`;
+    const hasItems = Array.isArray(a.items) && a.items.length > 0;
+    const head = `
+      <span class="action-glyph">${escapeHtml(def.glyph)}</span>
+      <span class="action-text">
+        <strong>${escapeHtml(def.defaultLabel)}</strong>
+        ${a.count ? `<span class="action-meta">${escapeHtml(String(a.count))} file${a.count === 1 ? '' : 's'}</span>` : ''}
+        ${a.label && !a.count ? `<code class="action-label">${escapeHtml(a.label)}</code>` : ''}
+        ${a.result ? `<span class="action-result">${escapeHtml(a.result)}</span>` : ''}
+      </span>
+      ${hasItems ? '<span class="action-expand" aria-hidden="true">▾</span>' : ''}`;
+    card.innerHTML = head;
+    if (hasItems) {
+      const detail = document.createElement('ul');
+      detail.className = 'action-items';
+      for (const it of a.items) {
+        const li = document.createElement('li');
+        li.innerHTML = `<code>${escapeHtml(it)}</code>`;
+        detail.appendChild(li);
+      }
+      card.appendChild(detail);
+      card.classList.add('collapsible');
+      card.addEventListener('click', (e) => {
+        e.stopPropagation();
+        card.classList.toggle('expanded');
+      });
+    }
+    wrap.appendChild(card);
+  }
+  return wrap;
+}
+
 async function renderChatHistory(container, agent) {
   container.innerHTML = '';
   chatBubbles = [];
@@ -1660,20 +1712,36 @@ async function renderChatHistory(container, agent) {
       bubble.dataset.role = m.role;
       bubble.tabIndex = 0;
       let body = String(m.content || '').trim();
+      let actionsTaken = null;
       if (!isUser) {
         try {
           const parsed = JSON.parse(body.replace(/^```(?:json)?/i,'').replace(/```$/, '').trim());
           if (parsed?.body) body = parsed.body;
           else if (parsed?.title) body = parsed.title;
+          if (Array.isArray(parsed?.actions_taken)) actionsTaken = parsed.actions_taken;
         } catch { /* leave body as-is */ }
       }
       // Strip the "[team-voice] " prefix added by the team driver so the
       // user sees the original prompt.
       const promptText = body.replace(/^\[team-voice\]\s*/, '');
 
+      // Action cards (Claude-Code-style) render above the body for
+      // agent bubbles — created/edited/ran/read/searched summaries.
+      if (!isUser && actionsTaken && actionsTaken.length) {
+        bubble.appendChild(buildActionCards(actionsTaken));
+      }
+
       const content = document.createElement('div');
       content.className = 'bubble-content';
-      content.textContent = promptText;
+      if (isUser) {
+        content.textContent = promptText;
+      } else {
+        // Render the assistant body as markdown (tables, code, lists,
+        // bold/italic, links). Inline output is HTML-sanitized inside
+        // md.js — only the parser's own tags survive.
+        content.innerHTML = renderMarkdown(promptText);
+        attachCodeCopyHandlers(content);
+      }
       bubble.appendChild(content);
 
       // Timestamp + retry / edit only render on user-authored bubbles.
