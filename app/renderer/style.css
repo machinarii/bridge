@@ -1350,6 +1350,18 @@ body[data-mode="zoom"] #surface {
   background: rgba(255,255,255,0.08);
   border-color: rgba(255,255,255,0.45);
 }
+.role-confirm:disabled,
+.role-confirm[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: transparent;
+  border-color: rgba(255,255,255,0.18);
+  color: var(--fg-dim);
+}
+.role-confirm:disabled:hover {
+  background: transparent;
+  border-color: rgba(255,255,255,0.18);
+}
 .role-confirm.focused,
 .role-confirm:focus,
 .role-confirm:focus-visible {
