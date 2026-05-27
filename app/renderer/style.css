@@ -1128,7 +1128,7 @@ body[data-mode="zoom"] #surface {
   padding: 0.6rem 1.6rem;
   cursor: pointer;
   font-family: inherit;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 20px;
   transition: background 120ms, border-color 120ms;
 }
