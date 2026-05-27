@@ -237,6 +237,74 @@ either the toast OR the menu.
 
 ---
 
+## 7. Rich response formatting in agent bubbles
+
+Today every agent bubble is plain `textContent` — even when the model
+returns markdown the user only sees a wall of text. Claude's actual
+responses lean heavily on bullets, tables, code blocks, and one-line
+action summaries; Bridge should render all of them.
+
+### 7a. Markdown rendering
+
+Inline markdown the agent bubble parses on its own:
+
+- Headers `##`, `###`
+- Bullet lists (`-`, `*`) and numbered lists (`1.`)
+- Tables (`| col | col |` with separator row)
+- Fenced code blocks (```` ``` ````) with a tiny copy button
+- Inline `code`
+- Bold `**foo**` / italic `*foo*`
+- Blockquotes `> …`
+- Links `[text](url)`
+
+Sanitize before injecting HTML (no raw `<script>`, no `on*=` attrs).
+Use a small purpose-built parser (~150 lines) or pull in a minimal
+markdown lib if license allows.
+
+### 7b. Action summary cards
+
+For Claude-Code-style "what the agent did" summaries — `Created
+auth.ts`, `Edited 2 files`, `Ran tests: 12 passed`, `Searched for X`,
+`Read project.md` — extend the tile-spec contract with an optional
+`actions_taken` array:
+
+```json
+{
+  "intent": "answer",
+  "body": "Done — auth flow is now stubbed.",
+  "actions_taken": [
+    { "kind": "created", "label": "auth.ts" },
+    { "kind": "edited",  "count": 2, "items": ["routes.ts", "config.ts"] },
+    { "kind": "ran",     "label": "tests", "result": "12 passed" },
+    { "kind": "read",    "label": "project.md" },
+    { "kind": "searched","label": "OAuth handler" }
+  ]
+}
+```
+
+Renderer turns each entry into a compact card inside the bubble,
+**above** the body text. Card styling:
+
+- One row per action (`kind` glyph + label/details, right-aligned
+  meta like file count or test result).
+- Expandable when `items` is set (e.g. "Edited 2 files" expands to
+  show `routes.ts`, `config.ts`).
+- Glyph per kind: `+` for created, `~` for edited, `▶` for ran, `📖`
+  / `eye` for read, `🔍` for searched. SVG icons; no emoji.
+
+Update the system prompt so the model emits `actions_taken` when it
+performed concrete operations on behalf of the user (even simulated,
+in the current stub mode). Backwards-compatible: if `actions_taken`
+is absent the bubble renders normally.
+
+### 7c. Optional follow-ups
+
+- **Copy button on code blocks** — click → copies to clipboard,
+  brief "Copied!" affordance.
+- **Inline diff blocks** when actions edit files — small unified
+  diff card showing additions/deletions in the bubble.
+- **Math** (`$…$`, `$$…$$`) via KaTeX if a project ever needs it.
+
 ## Deferred for now
 
 - **§7 "What did the team do?" recap** — natural-language standup view.
