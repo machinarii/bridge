@@ -1297,20 +1297,21 @@ body[data-mode="zoom"] #surface {
 .agent-view .bubble .bubble-time {
   flex: 1 1 auto;
   letter-spacing: 0.02em;
+  font-size: 0.6rem;
 }
 .agent-view .bubble .bubble-action {
   appearance: none;
   background: transparent;
   border: 1px solid rgba(255,255,255,0.22);
   color: inherit;
-  width: 38px; height: 38px;
+  width: 32px; height: 32px;
   border-radius: 8px;
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer;
   flex: 0 0 auto;
   transition: background 120ms, border-color 120ms;
 }
-.agent-view .bubble .bubble-action svg { width: 24px; height: 24px; }
+.agent-view .bubble .bubble-action svg { width: 20px; height: 20px; }
 .agent-view .bubble .bubble-action:hover,
 .agent-view .bubble .bubble-action:focus,
 .agent-view .bubble .bubble-action:focus-visible {
