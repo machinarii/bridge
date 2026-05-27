@@ -1081,8 +1081,10 @@ async function openAddAgentPicker() {
 
   renderActionBar([]);
   setShortcuts([
-    { gamepad: 'cross',  keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedAddAgentRole() },
-    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',   action: () => renderGrid() },
+    { gamepad: 'cross',   keyboard: 'Space', label: 'Toggle',   action: () => toggleFocusedAddAgentRole() },
+    { gamepad: 'options', keyboard: 'E',     label: 'Explorer', action: () => toggleFileExplorer() },
+    {                     keyboard: 'S',     label: 'Skills',   action: () => toggleSkillsDrawer() },
+    { gamepad: 'circle',  keyboard: 'Esc',   label: 'Back',     action: () => renderGrid() },
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Done',
                        action: () => commitAddAgentSelections() });
@@ -1716,7 +1718,7 @@ const skillsDrawerEl = document.getElementById('skills-drawer');
 const skillsListEl   = skillsDrawerEl?.querySelector('.skills-list');
 
 function toggleSkillsDrawer() {
-  if (mode === MODE_PROJECTS) return;
+  if (mode === MODE_PROJECTS || mode === MODE_NEW_PROJ_ROLES) return;
   if (!activeProject) return;
   if (skillsDrawerOpen) { closeSkillsDrawer(); return; }
   openSkillsDrawer();
@@ -1754,7 +1756,7 @@ function rebuildSkillsList() {
 }
 
 async function toggleFileExplorer() {
-  if (mode === MODE_PROJECTS) return;
+  if (mode === MODE_PROJECTS || mode === MODE_NEW_PROJ_ROLES) return;
   if (!activeProject) return;
   if (fileExplorerOpen) { closeFileExplorer(); return; }
   await openFileExplorer();
@@ -2444,15 +2446,15 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  if (e.key === '\\' || e.key === 'e' || e.key === 'E') {
-    // Only L1 / L2 actually have the explorer; toggleFileExplorer is a
-    // no-op outside those modes.
+  if (e.key === 'e' || e.key === 'E') {
+    // toggleFileExplorer bails outside the surface modes (L1 / L2 /
+    // add-agent), so no extra guard needed here.
     e.preventDefault();
     toggleFileExplorer();
     return;
   }
   if (e.key === 's' || e.key === 'S') {
-    if (mode === MODE_GRID || mode === MODE_ZOOM) {
+    if (mode === MODE_GRID || mode === MODE_ZOOM || mode === MODE_ADD_AGENT) {
       e.preventDefault();
       toggleSkillsDrawer();
       return;
