@@ -990,30 +990,39 @@ function stopMicVisualizer() {
   }
 }
 
+/* Travelling sine wave across the bars. The wave is always moving;
+ * loudness from the mic just scales its amplitude. Silence still
+ * shows a gentle baseline ripple so the UI reads as "alive." */
+let _micLoudness = 0;     // smoothed 0..1
 function animateMicBars() {
   if (!micViz) return;
   const bars = document.querySelectorAll('.capture-tile .mic-bars .bar');
   if (bars.length === 0) {
-    // Capture screen isn't visible anymore — keep checking until it is
-    // or until the visualizer is stopped from elsewhere.
     micVizFrame = requestAnimationFrame(animateMicBars);
     return;
   }
   const { analyser, data } = micViz;
   analyser.getByteFrequencyData(data);
-  // Spread the bars across the lower-frequency portion of the
-  // spectrum where speech mostly sits, with a gentle peak in the
-  // middle for a more "wave"-like shape.
+
+  // Average loudness across the speech band, smoothed so the
+  // amplitude doesn't jitter frame-to-frame.
   const usable = Math.min(data.length, 16);
+  let sum = 0;
+  for (let i = 0; i < usable; i++) sum += data[i];
+  const raw = sum / (usable * 255); // 0..1
+  _micLoudness = _micLoudness * 0.78 + raw * 0.22;
+
+  const t = performance.now() / 1000;
+  const SPEED = 4.5;                                // radians / sec
+  const BASE_AMP = 5;                                // baseline ripple (px)
+  const LOUD_AMP = 32;                               // extra amplitude when loud (px)
+  const MID = 22;                                    // bar centerline (px)
+  const PHASE_STEP = (Math.PI * 2) / bars.length;    // wave traverses the row
+  const amp = BASE_AMP + LOUD_AMP * _micLoudness;
+
   bars.forEach((bar, i) => {
-    const t = i / (bars.length - 1);          // 0..1
-    const bin = Math.floor(t * (usable - 1)); // sample within usable bins
-    // Slight center-bias hump (Hann-window-ish) so the middle bars
-    // tend to be tallest when input is flat.
-    const center = 1 - Math.abs(t - 0.5) * 2;
-    const raw = data[bin] / 255;
-    const lvl = Math.min(1, raw + center * 0.12);
-    const h = 6 + lvl * 54; // 6..60 px
+    const sine = Math.sin(t * SPEED + i * PHASE_STEP); // -1..1
+    const h = Math.max(4, MID + sine * amp);
     bar.style.height = `${h}px`;
   });
   micVizFrame = requestAnimationFrame(animateMicBars);
