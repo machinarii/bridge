@@ -895,7 +895,7 @@ body[data-mode="zoom"] #surface {
   position: absolute;
   top: 50%;
   left: 100%;
-  margin-left: 0.6rem;
+  margin-left: 1.25rem;
   transform: translateY(-50%);
   font-size: 0.78rem;
   color: rgba(255,255,255,0.75);
