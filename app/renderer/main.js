@@ -1581,6 +1581,9 @@ async function renderChatHistory(container, agent) {
       actions.appendChild(time);
 
       if (isUser) {
+        const btnRow = document.createElement('div');
+        btnRow.className = 'bubble-action-row';
+
         const retry = document.createElement('button');
         retry.className = 'bubble-action retry';
         retry.type = 'button';
@@ -1591,7 +1594,7 @@ async function renderChatHistory(container, agent) {
           <polyline points="3 3 3 9 9 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>`;
         retry.addEventListener('click', (e) => { e.stopPropagation(); retryBubble(i); });
-        actions.appendChild(retry);
+        btnRow.appendChild(retry);
 
         const edit = document.createElement('button');
         edit.className = 'bubble-action edit';
@@ -1603,7 +1606,9 @@ async function renderChatHistory(container, agent) {
           <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>`;
         edit.addEventListener('click', (e) => { e.stopPropagation(); openEditBubbleModal(i); });
-        actions.appendChild(edit);
+        btnRow.appendChild(edit);
+
+        actions.appendChild(btnRow);
       }
       bubble.appendChild(actions);
 
