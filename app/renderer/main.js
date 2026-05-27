@@ -2316,6 +2316,229 @@ function paintAgentStatus(agentId) {
 // Kick the SSE channel off once the renderer is ready.
 startEventStream();
 
+/* ---------- v2 §6 — Notifications ----------
+ *
+ * Two independent surfaces wired off the same SSE channel:
+ *   - notificationStore: durable, lives in the menu
+ *   - showNotificationToast(): transient, top-right card
+ *
+ * Persistence is in sessionStorage so a refresh keeps the unread count
+ * but it's intentionally not durable across browser restarts. */
+const NOTIF_LIMIT = 200;
+const NOTIF_KEY   = 'bridge:notifications';
+const TOAST_AUTO_MS_DEFAULT = 4200;
+
+let notifications = (function loadNotifs() {
+  try { return JSON.parse(sessionStorage.getItem(NOTIF_KEY) || '[]'); }
+  catch { return []; }
+})();
+
+function saveNotifs() {
+  try { sessionStorage.setItem(NOTIF_KEY, JSON.stringify(notifications.slice(0, NOTIF_LIMIT))); }
+  catch {}
+}
+
+function addNotification(n) {
+  const entry = {
+    id: n.id || `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    at: n.at || Date.now(),
+    kind: n.kind || 'info',
+    title: String(n.title || '').slice(0, 200),
+    body: String(n.body || '').slice(0, 600),
+    actionable: !!n.actionable,
+    requiresApproval: !!n.requiresApproval,
+    unread: true,
+    projectId: n.projectId || null,
+    agentId: n.agentId || null,
+  };
+  notifications.unshift(entry);
+  if (notifications.length > NOTIF_LIMIT) notifications.length = NOTIF_LIMIT;
+  saveNotifs();
+  paintNotificationBadge();
+  showNotificationToast(entry);
+  if (!document.getElementById('notification-menu').hidden) repaintNotificationMenu();
+  return entry;
+}
+
+function paintNotificationBadge() {
+  const btn = document.getElementById('notification-btn');
+  if (!btn) return;
+  const badge = btn.querySelector('.notification-count');
+  if (!badge) return;
+  const unread = notifications.filter(n => n.unread).length;
+  if (unread > 0) { badge.hidden = false; badge.textContent = unread > 99 ? '99+' : String(unread); }
+  else            { badge.hidden = true;  badge.textContent = '0'; }
+}
+
+function showNotificationToast(entry) {
+  const stack = document.getElementById('notification-toast-stack');
+  if (!stack) return;
+  const card = document.createElement('div');
+  card.className = 'notif-toast';
+  card.dataset.id = entry.id;
+  const title = document.createElement('div');
+  title.className = 'notif-title';
+  title.textContent = entry.title;
+  card.appendChild(title);
+  if (entry.body) {
+    const body = document.createElement('div');
+    body.className = 'notif-body';
+    body.textContent = entry.body;
+    card.appendChild(body);
+  }
+  if (entry.requiresApproval) {
+    const actions = document.createElement('div');
+    actions.className = 'notif-actions';
+    const yes = document.createElement('button');
+    yes.className = 'notif-primary'; yes.textContent = 'Approve';
+    yes.addEventListener('click', () => { resolveApproval(entry, true);  removeToast(card); });
+    const no = document.createElement('button');
+    no.textContent = 'Dismiss';
+    no.addEventListener('click', () => { resolveApproval(entry, false); removeToast(card); });
+    actions.append(yes, no);
+    card.appendChild(actions);
+  }
+  card.addEventListener('click', () => { if (!entry.requiresApproval) removeToast(card); });
+  stack.appendChild(card);
+  // Auto-dismiss informational toasts; approval-required toasts stay
+  // until the user clicks Approve / Dismiss.
+  if (!entry.requiresApproval) {
+    setTimeout(() => removeToast(card), TOAST_AUTO_MS_DEFAULT);
+  }
+}
+function removeToast(card) {
+  if (!card || card.classList.contains('leaving')) return;
+  card.classList.add('leaving');
+  setTimeout(() => card.remove(), 220);
+}
+
+function resolveApproval(entry, approved) {
+  // Mark the entry as resolved + non-actionable so the menu shows the
+  // outcome rather than the buttons.
+  const i = notifications.findIndex(n => n.id === entry.id);
+  if (i >= 0) {
+    notifications[i] = {
+      ...notifications[i],
+      requiresApproval: false,
+      unread: false,
+      title: `${notifications[i].title} — ${approved ? 'Approved' : 'Dismissed'}`,
+    };
+    saveNotifs();
+    paintNotificationBadge();
+    if (!document.getElementById('notification-menu').hidden) repaintNotificationMenu();
+  }
+  // POST follow-up to the server once that endpoint exists.
+}
+
+function repaintNotificationMenu() {
+  const list = document.getElementById('notification-menu-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (notifications.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'notification-empty';
+    empty.textContent = 'No notifications.';
+    list.appendChild(empty);
+    return;
+  }
+  for (const n of notifications) {
+    const row = document.createElement('div');
+    row.className = 'notification-entry';
+    row.dataset.id = n.id;
+    const title = document.createElement('div');
+    title.className = 'notif-title';
+    title.textContent = n.title;
+    const body  = document.createElement('div');
+    body.className = 'notif-body';
+    body.textContent = n.body;
+    const time  = document.createElement('div');
+    time.className = 'notif-time';
+    time.textContent = formatBubbleTime(n.at) || '';
+    row.append(title, body, time);
+    if (n.requiresApproval) {
+      const actions = document.createElement('div');
+      actions.className = 'notif-actions';
+      const yes = document.createElement('button');
+      yes.className = 'notif-primary'; yes.textContent = 'Approve';
+      yes.addEventListener('click', () => resolveApproval(n, true));
+      const no  = document.createElement('button');
+      no.textContent = 'Dismiss';
+      no.addEventListener('click', () => resolveApproval(n, false));
+      actions.append(yes, no);
+      row.appendChild(actions);
+    }
+    list.appendChild(row);
+  }
+}
+
+let notificationsOpen = false;
+function openNotificationMenu() {
+  if (notificationsOpen) return;
+  const btn  = document.getElementById('notification-btn');
+  const menu = document.getElementById('notification-menu');
+  if (!btn || !menu) return;
+  notificationsOpen = true;
+  menu.hidden = false;
+  // Anchor the menu just above the bell icon. Re-measured every open
+  // so it tracks the icon's actual position.
+  const r = btn.getBoundingClientRect();
+  const w = menu.offsetWidth || 420;
+  menu.style.right  = `${Math.max(8, window.innerWidth - r.right)}px`;
+  menu.style.bottom = `${window.innerHeight - r.top + 8}px`;
+  repaintNotificationMenu();
+  // Mark everything as read on open.
+  notifications.forEach(n => { n.unread = false; });
+  saveNotifs();
+  paintNotificationBadge();
+}
+function closeNotificationMenu() {
+  notificationsOpen = false;
+  const menu = document.getElementById('notification-menu');
+  if (menu) menu.hidden = true;
+}
+function toggleNotificationMenu() {
+  if (notificationsOpen) closeNotificationMenu(); else openNotificationMenu();
+}
+function clearAllNotifications() {
+  notifications = [];
+  saveNotifs();
+  paintNotificationBadge();
+  repaintNotificationMenu();
+}
+
+document.getElementById('notification-btn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleNotificationMenu();
+});
+document.getElementById('notification-btn')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault(); e.stopPropagation();
+    toggleNotificationMenu();
+  } else if (e.key === 'Escape' && notificationsOpen) {
+    e.preventDefault(); e.stopPropagation();
+    closeNotificationMenu();
+  }
+});
+document.getElementById('notification-clear')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  clearAllNotifications();
+});
+// Click outside the menu closes it. Wait for the next click after open.
+document.addEventListener('click', (e) => {
+  if (!notificationsOpen) return;
+  const menu = document.getElementById('notification-menu');
+  const btn  = document.getElementById('notification-btn');
+  if (menu && !menu.contains(e.target) && btn && !btn.contains(e.target)) closeNotificationMenu();
+});
+window.addEventListener('keydown', (e) => {
+  if (notificationsOpen && e.key === 'Escape') {
+    e.preventDefault(); closeNotificationMenu();
+  }
+}, true);
+
+// Paint the badge on load.
+paintNotificationBadge();
+
 /* ---------- L0 / shared helpers ---------- */
 /* Option+arrows on L0: slide through projects in a carousel. The "+ New"
  * tile is the last stop in the cycle and pops to a centered "Create
