@@ -263,7 +263,55 @@ kbd {
   justify-content: flex-start;
   align-items: center;
 }
-.settings-pane[data-tab="git"] #settings-git-interval { max-width: 140px; }
+.settings-pane[data-tab="git"] #settings-git-interval { max-width: 80px; text-align: center; }
+
+.stepper {
+  display: inline-flex; align-items: center; gap: 0;
+  width: max-content;
+}
+.stepper-btn {
+  appearance: none;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: var(--fg);
+  width: var(--steam-input-h);
+  height: var(--steam-input-h);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: inherit;
+  font-weight: 400;
+  transition: background 120ms, border-color 120ms;
+  flex: 0 0 auto;
+}
+.stepper-btn:first-child {
+  border-radius: var(--steam-radius) 0 0 var(--steam-radius);
+}
+.stepper-btn:last-child {
+  border-radius: 0 var(--steam-radius) var(--steam-radius) 0;
+}
+.stepper-btn:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.36);
+}
+.stepper-btn:focus,
+.stepper-btn:focus-visible {
+  outline: 2px solid var(--focus, #ffffff);
+  outline-offset: 2px;
+  z-index: 1;
+}
+.stepper #settings-git-interval {
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+}
+/* Hide the native number input arrows so we own the increment UX. */
+.stepper input[type="number"] { -moz-appearance: textfield; }
+.stepper input[type="number"]::-webkit-outer-spin-button,
+.stepper input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
 
 .settings-field--row {
   flex-direction: row; align-items: center; justify-content: flex-start;

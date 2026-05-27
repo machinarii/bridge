@@ -100,7 +100,11 @@
         </label>
         <label class="settings-field">
           <span>Interval (minutes)</span>
-          <input type="number" min="1" max="120" step="1" id="settings-git-interval" />
+          <div class="stepper">
+            <button type="button" class="stepper-btn" id="settings-git-interval-dec" aria-label="Decrease">−</button>
+            <input type="number" min="1" max="120" step="1" id="settings-git-interval" />
+            <button type="button" class="stepper-btn" id="settings-git-interval-inc" aria-label="Increase">+</button>
+          </div>
         </label>
         <small class="settings-meta">A per-project git repo is created under <code>app/state/&lt;projectId&gt;</code>. Major state changes commit immediately; the interval commits anything missed.</small>
       </section>
