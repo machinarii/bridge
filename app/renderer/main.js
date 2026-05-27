@@ -2461,6 +2461,15 @@ function paintGitState() {
   settingsGitStateEl.dataset.on = String(on);
 }
 settingsGitEnabledEl?.addEventListener('change', paintGitState);
+
+function stepGitInterval(delta) {
+  if (!settingsGitIntervalEl) return;
+  const cur = Number(settingsGitIntervalEl.value) || 5;
+  const next = Math.max(1, Math.min(120, cur + delta));
+  settingsGitIntervalEl.value = String(next);
+}
+document.getElementById('settings-git-interval-dec')?.addEventListener('click', () => stepGitInterval(-1));
+document.getElementById('settings-git-interval-inc')?.addEventListener('click', () => stepGitInterval(+1));
 const settingsSaveEl      = document.getElementById('settings-save');
 const settingsCancelEl    = document.getElementById('settings-cancel');
 const settingsTabEls      = [...document.querySelectorAll('.settings-tab')];
