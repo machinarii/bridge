@@ -885,13 +885,13 @@ body[data-mode="zoom"] #surface {
 .agent-view .bubble .bubble-content {
   display: block;
 }
-/* Action row hangs OUTSIDE the bubble, always to its right. For
- * right-aligned (user) bubbles the bubble itself slides left on
- * focus so the actions are visible inside the chat-scroll. */
+/* Action group hangs OUTSIDE the bubble, always to its right.
+ * Layout: timestamp on top, [retry edit] row below. */
 .agent-view .bubble .bubble-actions {
   display: none;
+  flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   position: absolute;
   top: 50%;
   left: 100%;
@@ -903,6 +903,11 @@ body[data-mode="zoom"] #surface {
 }
 .agent-view .bubble.focused .bubble-actions {
   display: inline-flex;
+}
+.agent-view .bubble .bubble-action-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 .agent-view .bubble.user.focused {
   /* Slide left just enough to clear the action row hanging off the
