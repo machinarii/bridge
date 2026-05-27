@@ -1073,7 +1073,7 @@ function renderNewProjectName() {
     <div class="role-confirm-row">
       <button type="button" class="role-cancel role-back" id="capture-back">Back</button>
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
-      <button type="button" class="role-confirm" id="capture-done">Create project</button>
+      <button type="button" class="role-confirm" id="capture-done">Continue</button>
     </div>`;
   surfaceEl.appendChild(t);
   const tryCancelNameCapture = () => {
