@@ -1013,9 +1013,9 @@ function animateMicBars() {
   _micLoudness = _micLoudness * 0.78 + raw * 0.22;
 
   const t = performance.now() / 1000;
-  const SPEED = 4.5;                                // radians / sec
-  const BASE_AMP = 5;                                // baseline ripple (px)
-  const LOUD_AMP = 32;                               // extra amplitude when loud (px)
+  const SPEED = 2.5;                                 // radians / sec — gentle
+  const BASE_AMP = 1.5;                              // baseline ripple (px) — subtle
+  const LOUD_AMP = 34;                               // extra amplitude when loud (px)
   const MID = 22;                                    // bar centerline (px)
   const PHASE_STEP = (Math.PI * 2) / bars.length;    // wave traverses the row
   const amp = BASE_AMP + LOUD_AMP * _micLoudness;
