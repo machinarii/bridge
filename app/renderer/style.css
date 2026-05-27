@@ -1124,7 +1124,7 @@ body[data-mode="zoom"] #surface {
   color: var(--fg);
   border-radius: var(--steam-radius);
   min-height: var(--steam-button-h);
-  min-width: 140px;
+  min-width: 210px;
   padding: 0.6rem 1.6rem;
   cursor: pointer;
   font-family: inherit;
