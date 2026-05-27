@@ -1975,13 +1975,86 @@ function commitEditBubble() {
 editBubbleCancelEl?.addEventListener('click', () => closeEditBubbleModal());
 editBubbleSaveEl?.addEventListener('click', () => commitEditBubble());
 editBubbleDictateEl?.addEventListener('click', () => startPTT());
+/* Focusables inside the edit-bubble modal, in visual order. Same
+ * keyboard / d-pad model as the settings modal. */
+function editBubbleFocusables() {
+  const items = [];
+  if (editBubbleTextEl)    items.push(editBubbleTextEl);
+  if (editBubbleDictateEl) items.push(editBubbleDictateEl);
+  if (editBubbleCancelEl)  items.push(editBubbleCancelEl);
+  if (editBubbleSaveEl)    items.push(editBubbleSaveEl);
+  return items;
+}
+function stepEditBubbleFocus(delta) {
+  const items = editBubbleFocusables();
+  if (items.length === 0) return;
+  const i = items.indexOf(document.activeElement);
+  const next = (i < 0 ? 0 : (i + delta + items.length) % items.length);
+  items[next].focus();
+}
+
 editBubbleModalEl?.addEventListener('keydown', (e) => {
   if (!editBubbleOpen) return;
-  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeEditBubbleModal(); return; }
+  const active = document.activeElement;
+  const inTextarea = active === editBubbleTextEl;
+
+  if (e.key === 'Escape') {
+    e.preventDefault(); e.stopPropagation(); closeEditBubbleModal();
+    return;
+  }
+  // Cmd/Ctrl+Enter from anywhere commits.
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
     e.preventDefault(); e.stopPropagation(); commitEditBubble();
+    return;
+  }
+  // Enter on a button activates that button; the textarea passes
+  // bare Enter through so the user can type newlines normally.
+  if (e.key === 'Enter' && !inTextarea && active && active.tagName === 'BUTTON') {
+    e.preventDefault(); e.stopPropagation(); active.click();
+    return;
+  }
+  // Down / Right / Up / Left walks the focus list. Inside the
+  // textarea, only let arrow keys move focus when the cursor is
+  // at the corresponding edge — otherwise let the textarea handle
+  // them as cursor movement.
+  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+    if (inTextarea) {
+      const atEnd = editBubbleTextEl.selectionStart === editBubbleTextEl.value.length;
+      if (e.key === 'ArrowDown' && !atEnd) return; // let textarea move cursor
+      if (e.key === 'ArrowRight' && !atEnd) return;
+    }
+    e.preventDefault(); e.stopPropagation();
+    stepEditBubbleFocus(+1);
+    return;
+  }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+    if (inTextarea) {
+      const atStart = editBubbleTextEl.selectionStart === 0;
+      if (e.key === 'ArrowUp' && !atStart) return;
+      if (e.key === 'ArrowLeft' && !atStart) return;
+    }
+    e.preventDefault(); e.stopPropagation();
+    stepEditBubbleFocus(-1);
+    return;
   }
 });
+
+/* Gamepad inside the edit-bubble modal. Mirrors the settings modal
+ * gamepad model. */
+function handleEditBubbleGamepad(button) {
+  const active = document.activeElement;
+  if (button === 'circle') { closeEditBubbleModal(); return; }
+  if (button === 'cross') {
+    if (active === editBubbleCancelEl) { closeEditBubbleModal(); return; }
+    if (active === editBubbleSaveEl)   { commitEditBubble();    return; }
+    if (active && active.tagName === 'BUTTON') { active.click(); return; }
+    // Default cross when textarea is focused: commit.
+    commitEditBubble();
+    return;
+  }
+  if (button === 'up' || button === 'left')   { stepEditBubbleFocus(-1); return; }
+  if (button === 'down' || button === 'right') { stepEditBubbleFocus(+1); return; }
+}
 
 function _setL2Shortcuts() {
   setShortcuts([
@@ -3133,6 +3206,11 @@ gp.addEventListener('press', (e) => {
   // Settings modal takes over gamepad while open.
   if (settingsOpen) {
     handleSettingsGamepad(b);
+    return;
+  }
+  // Edit-bubble modal takes over while open.
+  if (editBubbleOpen) {
+    handleEditBubbleGamepad(b);
     return;
   }
 
