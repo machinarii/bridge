@@ -466,12 +466,18 @@ let agentStatus = {}; // { [agentId]: 'idle'|'drafting'|'analyzing'|'waiting' }
 const VERB_LABELS = { idle: 'Idle', drafting: 'Drafting', analyzing: 'Analyzing', waiting: 'Waiting' };
 function verbLabel(v) { return VERB_LABELS[v] || 'Idle'; }
 
-/* v2 — in-project activity feed: events received from the SSE channel
- * scoped to activeProject. Capped to a sliding window so we don't
- * grow unbounded. */
-const ACTIVITY_LIMIT = 200;
-let projectActivity = []; // [{ at, projectId, kind: 'activity'|'delegate', text, agentId? }]
+/* v2 — activity feed buffer. Holds events across ALL projects so
+ * both the L0 cross-project feed (§2) and the L1/L2 in-project feed
+ * (§3) can read from the same source. Per-project filtering happens
+ * at render time. */
+const ACTIVITY_LIMIT = 400;
+let allActivity = []; // [{ at, projectId, kind: 'activity'|'delegate', text, agentId? }]
 let activityDrawerOpen = false;
+/* projectActivity stays as a view alias of allActivity for compat
+ * with code paths that may reference it. */
+function projectActivityForId(pid) {
+  return pid ? allActivity.filter(e => e.projectId === pid) : allActivity.slice();
+}
 let inflightController = null;
 let pttActive = false;
 
@@ -629,6 +635,8 @@ function updatePickerShortcuts() {
   setShortcuts([
     { gamepad: 'r2', keyboard: 'V', label: `Hold to talk`,
       action: () => talkToFocusedLead() },
+    {                keyboard: 'A', label: 'Activity',
+      action: () => toggleActivityDrawer() },
   ]);
 }
 
@@ -2329,9 +2337,9 @@ function handleBridgeEvent(ev) {
     // can hook in without touching the subscriber wiring.
     case 'activity':
     case 'delegate': {
-      // Keep only events for the active project; rest is discarded.
-      // (Once the cross-project feed in §2 lands we'll branch.)
-      if (!activeProject || ev.projectId !== activeProject.id) break;
+      // Capture every event into the global buffer. The L1/L2 feed
+      // filters by activeProject at render time; the L0 cross-project
+      // feed shows everything.
       pushActivityEntry(ev);
       break;
     }
@@ -2377,19 +2385,32 @@ function pushActivityEntry(ev) {
     entry.text = ev.summary || '';
     entry.agentId = ev.agentId;
   } else if (ev.type === 'delegate') {
-    const from = agentNameFromId(ev.fromAgentId);
-    const to   = agentNameFromId(ev.toAgentId);
+    const from = agentNameForProjectAgent(ev.projectId, ev.fromAgentId);
+    const to   = agentNameForProjectAgent(ev.projectId, ev.toAgentId);
     const task = (ev.task || '').slice(0, 140);
     entry.text = `${from} → ${to}${task ? ': ' + task : ''}`;
     entry.fromAgentId = ev.fromAgentId;
     entry.toAgentId = ev.toAgentId;
   }
   if (!entry.text) return;
-  projectActivity.unshift(entry);
-  if (projectActivity.length > ACTIVITY_LIMIT) projectActivity.length = ACTIVITY_LIMIT;
+  allActivity.unshift(entry);
+  if (allActivity.length > ACTIVITY_LIMIT) allActivity.length = ACTIVITY_LIMIT;
   if (activityDrawerOpen) repaintActivityList();
 }
 
+/* Resolve an agent's display name across projects. For the L1/L2
+ * feed activeProject covers it; for the L0 cross-project feed we
+ * may need a different project's roster. */
+function agentNameForProjectAgent(projectId, agentId) {
+  if (!agentId) return '';
+  if (activeProject && activeProject.id === projectId) {
+    const a = activeProject.agents.find(x => x.id === agentId);
+    if (a) return a.name;
+  }
+  const p = projects.find(x => x.id === projectId);
+  const a = p?.agents?.find(x => x.id === agentId);
+  return a?.name || agentId;
+}
 function agentNameFromId(agentId) {
   if (!activeProject || !agentId) return agentId || '';
   const a = activeProject.agents.find(x => x.id === agentId);
@@ -2397,8 +2418,11 @@ function agentNameFromId(agentId) {
 }
 
 function toggleActivityDrawer() {
-  if (mode === MODE_PROJECTS || mode === MODE_NEW_PROJ_ROLES) return;
-  if (!activeProject) return;
+  // Allowed at L0 (cross-project feed) and inside a project (L1/L2 /
+  // add-agent). Disabled during the new-project create flow.
+  if (mode === MODE_NEW_PROJ_ROLES ||
+      mode === MODE_NEW_PROJ_NAME ||
+      mode === MODE_NEW_PROJ_GOAL) return;
   if (activityDrawerOpen) { closeActivityDrawer(); return; }
   openActivityDrawer();
 }
@@ -2412,6 +2436,9 @@ function openActivityDrawer() {
   // Mutually exclusive with the other left drawers.
   if (fileExplorerOpen) closeFileExplorer();
   if (skillsDrawerOpen) closeSkillsDrawer();
+  // Update the header to reflect the scope (project vs cross-project).
+  const headerEl = el.querySelector('header span');
+  if (headerEl) headerEl.textContent = activeProject ? 'Activity' : 'Activity · all projects';
   repaintActivityList();
 }
 function closeActivityDrawer() {
@@ -2425,24 +2452,76 @@ function repaintActivityList() {
   const list = document.querySelector('#activity-drawer .activity-list');
   if (!list) return;
   list.innerHTML = '';
-  if (projectActivity.length === 0) {
+  // On L0 (cross-project), show entries from every project with a
+  // project-name crumb prefix; otherwise filter to the active project.
+  const entries = activeProject
+    ? projectActivityForId(activeProject.id)
+    : allActivity.slice();
+  if (entries.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'activity-empty';
-    empty.textContent = 'No team activity yet.';
+    empty.textContent = activeProject
+      ? 'No team activity yet.'
+      : 'No activity across any project yet.';
     list.appendChild(empty);
     return;
   }
-  for (const entry of projectActivity) {
+  for (const entry of entries) {
     const row = document.createElement('div');
     row.className = `activity-entry activity-${entry.kind}`;
+    row.tabIndex = 0;
+    row.dataset.projectId = entry.projectId || '';
+    if (!activeProject) {
+      // Open the project (and the agent, if known) on click / Enter
+      // when this entry is selected from the cross-project feed.
+      const open = () => openProjectFromActivityEntry(entry);
+      row.addEventListener('click', open);
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); open(); }
+      });
+    }
     const line = document.createElement('div');
     line.className = 'activity-line';
-    line.textContent = entry.text;
+    if (!activeProject) {
+      const projName = projects.find(p => p.id === entry.projectId)?.name || '';
+      if (projName) {
+        const crumb = document.createElement('span');
+        crumb.className = 'activity-project';
+        crumb.textContent = projName;
+        line.appendChild(crumb);
+        line.appendChild(document.createTextNode(' · '));
+      }
+    }
+    line.appendChild(document.createTextNode(entry.text));
     const meta = document.createElement('div');
     meta.className = 'activity-meta';
     meta.textContent = formatBubbleTime(entry.at) || '';
     row.append(line, meta);
     list.appendChild(row);
+  }
+}
+
+/* Cross-project feed entry → open the target project. If the entry
+ * names an agent, drill into L2 as well. */
+async function openProjectFromActivityEntry(entry) {
+  const idx = projects.findIndex(p => p.id === entry.projectId);
+  if (idx < 0) return;
+  closeActivityDrawer();
+  // Focus the matching project tile and open it via the same morph
+  // path a click does.
+  pickerIndex = idx;
+  ring.index = idx;
+  ring.paint();
+  await openFocused();
+  // Once at L1, if the event named an agent, also enter L2.
+  if (entry.agentId && activeProject) {
+    const aIdx = activeProject.agents.findIndex(a => a.id === entry.agentId);
+    if (aIdx >= 0) {
+      gridIndex = aIdx;
+      ring.set(surfaceEl.querySelectorAll('.agent-tile'));
+      ring.index = aIdx;
+      await enterZoom();
+    }
   }
 }
 
@@ -2834,9 +2913,9 @@ async function exitToProjects() {
   if (fileExplorerOpen) closeFileExplorer();
   if (skillsDrawerOpen) closeSkillsDrawer();
   if (activityDrawerOpen) closeActivityDrawer();
-  // Reset the in-project activity feed so we don't leak entries from
-  // one project into the next.
-  projectActivity = [];
+  // allActivity is intentionally NOT cleared — the L0 cross-project
+  // feed accumulates across projects. Per-project filtering at render
+  // time keeps L1/L2 scoped to the active project.
   const fromProjectId = activeProject?.id;
   popZoomRect(); // discard stale cached rect; we'll compute fresh
   await backZoomWithSnapshot(
@@ -3803,7 +3882,8 @@ window.addEventListener('keydown', (e) => {
     }
   }
   if (e.key === 'a' || e.key === 'A') {
-    if (mode === MODE_GRID || mode === MODE_ZOOM || mode === MODE_ADD_AGENT) {
+    if (mode === MODE_GRID || mode === MODE_ZOOM ||
+        mode === MODE_ADD_AGENT || mode === MODE_PROJECTS) {
       e.preventDefault();
       toggleActivityDrawer();
       return;
