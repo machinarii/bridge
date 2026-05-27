@@ -1284,15 +1284,20 @@ body[data-mode="zoom"] #surface {
 }
 
 /* Invisible bottom row holding the Cancel + Confirm buttons.
- * No chrome of its own — buttons are the only visible elements. */
+ * No chrome of its own — buttons are the only visible elements.
+ * Cancel / Back stay on the LEFT, primary (Continue / Create
+ * project) on the RIGHT via auto margin on .role-confirm. */
 .role-confirm-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
   gap: 0.75rem;
   flex: 0 0 auto;
   background: transparent;
   border: none;
+}
+.role-confirm-row .role-confirm {
+  margin-left: auto;
 }
 .role-cancel {
   appearance: none;
