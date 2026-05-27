@@ -1126,7 +1126,7 @@ body[data-mode="zoom"] #surface {
   height: 0.6rem;
   border-right: 2.5px solid #0b0f14;
   border-bottom: 2.5px solid #0b0f14;
-  transform: rotate(45deg) translate(-3px, -3px);
+  transform: rotate(45deg) translate(-3px, -1px);
 }
 
 /* ===== Capture tile (name + goal steps) ===== */
