@@ -1103,7 +1103,7 @@ function renderNewProjectGoal() {
   const t = document.createElement('section');
   t.className = 'capture-tile';
   t.innerHTML = `
-    <h2>What's your objective?</h2>
+    <h2>What's the objective?</h2>
     <div class="capture-value ${newProjGoal ? 'has-value' : ''}">${captureValueInner(newProjGoal)}</div>
     <div class="role-confirm-row">
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
