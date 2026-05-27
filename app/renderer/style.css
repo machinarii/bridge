@@ -243,7 +243,25 @@ kbd {
   overflow-y: auto;
   padding-right: 4px;
 }
-.settings-pane[data-tab="git"] .settings-field { width: 100%; align-items: flex-start; }
+/* Git tab — force every direct + descendant element to align to the
+ * left of the pane regardless of any inherited centering. */
+.settings-pane[data-tab="git"] {
+  align-items: flex-start;
+  text-align: left;
+}
+.settings-pane[data-tab="git"] > * {
+  align-self: flex-start;
+  text-align: left;
+  width: 100%;
+}
+.settings-pane[data-tab="git"] .settings-field {
+  align-items: flex-start;
+  text-align: left;
+}
+.settings-pane[data-tab="git"] .settings-field--row {
+  justify-content: flex-start;
+  align-items: center;
+}
 .settings-pane[data-tab="git"] #settings-git-interval { max-width: 140px; }
 
 .settings-field--row {
