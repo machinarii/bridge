@@ -237,12 +237,13 @@ kbd {
 .settings-pane[hidden] { display: none !important; }
 .settings-pane {
   display: flex; flex-direction: column; gap: 1rem;
-  align-items: flex-start;
+  align-items: stretch;
   /* Lock pane height so the modal doesn't jump between tabs. */
   height: 50vh; min-height: 360px; max-height: 60vh;
   overflow-y: auto;
   padding-right: 4px;
 }
+.settings-pane .settings-field { width: 100%; }
 /* Git tab — force every direct + descendant element to align to the
  * left of the pane regardless of any inherited centering. */
 .settings-pane[data-tab="git"] {
