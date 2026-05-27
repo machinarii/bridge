@@ -844,6 +844,7 @@ body[data-mode="zoom"] #surface {
  * first child. */
 #action-bar > * + * { margin-left: 0.5rem; }
 #action-bar .action {
+  margin-left: 0;
   display: inline-flex; align-items: center; gap: 0.4rem;
   padding: 0.25rem 0.6rem;
   background: transparent;
