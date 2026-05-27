@@ -448,6 +448,7 @@ const MODE_NEW_PROJ_NAME    = 'new_project_name';  // create-flow step 2
 const MODE_NEW_PROJ_GOAL    = 'new_project_goal';  // create-flow step 3
 const MODE_GRID             = 'grid';              // L1 (project grid)
 const MODE_ZOOM             = 'zoom';              // L2 (agent zoom)
+const MODE_ADD_AGENT        = 'add_agent';         // L1 → add-agent role picker
 
 let mode = MODE_PROJECTS;
 let projects = [];                // [{ id, name, agents, ... }]
@@ -984,14 +985,12 @@ function renderGrid() {
   updateGridShortcuts();
 }
 
-/* ---------- Add-agent modal ---------- */
-const addAgentModalEl  = document.getElementById('add-agent-modal');
-const addAgentRolesEl  = document.getElementById('add-agent-roles');
-const addAgentCancelEl = document.getElementById('add-agent-cancel');
-const addAgentConfirmEl= document.getElementById('add-agent-confirm');
-let addAgentOpen = false;
-let addAgentSelectedRole = null;
-let addAgentAvailable = [];
+/* ---------- Add-agent role picker (full-screen, multi-select) ----------
+ * Reuses the .role-grid / .role-tile / .role-toggle visual treatment
+ * from the create-project flow. PM is excluded since the project
+ * already has one. Selected roles are POSTed sequentially to
+ * /projects/:pid/agents on Done. */
+let addAgentSelected = new Set(); // role ids checked in this session
 
 async function openAddAgentPicker() {
   if (!activeProject) return;
@@ -1002,91 +1001,106 @@ async function openAddAgentPicker() {
     } catch { window._roles = []; }
   }
   const usedRoles = new Set(activeProject.agents.map(a => a.role));
-  addAgentAvailable = (window._roles || []).filter(r => !usedRoles.has(r.id));
-  if (addAgentAvailable.length === 0) {
+  const available = (window._roles || []).filter(r => !usedRoles.has(r.id));
+  if (available.length === 0) {
     setIndicator('error', 'No roles left to add');
     setTimeout(() => setIndicator('idle', 'Connected'), 1500);
     return;
   }
-  addAgentSelectedRole = addAgentAvailable[0].id;
-  paintAddAgentRoles();
-  addAgentModalEl.hidden = false;
-  addAgentOpen = true;
-  setTimeout(() => addAgentRolesEl.querySelector('.role-tile')?.focus(), 0);
-}
+  mode = MODE_ADD_AGENT;
+  document.body.dataset.mode = mode;
+  addAgentSelected = new Set();
+  setBreadcrumbs([
+    { label: 'Projects' },
+    { label: activeProject.name },
+    { label: 'Add agent' },
+  ]);
+  surfaceEl.innerHTML = '';
 
-function paintAddAgentRoles() {
-  addAgentRolesEl.innerHTML = '';
-  for (const role of addAgentAvailable) {
-    const tile = document.createElement('div');
-    tile.className = 'role-tile';
-    tile.tabIndex = 0;
-    tile.dataset.roleId = role.id;
-    if (role.id === addAgentSelectedRole) tile.classList.add('focused');
-    tile.innerHTML = `
+  // Heading + close X (consistent with L1 / L2).
+  const heading = document.createElement('header');
+  heading.className = 'project-heading';
+  heading.innerHTML = `
+    <h2 class="project-title">Add agent</h2>
+    <p class="project-goal">Pick one or more roles to add.</p>`;
+  surfaceEl.appendChild(heading);
+  surfaceEl.appendChild(createSurfaceCloseButton(() => renderGrid()));
+
+  const roles = [...available].sort((a, b) => a.label.localeCompare(b.label));
+
+  const wrap = document.createElement('section');
+  wrap.className = 'role-picker';
+  const grid = document.createElement('div');
+  grid.className = 'role-grid';
+
+  const tileEls = [];
+  for (const role of roles) {
+    const sample = role.namePool?.[0] || '';
+    const t = document.createElement('div');
+    t.className = 'role-tile';
+    t.dataset.roleId = role.id;
+    t.style.setProperty('--tile-color', role.color);
+    t.innerHTML = `
       <div class="role-label">${escapeHtml(role.label)}</div>
-      <div class="role-sample">${escapeHtml(role.namePool?.[0] || '')}</div>`;
-    tile.addEventListener('click', () => {
-      addAgentSelectedRole = role.id;
-      paintAddAgentRoles();
-    });
-    tile.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault(); e.stopPropagation();
-        addAgentSelectedRole = role.id;
-        confirmAddAgent();
-      }
-    });
-    addAgentRolesEl.appendChild(tile);
+      <div class="role-sample">${escapeHtml(sample)}</div>
+      <div class="role-toggle" data-checked="false"></div>`;
+    t.addEventListener('click', () => { ring.moveTo(el => el === t); toggleFocusedAddAgentRole(); });
+    grid.appendChild(t);
+    tileEls.push(t);
   }
+  wrap.appendChild(grid);
+  surfaceEl.appendChild(wrap);
+
+  ring.set(tileEls);
+  ring.index = 0;
+  ring.paint();
+
+  renderActionBar([]);
+  setShortcuts([
+    { gamepad: 'cross',  keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedAddAgentRole() },
+    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',   action: () => renderGrid() },
+  ]);
+  setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Done',
+                       action: () => commitAddAgentSelections() });
 }
 
-function closeAddAgentPicker() {
-  addAgentModalEl.hidden = true;
-  addAgentOpen = false;
+function toggleFocusedAddAgentRole() {
+  const cur = ring.current();
+  if (!cur) return;
+  const id = cur.dataset.roleId;
+  if (!id) return;
+  if (addAgentSelected.has(id)) addAgentSelected.delete(id);
+  else addAgentSelected.add(id);
+  const toggle = cur.querySelector('.role-toggle');
+  if (toggle) toggle.dataset.checked = String(addAgentSelected.has(id));
 }
 
-async function confirmAddAgent() {
-  if (!addAgentSelectedRole || !activeProject) { closeAddAgentPicker(); return; }
+async function commitAddAgentSelections() {
+  if (!activeProject || addAgentSelected.size === 0) { renderGrid(); return; }
   const pid = activeProject.id;
-  try {
-    const r = await fetch(`/projects/${pid}/agents`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roleId: addAgentSelectedRole }),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    const updated = await r.json();
-    // Refresh local project state and re-render the grid.
+  setIndicator('thinking', `Adding ${addAgentSelected.size} agent${addAgentSelected.size > 1 ? 's' : ''}…`);
+  let updated = null;
+  for (const roleId of addAgentSelected) {
+    try {
+      const r = await fetch(`/projects/${pid}/agents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roleId }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      updated = await r.json();
+    } catch (err) {
+      console.error(`[add-agent] failed for ${roleId}`, err);
+    }
+  }
+  if (updated) {
     const i = projects.findIndex(p => p.id === pid);
     if (i >= 0) projects[i] = updated;
     activeProject = withLeadFirst(updated);
-    closeAddAgentPicker();
-    renderGrid();
-  } catch (err) {
-    console.error('[add-agent] failed', err);
-    setIndicator('error', 'Add agent failed');
-    setTimeout(() => setIndicator('idle', 'Connected'), 2000);
   }
+  setIndicator('idle', 'Connected');
+  renderGrid();
 }
-
-addAgentCancelEl?.addEventListener('click', () => closeAddAgentPicker());
-addAgentConfirmEl?.addEventListener('click', () => confirmAddAgent());
-addAgentModalEl?.addEventListener('keydown', (e) => {
-  if (!addAgentOpen) return;
-  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeAddAgentPicker(); return; }
-  const tiles = [...addAgentRolesEl.querySelectorAll('.role-tile')];
-  const active = document.activeElement;
-  const idx = tiles.indexOf(active);
-  const dirMap = { ArrowLeft: -1, ArrowRight: +1, ArrowUp: -3, ArrowDown: +3 };
-  if (e.key in dirMap && idx >= 0) {
-    e.preventDefault(); e.stopPropagation();
-    const next = Math.max(0, Math.min(tiles.length - 1, idx + dirMap[e.key]));
-    addAgentSelectedRole = tiles[next].dataset.roleId;
-    paintAddAgentRoles();
-    addAgentRolesEl.querySelectorAll('.role-tile')[next]?.focus();
-  }
-});
 
 /** L1 shortcuts depend on which agent is focused — the lead can't be
  *  disabled, so "Agent on / off" disappears when the lead is selected. */
@@ -2000,6 +2014,14 @@ gp.addEventListener('press', (e) => {
     else if (b === 'circle')     renderProjects();
     return;
   }
+  if (mode === MODE_ADD_AGENT) {
+    if (b === 'up' || b === 'down' || b === 'left' || b === 'right') {
+      roleGridMove(b);
+    } else if (b === 'cross')    toggleFocusedAddAgentRole();
+    else if (b === 'triangle')   commitAddAgentSelections();
+    else if (b === 'circle')     renderGrid();
+    return;
+  }
   if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
     if (b === 'cross')   confirmCapture();
     else if (b === 'circle') goBackInCreateFlow();
@@ -2150,7 +2172,7 @@ async function ensureRolesList() {
 }
 
 async function openSettings() {
-  if (settingsOpen || addAgentOpen) return;
+  if (settingsOpen) return;
   settingsOpen = true;
   settingsModalEl.hidden = false;
   selectSettingsTab('general');
@@ -2367,7 +2389,7 @@ settingsCancelEl?.addEventListener('click', () => closeSettings());
 window.addEventListener('keydown', (e) => {
   // Settings modal owns the keyboard while it's open — let its own
   // handler take care of Esc / Tab / arrows / Enter.
-  if (settingsOpen || addAgentOpen) return;
+  if (settingsOpen) return;
 
   if (document.activeElement === typedInput) {
     if (e.key === 'Enter') {
@@ -2481,6 +2503,11 @@ window.addEventListener('keydown', (e) => {
     else if (e.code === 'Space')  { e.preventDefault(); toggleFocusedRole(); }
     else if (e.key === 'Enter')   { e.preventDefault(); advanceFromRolePicker(); }
     else if (e.key === 'Escape')  { e.preventDefault(); renderProjects(); }
+  } else if (mode === MODE_ADD_AGENT) {
+    if (dir) { e.preventDefault(); roleGridMove(dir); }
+    else if (e.code === 'Space')  { e.preventDefault(); toggleFocusedAddAgentRole(); }
+    else if (e.key === 'Enter')   { e.preventDefault(); commitAddAgentSelections(); }
+    else if (e.key === 'Escape')  { e.preventDefault(); renderGrid(); }
   } else if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
     if (e.key === 'ArrowDown') { e.preventDefault(); enterShortcuts(); return; }
     if (e.key === 'Enter')        { e.preventDefault(); confirmCapture(); }
