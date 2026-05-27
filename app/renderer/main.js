@@ -1001,6 +1001,8 @@ async function openAddAgentPicker() {
     } catch { window._roles = []; }
   }
   const usedRoles = new Set(activeProject.agents.map(a => a.role));
+  // Every role is shown. Existing agents are pre-checked and locked
+  // (cannot be removed from this screen).
   const available = (window._roles || []).filter(r => !usedRoles.has(r.id));
   if (available.length === 0) {
     setIndicator('error', 'No roles left to add');
@@ -1026,7 +1028,14 @@ async function openAddAgentPicker() {
   surfaceEl.appendChild(heading);
   surfaceEl.appendChild(createSurfaceCloseButton(() => renderGrid()));
 
-  const roles = [...available].sort((a, b) => a.label.localeCompare(b.label));
+  // Locked (already on project) first, alphabetized; then the rest,
+  // also alphabetized. Focus lands on the first togglable tile.
+  const allRoles = window._roles || [];
+  const locked = allRoles.filter(r => usedRoles.has(r.id))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const open = allRoles.filter(r => !usedRoles.has(r.id))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const roles = [...locked, ...open];
 
   const wrap = document.createElement('section');
   wrap.className = 'role-picker';
@@ -1034,25 +1043,32 @@ async function openAddAgentPicker() {
   grid.className = 'role-grid';
 
   const tileEls = [];
+  let firstOpenTile = null;
   for (const role of roles) {
     const sample = role.namePool?.[0] || '';
+    const isLocked = usedRoles.has(role.id);
     const t = document.createElement('div');
     t.className = 'role-tile';
     t.dataset.roleId = role.id;
+    if (isLocked) t.dataset.locked = 'true';
     t.style.setProperty('--tile-color', role.color);
     t.innerHTML = `
       <div class="role-label">${escapeHtml(role.label)}</div>
       <div class="role-sample">${escapeHtml(sample)}</div>
-      <div class="role-toggle" data-checked="false"></div>`;
+      <div class="role-toggle" data-checked="${isLocked ? 'true' : 'false'}" ${isLocked ? 'data-locked="true"' : ''}></div>`;
     t.addEventListener('click', () => { ring.moveTo(el => el === t); toggleFocusedAddAgentRole(); });
     grid.appendChild(t);
     tileEls.push(t);
+    if (!firstOpenTile && !isLocked) firstOpenTile = t;
   }
   wrap.appendChild(grid);
   surfaceEl.appendChild(wrap);
 
   ring.set(tileEls);
-  ring.index = 0;
+  // Land focus on the first togglable role; if every role is already
+  // on the project (rare — PM lock plus full team), fall through to 0.
+  const startIdx = firstOpenTile ? tileEls.indexOf(firstOpenTile) : 0;
+  ring.index = startIdx >= 0 ? startIdx : 0;
   ring.paint();
 
   renderActionBar([]);
@@ -1067,6 +1083,7 @@ async function openAddAgentPicker() {
 function toggleFocusedAddAgentRole() {
   const cur = ring.current();
   if (!cur) return;
+  if (cur.dataset.locked === 'true') return; // locked roles cannot be un-checked
   const id = cur.dataset.roleId;
   if (!id) return;
   if (addAgentSelected.has(id)) addAgentSelected.delete(id);
