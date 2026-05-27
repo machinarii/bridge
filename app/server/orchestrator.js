@@ -46,7 +46,18 @@ There are four intent kinds:
 
 3. answer — anything else. Output:
    { "intent": "answer", "template": "reader", "context": "Answer", "title": "<short>",
-     "body": "<concise spoken-friendly answer>",
+     "body": "<concise spoken-friendly answer; markdown OK — bullets, tables, code blocks, **bold**, *italic*, \`inline code\`, > quotes, links — supported>",
+     "actions_taken": [
+       /* OPTIONAL. Include only when you actually performed operations on the user's behalf.
+          Each entry is one of:
+          { "kind": "created",  "label": "<file or thing>" }
+          { "kind": "edited",   "count": <int>, "items": ["<file1>", "<file2>"] }   // or "label" for a single edit
+          { "kind": "deleted",  "label": "<file>" }
+          { "kind": "ran",      "label": "<command or task>", "result": "<short summary>" }
+          { "kind": "read",     "label": "<file>" }
+          { "kind": "searched", "label": "<query>" }
+          Omit the field entirely when nothing material happened. */
+     ],
      "actions": [{ "verb": "Back", "glyph": "circle", "action": { "type": "cancel" } }] }
 
 4. delegate — only when the task is plainly outside your role and would be better handled by a specific teammate (e.g. engineer wanting QA to write tests, PM punting code questions to engineer). Use sparingly. Output:

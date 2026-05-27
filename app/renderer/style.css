@@ -902,6 +902,167 @@ body[data-mode="zoom"] #surface {
 .agent-view .bubble .bubble-content {
   display: block;
 }
+/* ===== v2 markdown rendering in agent bubbles ===== */
+.agent-view .bubble.agent .bubble-content > *:first-child { margin-top: 0; }
+.agent-view .bubble.agent .bubble-content > *:last-child  { margin-bottom: 0; }
+.agent-view .bubble.agent .bubble-content p { margin: 0 0 0.6em; line-height: 1.5; }
+.agent-view .bubble.agent .bubble-content h1,
+.agent-view .bubble.agent .bubble-content h2,
+.agent-view .bubble.agent .bubble-content h3,
+.agent-view .bubble.agent .bubble-content h4 {
+  margin: 0.8em 0 0.35em; font-weight: 500; line-height: 1.25;
+}
+.agent-view .bubble.agent .bubble-content h2 { font-size: 1.15em; }
+.agent-view .bubble.agent .bubble-content h3 { font-size: 1.05em; }
+.agent-view .bubble.agent .bubble-content ul,
+.agent-view .bubble.agent .bubble-content ol {
+  margin: 0.3em 0 0.6em;
+  padding-left: 1.4em;
+  line-height: 1.5;
+}
+.agent-view .bubble.agent .bubble-content li { margin: 0.15em 0; }
+.agent-view .bubble.agent .bubble-content blockquote {
+  margin: 0.4em 0;
+  padding: 0.25em 0.75em;
+  border-left: 3px solid rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.85);
+}
+.agent-view .bubble.agent .bubble-content a {
+  color: var(--accent, #6ea8ff);
+  text-decoration: underline;
+}
+.agent-view .bubble.agent .bubble-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: rgba(255,255,255,0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.agent-view .bubble.agent .bubble-content .md-code {
+  position: relative;
+  margin: 0.6em 0;
+  background: rgba(0,0,0,0.32);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.agent-view .bubble.agent .bubble-content .md-code pre {
+  margin: 0;
+  padding: 0.75em 0.9em;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  line-height: 1.45;
+}
+.agent-view .bubble.agent .bubble-content .md-code code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+.agent-view .bubble.agent .bubble-content .md-code-copy {
+  appearance: none;
+  position: absolute;
+  top: 6px; right: 6px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: var(--fg);
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  opacity: 0; transition: opacity 120ms;
+}
+.agent-view .bubble.agent .bubble-content .md-code:hover .md-code-copy { opacity: 1; }
+.agent-view .bubble.agent .bubble-content .md-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: 0.95em;
+}
+.agent-view .bubble.agent .bubble-content .md-table th,
+.agent-view .bubble.agent .bubble-content .md-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  text-align: left;
+  vertical-align: top;
+}
+.agent-view .bubble.agent .bubble-content .md-table th {
+  font-weight: 500;
+  border-bottom-color: rgba(255,255,255,0.22);
+}
+
+/* ===== v2 action cards (Claude-Code-style summaries) ===== */
+.agent-view .bubble.agent .bubble-actions-taken {
+  display: flex; flex-direction: column;
+  gap: 6px;
+  margin-bottom: 0.6em;
+}
+.agent-view .bubble.agent .action-card {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  font-size: 0.95em;
+}
+.agent-view .bubble.agent .action-card.collapsible { cursor: pointer; }
+.agent-view .bubble.agent .action-card .action-glyph {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  font-weight: 600;
+  background: rgba(255,255,255,0.08);
+  color: var(--fg);
+}
+.agent-view .bubble.agent .action-card.action-created  .action-glyph { color: #9cf2c1; }
+.agent-view .bubble.agent .action-card.action-edited   .action-glyph { color: #ffb86b; }
+.agent-view .bubble.agent .action-card.action-deleted  .action-glyph { color: #ff7b86; }
+.agent-view .bubble.agent .action-card.action-ran      .action-glyph { color: #c08bff; }
+.agent-view .bubble.agent .action-card.action-read     .action-glyph { color: #6ea8ff; }
+.agent-view .bubble.agent .action-card.action-searched .action-glyph { color: #ffd35a; }
+.agent-view .bubble.agent .action-card .action-text {
+  display: inline-flex; flex-wrap: wrap; align-items: baseline;
+  gap: 0.4rem;
+  color: var(--fg);
+}
+.agent-view .bubble.agent .action-card .action-text strong { font-weight: 500; }
+.agent-view .bubble.agent .action-card .action-meta { color: var(--fg-dim); font-size: 0.92em; }
+.agent-view .bubble.agent .action-card .action-label,
+.agent-view .bubble.agent .action-card .action-result {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  color: var(--fg);
+  background: rgba(255,255,255,0.06);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.agent-view .bubble.agent .action-card .action-expand {
+  color: var(--fg-dim);
+  font-size: 0.85em;
+  transition: transform 160ms;
+}
+.agent-view .bubble.agent .action-card.expanded .action-expand { transform: rotate(180deg); }
+.agent-view .bubble.agent .action-card .action-items {
+  grid-column: 1 / -1;
+  list-style: none;
+  margin: 0.5em 0 0;
+  padding: 0;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+}
+.agent-view .bubble.agent .action-card.expanded .action-items { display: flex; }
+.agent-view .bubble.agent .action-card .action-items li {
+  margin: 0; font-size: 0.92em;
+}
+.agent-view .bubble.agent .action-card .action-items code {
+  background: transparent;
+  padding: 0;
+}
 /* Action group hangs OUTSIDE the bubble, always to its right.
  * Layout: timestamp on top, [retry edit] row below. */
 .agent-view .bubble .bubble-actions {
