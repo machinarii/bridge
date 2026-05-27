@@ -1055,6 +1055,10 @@ function renderNewProjectName() {
   t.querySelector('#capture-done')?.addEventListener('click', () => confirmCapture());
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelNameCapture));
   startMicVisualizer();
+  // Auto-start speech recognition so the user can just speak. Partial
+  // transcripts populate .mic-live-text in real time; the 'end' event
+  // commits the value.
+  setTimeout(() => startPTT(), 80);
   renderActionBar([
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
   ]);
@@ -1087,6 +1091,7 @@ function renderNewProjectGoal() {
   t.querySelector('#capture-done')?.addEventListener('click', () => confirmCapture());
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelGoalCapture));
   startMicVisualizer();
+  setTimeout(() => startPTT(), 80);
   renderActionBar([
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
   ]);
