@@ -863,10 +863,13 @@ body[data-mode="zoom"] #surface {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* 0.5rem all sides to match the L0/L1 grids, plus extra
-   * padding-right so the scrollbar lives in its own gutter and
-   * doesn't graze the bubbles. */
-  padding: 0.5rem 1.75rem 0.5rem 0.5rem;
+  /* Same 0.5rem on all sides as before. The right padding of 1.5rem
+   * carves a gutter for the scrollbar; the matching -1.25rem margin
+   * extends the chat-scroll past its old right edge so bubbles stay
+   * in their original position relative to the surface — the
+   * scrollbar slides outward instead of pushing the bubbles in. */
+  padding: 0.5rem 1.5rem 0.5rem 0.5rem;
+  margin-right: -1.25rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
