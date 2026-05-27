@@ -108,6 +108,11 @@
             <option value="" disabled>Loading models…</option>
           </select>
         </label>
+        <label class="settings-field">
+          <span>Local STT URL <small style="opacity:0.6">(Parakeet, Whisper, …)</small></span>
+          <input type="text" id="settings-stt-url" placeholder="http://localhost:8123/transcribe" autocomplete="off" />
+          <small class="settings-meta">Leave blank to use the browser's built-in speech recognition.</small>
+        </label>
       </section>
 
       <section class="settings-pane" data-tab="models" hidden>
