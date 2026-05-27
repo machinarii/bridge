@@ -2230,11 +2230,32 @@ async function executeAction(action, sourceSpec) {
 
 /* ---------- PTT + intent submission ---------- */
 const PTT_MODES = new Set([MODE_PROJECTS, MODE_ZOOM, MODE_GRID, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL]);
+
+/* If LOCAL_STT_URL is configured on the server, mic capture goes
+ * through MediaRecorder and POSTs to /transcribe. Otherwise we fall
+ * back to the browser's SpeechRecognition (Google Cloud STT in
+ * Chrome, Apple in Safari). */
+let localSttUrl = '';
+let localRecorder = null;
+let localRecChunks = [];
+
+(async function _initLocalStt() {
+  try {
+    const r = await fetch('/settings');
+    if (r.ok) { const s = await r.json(); localSttUrl = s.LOCAL_STT_URL || ''; }
+  } catch {}
+})();
+
 function startPTT() {
   if (pttActive) return;
   if (!editBubbleOpen && !PTT_MODES.has(mode)) return;
   pttActive = true;
   stopSpeaking();
+  if (localSttUrl) {
+    // Local STT path — MediaRecorder → /transcribe proxy → text.
+    startLocalRecording();
+    return;
+  }
   if (!speech.supported) {
     setIndicator('error', 'Speech not supported — press / to type');
     typedWrap.hidden = false;
@@ -2249,7 +2270,73 @@ function startPTT() {
 function endPTT() {
   if (!pttActive) return;
   pttActive = false;
+  if (localRecorder) { stopLocalRecording(); return; }
   if (speech.supported) speech.stop();
+}
+
+async function startLocalRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus' : 'audio/webm';
+    localRecorder = new MediaRecorder(stream, { mimeType: mime });
+    localRecChunks = [];
+    localRecorder.ondataavailable = (e) => { if (e.data?.size) localRecChunks.push(e.data); };
+    localRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(localRecChunks, { type: mime });
+      localRecorder = null;
+      localRecChunks = [];
+      await postLocalTranscript(blob);
+    };
+    localRecorder.start();
+    setIndicator('listening', 'Listening…');
+  } catch (err) {
+    pttActive = false;
+    setIndicator('error', `Mic: ${err.message}`);
+    setTimeout(() => setIndicator('idle', 'Connected'), 2000);
+  }
+}
+
+function stopLocalRecording() {
+  try { localRecorder?.stop(); } catch {}
+}
+
+async function postLocalTranscript(blob) {
+  setIndicator('thinking', 'Transcribing…');
+  try {
+    const r = await fetch('/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': blob.type || 'audio/webm' },
+      body: blob,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setIndicator('error', data?.error || `Transcribe ${r.status}`);
+      setTimeout(() => setIndicator('idle', 'Connected'), 2000);
+      return;
+    }
+    const text = (data?.text || '').trim();
+    setIndicator('idle', 'Connected');
+    if (!text) { setIndicator('idle', 'No speech detected'); setTimeout(() => setIndicator('idle', 'Connected'), 1500); return; }
+    // Hand off to the same routes Speech 'end' uses so the rest of
+    // the app behaves identically to the browser-STT flow.
+    dispatchTranscript(text);
+  } catch (err) {
+    setIndicator('error', `Transcribe failed: ${err.message}`);
+    setTimeout(() => setIndicator('idle', 'Connected'), 2000);
+  }
+}
+
+/* Same logic as the Speech 'end' listener — extracted so both paths
+ * route the final transcript through one handler. */
+function dispatchTranscript(text) {
+  if (editBubbleOpen) { editBubbleTextEl.value = text; return; }
+  if (mode === MODE_NEW_PROJ_NAME) { newProjName = text; renderNewProjectName(); return; }
+  if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = text; renderNewProjectGoal(); return; }
+  if (mode === MODE_ZOOM) { submitIntent(text); return; }
+  if (mode === MODE_GRID) { submitTeamIntent(text); return; }
+  if (mode === MODE_PROJECTS) { dispatchHomeUtterance(text); return; }
 }
 
 speech.addEventListener('partial', (e) => {
@@ -3552,6 +3639,7 @@ const settingsMcpListEl   = document.getElementById('settings-mcp-list');
 const settingsMcpAddEl    = document.getElementById('settings-mcp-add');
 const settingsGitEnabledEl= document.getElementById('settings-git-enabled');
 const settingsGitIntervalEl = document.getElementById('settings-git-interval');
+const settingsSttUrlEl    = document.getElementById('settings-stt-url');
 const settingsGitStateEl   = document.getElementById('settings-git-state');
 
 function paintGitState() {
@@ -3710,6 +3798,9 @@ async function openSettings() {
   populateMcpList(s.MCP_PLUGINS || []);
   settingsGitEnabledEl.checked = !!s.GIT_AUTOSAVE;
   settingsGitIntervalEl.value = Number(s.GIT_AUTOSAVE_INTERVAL_MIN || 5);
+  if (settingsSttUrlEl) settingsSttUrlEl.value = s.LOCAL_STT_URL || '';
+  // Keep the local STT cache in sync with the server.
+  localSttUrl = s.LOCAL_STT_URL || '';
   paintGitState();
   // Land focus on the first tab so the user can immediately navigate
   // with arrows / d-pad.
@@ -3881,6 +3972,11 @@ async function saveSettings() {
   updates.MCP_PLUGINS = settingsMcpEntries;
   updates.GIT_AUTOSAVE = !!settingsGitEnabledEl.checked;
   updates.GIT_AUTOSAVE_INTERVAL_MIN = Math.max(1, Math.min(120, Number(settingsGitIntervalEl.value) || 5));
+  if (settingsSttUrlEl) {
+    const url = settingsSttUrlEl.value.trim();
+    updates.LOCAL_STT_URL = url;
+    localSttUrl = url;
+  }
 
   try {
     const r = await fetch('/settings', {

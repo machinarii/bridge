@@ -77,6 +77,7 @@ const SETTINGS_KEYS = [
   'MCP_PLUGINS',                // JSON: [{ id, name, enabled }]
   'GIT_AUTOSAVE',               // "on" | "off"
   'GIT_AUTOSAVE_INTERVAL_MIN',  // integer
+  'LOCAL_STT_URL',              // e.g. http://localhost:8123/transcribe
 ];
 
 function maskKey(s) {
@@ -118,7 +119,32 @@ app.get('/settings', (_req, res) => {
     MCP_PLUGINS: parseJsonEnv('MCP_PLUGINS', []),
     GIT_AUTOSAVE: (process.env.GIT_AUTOSAVE || 'off') === 'on',
     GIT_AUTOSAVE_INTERVAL_MIN: Number(process.env.GIT_AUTOSAVE_INTERVAL_MIN || 5),
+    LOCAL_STT_URL: process.env.LOCAL_STT_URL || '',
   });
+});
+
+/* Proxy mic audio to the local Parakeet (or whichever) STT server
+ * configured in LOCAL_STT_URL. The renderer captures via
+ * MediaRecorder and POSTs a webm/opus blob; we forward it as
+ * multipart/form-data and return the recognized text. */
+app.post('/transcribe', express.raw({ type: '*/*', limit: '25mb' }), async (req, res) => {
+  const target = process.env.LOCAL_STT_URL;
+  if (!target) return res.status(400).json({ error: 'LOCAL_STT_URL not set' });
+  try {
+    // FormData is available globally on Node ≥ 18.
+    const fd = new FormData();
+    const ct = req.headers['content-type'] || 'application/octet-stream';
+    fd.append('file', new Blob([req.body], { type: ct }), 'audio');
+    const t0 = Date.now();
+    const r = await fetch(target, { method: 'POST', body: fd });
+    const text = await r.text();
+    if (!r.ok) return res.status(502).json({ error: `upstream ${r.status}: ${text.slice(0, 200)}` });
+    let payload;
+    try { payload = JSON.parse(text); } catch { payload = { text }; }
+    res.json({ ...payload, latencyMs: Date.now() - t0 });
+  } catch (err) {
+    res.status(502).json({ error: String(err?.message || err) });
+  }
 });
 
 let _modelsCache = null;
