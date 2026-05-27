@@ -1705,6 +1705,42 @@ function buildActionCards(actions) {
   return wrap;
 }
 
+/* v2 §4 — render a delegation handoff as a distinct centered bubble.
+ * Payload (stored as JSON in m.content) looks like:
+ *   { kind: 'handoff', from, to, fromRole?, toRole?, task }
+ * Anything else (legacy system turns) renders as plain text. */
+function renderHandoffBubble(m, idx) {
+  let payload = null;
+  try {
+    payload = JSON.parse(String(m.content || '').trim());
+    if (payload?.kind !== 'handoff') payload = null;
+  } catch { payload = null; }
+
+  const el = document.createElement('div');
+  el.className = 'bubble system handoff';
+  el.dataset.idx = String(idx);
+  el.dataset.role = 'system';
+
+  if (payload) {
+    const arrow = document.createElement('div');
+    arrow.className = 'handoff-line';
+    arrow.innerHTML =
+      `<span class="handoff-from">${escapeHtml(payload.from || '')}</span>` +
+      `<span class="handoff-arrow" aria-hidden="true">→</span>` +
+      `<span class="handoff-to">${escapeHtml(payload.to || '')}</span>`;
+    el.appendChild(arrow);
+    if (payload.task) {
+      const task = document.createElement('div');
+      task.className = 'handoff-task';
+      task.textContent = payload.task;
+      el.appendChild(task);
+    }
+  } else {
+    el.textContent = String(m.content || '');
+  }
+  return el;
+}
+
 async function renderChatHistory(container, agent) {
   container.innerHTML = '';
   chatBubbles = [];
@@ -1716,6 +1752,15 @@ async function renderChatHistory(container, agent) {
     const { messages } = await r.json();
     chatMessages = messages || [];
     messages.forEach((m, i) => {
+      // v2 §4: a 'system' turn carrying a JSON handoff payload renders
+      // as a distinct neutral bubble between agent / user bubbles.
+      // Handoff bubbles are read-only (not focusable, not in the
+      // keyboard nav ring) — they're context, not actions.
+      if (m.role === 'system') {
+        const handoffEl = renderHandoffBubble(m, i);
+        if (handoffEl) container.appendChild(handoffEl);
+        return;
+      }
       const isUser = m.role === 'user';
       const bubble = document.createElement('div');
       bubble.className = `bubble ${isUser ? 'user' : 'agent'}`;

@@ -160,6 +160,19 @@ export async function runTeamVoice({ projectId, text }) {
         task: newTask,
       });
       emitDelegate(projectId, asg.agentId, target.id, newTask);
+      // v2 §4: leave a "handoff" system turn in both agents' chat
+      // histories so the delegation shows up as a distinct bubble at
+      // L2 on either side of the chain.
+      const handoff = JSON.stringify({
+        kind: 'handoff',
+        from: fromAgent?.name || asg.agentId,
+        to:   target.name || target.id,
+        fromRole: getRole(fromAgent?.role)?.label || '',
+        toRole:   getRole(target.role)?.label || '',
+        task: newTask,
+      });
+      appendTurn(asg.agentId, 'system', handoff);
+      appendTurn(target.id,    'system', handoff);
       const nextAsg = {
         agentId: target.id,
         task: newTask,
