@@ -1638,7 +1638,15 @@ function focusBubble(i) {
 function focusFirstBubble()    { return focusBubble(0); }
 function focusLastBubble()     { return focusBubble(chatBubbles.length - 1); }
 function moveBubbleFocus(d)    { return focusBubble(chatBubbleIdx + d); }
-function isBubbleFocused()     { return chatBubbleIdx >= 0 && document.activeElement?.classList?.contains('bubble'); }
+function isBubbleFocused() {
+  // True while either the bubble itself OR one of its action icons
+  // (.bubble-action) holds focus — both states should keep the bubble
+  // keyboard handler in charge of arrow navigation.
+  if (chatBubbleIdx < 0) return false;
+  const a = document.activeElement;
+  if (!a) return false;
+  return a.classList?.contains('bubble') || a.classList?.contains('bubble-action');
+}
 function leaveBubbleFocus()    { chatBubbleIdx = -1; paintBubbleFocus(); }
 
 async function retryBubble(i) {
