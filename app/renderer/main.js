@@ -932,9 +932,35 @@ function goBackInCreateFlow() {
   else { stopMicVisualizer(); renderProjects(); }
 }
 
-function confirmCapture() {
+const NAME_LIMIT = 40;
+async function confirmCapture() {
   if (mode === MODE_NEW_PROJ_NAME) {
-    if (!newProjName.trim()) { setIndicator('error', 'Speak or type a name'); return; }
+    const raw = newProjName.trim();
+    if (!raw) { setIndicator('error', 'Speak or type a name'); return; }
+    if (raw.length > NAME_LIMIT) {
+      // Over the 40-char limit — ask the server to rewrite the name
+      // (LLM-backed; falls back to truncate on failure).
+      setIndicator('thinking', 'Shortening name…');
+      try {
+        const r = await fetch('/projects/shorten-name', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: raw }),
+        });
+        if (r.ok) {
+          const data = await r.json();
+          if (data?.name) newProjName = data.name;
+          else newProjName = raw.slice(0, NAME_LIMIT).trim();
+        } else {
+          newProjName = raw.slice(0, NAME_LIMIT).trim();
+        }
+      } catch {
+        newProjName = raw.slice(0, NAME_LIMIT).trim();
+      }
+      setIndicator('idle', 'Connected');
+    } else {
+      newProjName = raw;
+    }
     renderNewProjectGoal();
   } else if (mode === MODE_NEW_PROJ_GOAL) {
     if (!newProjGoal.trim()) { setIndicator('error', 'Speak or type a goal'); return; }

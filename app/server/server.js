@@ -156,6 +156,57 @@ app.get('/projects/:pid', (req, res) => {
   res.json(p);
 });
 
+/* Shortens a project name to <= 40 characters via OpenRouter. Falls
+ * back to a hard truncate if the API key is missing or the request
+ * fails for any reason. */
+const NAME_LIMIT = 40;
+async function shortenViaLLM(name) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey || apiKey.includes('replace-me')) {
+    return { name: name.slice(0, NAME_LIMIT).trim(), shortened: false, reason: 'no_key' };
+  }
+  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.7';
+  const prompt =
+    `Rewrite this project name so it is ${NAME_LIMIT} characters or fewer ` +
+    `while preserving its meaning. Output only the rewritten name — ` +
+    `no quotes, no commentary, no trailing punctuation.\n\n` +
+    `Name: ${name}`;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15_000);
+  try {
+    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'http://localhost/bridge',
+        'X-Title': 'Bridge — shorten name',
+      },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
+      signal: ctrl.signal,
+    });
+    if (!r.ok) throw new Error(`upstream ${r.status}`);
+    const data = await r.json();
+    const raw = String(data?.choices?.[0]?.message?.content || '').trim();
+    const cleaned = raw.replace(/^["'`]+|["'`]+$/g, '').trim();
+    const final = (cleaned.length && cleaned.length <= NAME_LIMIT)
+      ? cleaned
+      : cleaned.slice(0, NAME_LIMIT).trim();
+    return { name: final, shortened: true };
+  } catch (err) {
+    return { name: name.slice(0, NAME_LIMIT).trim(), shortened: false, reason: String(err.message || err) };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+app.post('/projects/shorten-name', async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'name required' });
+  if (name.length <= NAME_LIMIT) return res.json({ name, shortened: false });
+  res.json(await shortenViaLLM(name));
+});
+
 app.post('/projects', async (req, res) => {
   try {
     const { name, goal, roleIds } = req.body || {};
