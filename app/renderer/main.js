@@ -2486,7 +2486,7 @@ function openNotificationMenu() {
   const r = btn.getBoundingClientRect();
   const w = menu.offsetWidth || 420;
   menu.style.right  = `${Math.max(8, window.innerWidth - r.right)}px`;
-  menu.style.bottom = `${window.innerHeight - r.top + 8}px`;
+  menu.style.bottom = `${window.innerHeight - r.top + 14}px`;
   repaintNotificationMenu();
   // Mark everything as read on open.
   notifications.forEach(n => { n.unread = false; });

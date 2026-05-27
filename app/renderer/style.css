@@ -168,7 +168,7 @@ kbd {
 #notification-menu[hidden] { display: none !important; }
 #notification-menu {
   position: fixed;
-  bottom: calc(60px + 16px); /* footer height + gap; refined by JS */
+  bottom: calc(60px + 22px); /* footer height + 22px gap; refined by JS */
   right: calc(32px + 36px + 0.6rem); /* baseplate + gear width + gap; refined by JS */
   width: min(420px, 92vw);
   max-height: 60vh;
