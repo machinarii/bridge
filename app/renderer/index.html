@@ -93,10 +93,12 @@
       </section>
 
       <section class="settings-pane" data-tab="git" hidden>
-        <label class="settings-field settings-field--row">
+        <label class="settings-field">
           <span>Auto-save project state to git</span>
-          <input type="checkbox" id="settings-git-enabled" />
-          <span class="settings-git-state" id="settings-git-state">Disabled</span>
+          <div class="git-toggle">
+            <input type="checkbox" id="settings-git-enabled" />
+            <span class="settings-git-state" id="settings-git-state">Disabled</span>
+          </div>
         </label>
         <label class="settings-field">
           <span>Interval (minutes)</span>
