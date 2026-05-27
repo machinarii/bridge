@@ -11,6 +11,7 @@ import { getRole } from './roles.js';
 import { interpretIntent } from './orchestrator.js';
 import { appendTurn, getContext } from './scratchpad.js';
 import { getModelForRole, getDefaultModel } from './models.js';
+import { emitStatus, emitActivity, emitDelegate } from './events.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const FANOUT_CAP = 5;
@@ -112,6 +113,8 @@ export async function runTeamVoice({ projectId, text }) {
     `If no one applies, return assignments:[] and put your direct answer in summary_intent.`;
 
   appendTurn(lead.id, 'user', `[team-voice] ${text}`);
+  emitStatus(projectId, lead.id, 'analyzing');
+  emitActivity(projectId, `${lead.name}: routing "${text.slice(0, 60)}"`, lead.id);
   const routingRaw = await callOpenRouterJSON({ apiKey, model: leadModel, prompt: routingPrompt, timeoutMs: ROUTING_TIMEOUT_MS });
   const routing = parseRoutingOutput(routingRaw);
   const { kept, dropped } = applyCostCap(routing.assignments, FANOUT_CAP);
@@ -156,6 +159,7 @@ export async function runTeamVoice({ projectId, text }) {
         toAgentId: target.id, toRole: target.role,
         task: newTask,
       });
+      emitDelegate(projectId, asg.agentId, target.id, newTask);
       const nextAsg = {
         agentId: target.id,
         task: newTask,
@@ -187,6 +191,7 @@ export async function runTeamVoice({ projectId, text }) {
     `Compose a single response to the user that synthesizes their work. 1-3 sentences, spoken-friendly. ` +
     `Output the standard answer tile-spec JSON: ` +
     `{"intent":"answer","template":"reader","context":"Team","title":"<short>","body":"<text>","actions":[{"verb":"Back","glyph":"circle","action":{"type":"cancel"}}]}`;
+  emitStatus(projectId, lead.id, 'drafting');
   const synthRaw = await callOpenRouterJSON({ apiKey, model: leadModel, prompt: synthPrompt, timeoutMs: SYNTHESIS_TIMEOUT_MS });
   let summary;
   try { summary = JSON.parse(synthRaw.trim().replace(/^```(?:json)?/i,'').replace(/```$/, '')); }
@@ -199,6 +204,8 @@ export async function runTeamVoice({ projectId, text }) {
     };
   }
   appendTurn(lead.id, 'assistant', summary.body || '');
+  emitStatus(projectId, lead.id, 'idle');
+  emitActivity(projectId, `${lead.name}: ${summary.title || 'team voice complete'}`, lead.id);
 
   return { routing: { assignments: kept, summary_intent: routing.summary_intent, dropped: dropped.length },
            perAgent, delegations: delegationLog, summary };

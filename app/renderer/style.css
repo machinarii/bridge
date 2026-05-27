@@ -718,6 +718,23 @@ body[data-mode="zoom"] #surface {
 .agent-tile .status .dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--fg-dim);
+  transition: background 200ms, box-shadow 200ms;
+}
+/* Live verb states drive dot + label affordance. */
+.agent-tile[data-status="drafting"]  .status .dot {
+  background: var(--accent, #6ea8ff);
+  box-shadow: 0 0 8px 1px color-mix(in oklab, var(--accent, #6ea8ff) 80%, transparent);
+  animation: agentPulse 1.4s ease-in-out infinite;
+}
+.agent-tile[data-status="analyzing"] .status .dot {
+  background: color-mix(in oklab, var(--accent, #6ea8ff) 70%, transparent);
+}
+.agent-tile[data-status="waiting"]   .status .dot {
+  background: var(--warn, #ffb86b);
+}
+@keyframes agentPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
 }
 .agent-tile.add-agent {
   /* Quiet dashed tile, no per-project color wash. */

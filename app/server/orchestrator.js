@@ -4,6 +4,7 @@ import { getProject } from './projects.js';
 import { readProjectCharter } from './charters.js';
 import { getRole } from './roles.js';
 import { getModelForRole } from './models.js';
+import { emitStatus, emitActivity } from './events.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -66,8 +67,12 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom }) 
   const apiKey = process.env.OPENROUTER_API_KEY;
   appendTurn(agentId, 'user', text);
 
+  // v2 status: agent is reading context, evaluating inputs.
+  emitStatus(projectId, agentId, 'analyzing');
+
   if (!apiKey || apiKey.includes('replace-me')) {
     const spec = fallbackSpec(text, 'OPENROUTER_API_KEY missing — using local classifier.');
+    emitStatus(projectId, agentId, 'idle');
     return hydrateSpec(spec, { project, agent, text });
   }
   const model = getModelForRole(agent.role);
@@ -79,26 +84,33 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom }) 
     { role: 'user', content: text },
   ];
 
-  const resp = await fetch(OPENROUTER_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'http://localhost/aurora-bridge',
-      'X-Title': `Bridge - ${agent.name}`,
-    },
-    body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages }),
-  });
+  try {
+    // v2 status: producing tokens.
+    emitStatus(projectId, agentId, 'drafting');
+    const resp = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'http://localhost/aurora-bridge',
+        'X-Title': `Bridge - ${agent.name}`,
+      },
+      body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages }),
+    });
 
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`OpenRouter ${resp.status}: ${errText.slice(0, 200)}`);
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`OpenRouter ${resp.status}: ${errText.slice(0, 200)}`);
+    }
+    const data = await resp.json();
+    const raw = data?.choices?.[0]?.message?.content || '';
+    appendTurn(agentId, 'assistant', raw);
+    const spec = parseSpec(raw);
+    emitActivity(projectId, `${agent.name}: ${spec?.title || spec?.intent || 'replied'}`, agentId);
+    return hydrateSpec(spec, { project, agent, text });
+  } finally {
+    emitStatus(projectId, agentId, 'idle');
   }
-  const data = await resp.json();
-  const raw = data?.choices?.[0]?.message?.content || '';
-  appendTurn(agentId, 'assistant', raw);
-  const spec = parseSpec(raw);
-  return hydrateSpec(spec, { project, agent, text });
 }
 
 function parseSpec(raw) {

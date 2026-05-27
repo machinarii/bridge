@@ -12,6 +12,7 @@ import { runTeamVoice } from './team.js';
 import {
   notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
 } from './autosave.js';
+import { subscribe as subscribeEvents } from './events.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -34,6 +35,39 @@ app.use('/assets', express.static(ASSETS_DIR, { maxAge: '1d', immutable: true })
 app.use(express.static(RENDERER_DIR));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+/* ---------- v2 SSE event channel ----------
+ *
+ * GET /projects/:pid/events  → events for a single project
+ * GET /events                → events across all projects
+ *
+ * Renderers subscribe once on screen load. Each event lands as a
+ * single SSE message:
+ *
+ *   event: bridge
+ *   data: { "id": 17, "at": 1716700000000, "type": "status",
+ *           "projectId": "p_...", "agentId": "p_..__pm", "verb": "drafting" }
+ */
+function attachEventStream(req, res, projectId) {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders?.();
+  res.write(`event: bridge\ndata: ${JSON.stringify({ type: 'hello', at: Date.now() })}\n\n`);
+  const ping = setInterval(() => {
+    try { res.write(`: ping ${Date.now()}\n\n`); } catch { /* closed */ }
+  }, 25_000);
+  const unsubscribe = subscribeEvents(projectId, (ev) => {
+    try { res.write(`event: bridge\ndata: ${JSON.stringify(ev)}\n\n`); }
+    catch { /* dropped client */ }
+  });
+  req.on('close', () => { clearInterval(ping); unsubscribe(); });
+}
+app.get('/events',                   (req, res) => attachEventStream(req, res, null));
+app.get('/projects/:pid/events',     (req, res) => attachEventStream(req, res, req.params.pid));
 
 /* Read/write a small subset of .env. The key is returned masked. */
 const SETTINGS_KEYS = [
