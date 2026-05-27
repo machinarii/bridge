@@ -457,6 +457,11 @@ let activeProject = null;         // project record at L1/L2
 let zoomedIndex = 0;
 let gridIndex = 0;
 let agentBusy = {};
+/* v2 — last-known status verb per agent. Updated by the SSE
+ * subscriber; rendered into agent-tile .status on L1. */
+let agentStatus = {}; // { [agentId]: 'idle'|'drafting'|'analyzing'|'waiting' }
+const VERB_LABELS = { idle: 'Idle', drafting: 'Drafting', analyzing: 'Analyzing', waiting: 'Waiting' };
+function verbLabel(v) { return VERB_LABELS[v] || 'Idle'; }
 let inflightController = null;
 let pttActive = false;
 
@@ -1250,11 +1255,13 @@ function renderGrid() {
     if (a.id === activeProject.leadAgentId) tile.dataset.lead = 'true';
     tile.style.setProperty('--tile-color', projectColor);
     tile.dataset.agentId = a.id;
-    tile.dataset.busy = agentBusy[a.id] ? 'true' : 'false';
+    const verb = agentStatus[a.id] || (agentBusy[a.id] ? 'drafting' : 'idle');
+    tile.dataset.busy = (verb !== 'idle') ? 'true' : 'false';
+    tile.dataset.status = verb;
     tile.innerHTML = `
       <h2 class="name">${escapeHtml(a.name)}</h2>
       <div class="role">${escapeHtml(roleLabel(a.role))}</div>
-      <div class="status"><span class="dot"></span><span>${agentBusy[a.id] ? 'Thinking…' : 'Idle'}</span></div>`;
+      <div class="status"><span class="dot"></span><span class="status-verb">${verbLabel(verb)}</span></div>`;
     tile.addEventListener('click', () => { gridIndex = i; ring.set(tileEls); ring.index = i; ring.paint(); enterZoom(); });
     grid.appendChild(tile);
     return tile;
@@ -2085,6 +2092,66 @@ speech.addEventListener('error', (e) => {
   setIndicator('error', `Speech error: ${e.detail}`);
   setTimeout(() => setIndicator('idle', 'Connected'), 2000);
 });
+
+/* ---------- v2 SSE event subscriber ----------
+ * Single long-lived connection to GET /events. Every server-side
+ * event (status, activity, delegate, …) lands here; specific
+ * handlers update local state and the DOM. The connection
+ * auto-reconnects if the server restarts. */
+let _evtSource = null;
+function startEventStream() {
+  if (_evtSource) try { _evtSource.close(); } catch {}
+  try {
+    _evtSource = new EventSource('/events');
+    _evtSource.addEventListener('bridge', (e) => {
+      try { handleBridgeEvent(JSON.parse(e.data)); } catch {}
+    });
+    _evtSource.onerror = () => {
+      // EventSource reconnects automatically; just log noisily.
+      console.warn('[events] stream error — reconnecting');
+    };
+  } catch (err) {
+    console.warn('[events] failed to start stream:', err);
+  }
+}
+
+function handleBridgeEvent(ev) {
+  if (!ev || !ev.type) return;
+  switch (ev.type) {
+    case 'status': {
+      if (!ev.agentId) return;
+      agentStatus[ev.agentId] = ev.verb || 'idle';
+      agentBusy[ev.agentId] = (ev.verb && ev.verb !== 'idle');
+      paintAgentStatus(ev.agentId);
+      break;
+    }
+    // Other event types are unused at the moment but kept here so
+    // future features (activity feed, notifications, delegate lines)
+    // can hook in without touching the subscriber wiring.
+    case 'activity':
+    case 'delegate':
+    case 'notification':
+    case 'note_added':
+    case 'token':
+    case 'tool':
+    default:
+      break;
+  }
+}
+
+/* Live-update an individual agent tile's status label + busy state. */
+function paintAgentStatus(agentId) {
+  const tile = document.querySelector(`.agent-tile[data-agent-id="${agentId}"]`);
+  if (!tile) return;
+  const verb = agentStatus[agentId] || 'idle';
+  tile.dataset.status = verb;
+  tile.dataset.busy = (verb !== 'idle') ? 'true' : 'false';
+  const verbEl = tile.querySelector('.status .status-verb');
+  if (verbEl) verbEl.textContent = verbLabel(verb);
+}
+
+// Kick the SSE channel off once the renderer is ready.
+startEventStream();
 
 /* ---------- L0 / shared helpers ---------- */
 /* Option+arrows on L0: slide through projects in a carousel. The "+ New"
