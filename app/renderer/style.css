@@ -263,7 +263,7 @@ kbd {
 .git-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
   margin-top: 0.5rem;
 }
 .settings-pane[data-tab="git"] #settings-git-interval { max-width: 80px; text-align: center; }
