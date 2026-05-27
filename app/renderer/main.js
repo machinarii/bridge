@@ -1011,6 +1011,9 @@ async function openAddAgentPicker() {
   }
   mode = MODE_ADD_AGENT;
   document.body.dataset.mode = mode;
+  // Keep the project's color wash so the add-agent screen reads as
+  // "still inside this project."
+  document.documentElement.style.setProperty('--agent-color', getProjectColor(activeProject));
   addAgentSelected = new Set();
   setBreadcrumbs([
     { label: 'Projects' },

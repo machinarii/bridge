@@ -462,8 +462,11 @@ body[data-surface-close-focus="true"] #surface {
 }
 
 /* L1 surface carries the project's color as its backdrop (the tiles
- * inside are neutral). */
-body[data-mode="grid"] #surface {
+ * inside are neutral). The add-agent picker (which is reached from
+ * L1) keeps the same wash so the transition reads as "still inside
+ * this project" rather than a context switch. */
+body[data-mode="grid"] #surface,
+body[data-mode="add_agent"] #surface {
   background:
     radial-gradient(ellipse 120% 80% at 50% -10%,
       color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%,
