@@ -141,6 +141,29 @@ kbd {
     0 0 16px 2px rgba(255,255,255,0.25);
 }
 
+#edit-bubble-modal[hidden] { display: none !important; }
+#edit-bubble-modal {
+  position: fixed; inset: 0;
+  background: rgba(8,11,14,0.62);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+#edit-bubble-modal .settings-card { width: min(560px, 92vw); }
+#edit-bubble-text {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: var(--steam-radius);
+  padding: 0.75rem 1rem;
+  color: var(--fg);
+  font-size: var(--steam-body-fs);
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  min-height: 96px;
+}
+#edit-bubble-text:focus { border-color: var(--focus); }
+
 #settings-modal[hidden] { display: none !important; }
 #settings-modal {
   position: fixed; inset: 0;
@@ -707,6 +730,53 @@ body[data-mode="zoom"] #surface {
   line-height: 1.4;
   white-space: pre-wrap;
   word-wrap: break-word;
+  position: relative;
+  cursor: pointer;
+  outline: none;
+  transition: box-shadow 120ms;
+}
+.agent-view .bubble.focused {
+  box-shadow: 0 0 0 2px var(--focus, #ffffff), 0 0 16px 2px rgba(255,255,255,0.25);
+}
+.agent-view .bubble .bubble-content {
+  display: block;
+}
+.agent-view .bubble .bubble-actions {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.75);
+}
+.agent-view .bubble.focused .bubble-actions {
+  display: inline-flex;
+}
+.agent-view .bubble .bubble-time {
+  flex: 1 1 auto;
+  letter-spacing: 0.02em;
+}
+.agent-view .bubble .bubble-action {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.22);
+  color: inherit;
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 120ms, border-color 120ms;
+}
+.agent-view .bubble .bubble-action:hover,
+.agent-view .bubble .bubble-action:focus,
+.agent-view .bubble .bubble-action:focus-visible {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.45);
+  outline: 2px solid var(--focus, #ffffff);
+  outline-offset: 2px;
 }
 .agent-view .bubble.user {
   align-self: flex-end;

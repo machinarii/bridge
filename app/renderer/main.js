@@ -1295,32 +1295,176 @@ function renderZoom(specOverride) {
   _setL2Shortcuts();
 }
 
+/* Selectable chat bubbles: each prompt / response is a tabbable
+ * element with a hover-state action row (timestamp + retry + edit on
+ * user turns, timestamp on agent turns). chatBubbles holds the live
+ * NodeList for focus traversal. */
+let chatBubbles = [];      // DOM nodes in order
+let chatBubbleIdx = -1;    // -1 = not in chat
+let chatMessages = [];     // last-fetched message records
+
+function formatBubbleTime(at) {
+  if (!at) return '';
+  try {
+    const d = new Date(at);
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  } catch { return ''; }
+}
+
 async function renderChatHistory(container, agent) {
   container.innerHTML = '';
+  chatBubbles = [];
+  chatBubbleIdx = -1;
+  chatMessages = [];
   try {
     const r = await fetch(`/projects/${activeProject.id}/agents/${agent.id}/history`);
     if (!r.ok) return;
     const { messages } = await r.json();
-    for (const m of messages) {
+    chatMessages = messages || [];
+    messages.forEach((m, i) => {
+      const isUser = m.role === 'user';
       const bubble = document.createElement('div');
-      bubble.className = `bubble ${m.role === 'user' ? 'user' : 'agent'}`;
+      bubble.className = `bubble ${isUser ? 'user' : 'agent'}`;
+      bubble.dataset.idx = String(i);
+      bubble.dataset.role = m.role;
+      bubble.tabIndex = 0;
       let body = String(m.content || '').trim();
-      if (m.role === 'assistant') {
-        // The assistant turn is the raw spec JSON; extract its body.
+      if (!isUser) {
         try {
           const parsed = JSON.parse(body.replace(/^```(?:json)?/i,'').replace(/```$/, '').trim());
           if (parsed?.body) body = parsed.body;
           else if (parsed?.title) body = parsed.title;
         } catch { /* leave body as-is */ }
       }
-      bubble.textContent = body;
+      // Strip the "[team-voice] " prefix added by the team driver so the
+      // user sees the original prompt.
+      const promptText = body.replace(/^\[team-voice\]\s*/, '');
+
+      const content = document.createElement('div');
+      content.className = 'bubble-content';
+      content.textContent = promptText;
+      bubble.appendChild(content);
+
+      const actions = document.createElement('div');
+      actions.className = 'bubble-actions';
+      const time = document.createElement('span');
+      time.className = 'bubble-time';
+      time.textContent = formatBubbleTime(m.at);
+      actions.appendChild(time);
+
+      if (isUser) {
+        const retry = document.createElement('button');
+        retry.className = 'bubble-action retry';
+        retry.type = 'button';
+        retry.setAttribute('aria-label', 'Retry');
+        retry.title = 'Retry';
+        retry.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M4 12a8 8 0 1 0 2.34-5.66" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <polyline points="3 3 3 9 9 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+        retry.addEventListener('click', (e) => { e.stopPropagation(); retryBubble(i); });
+        actions.appendChild(retry);
+
+        const edit = document.createElement('button');
+        edit.className = 'bubble-action edit';
+        edit.type = 'button';
+        edit.setAttribute('aria-label', 'Edit');
+        edit.title = 'Edit';
+        edit.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M12 20h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+        edit.addEventListener('click', (e) => { e.stopPropagation(); openEditBubbleModal(i); });
+        actions.appendChild(edit);
+      }
+      bubble.appendChild(actions);
+
+      bubble.addEventListener('focus', () => {
+        chatBubbleIdx = i;
+        paintBubbleFocus();
+      });
+      bubble.addEventListener('click', () => bubble.focus());
       container.appendChild(bubble);
-    }
+      chatBubbles.push(bubble);
+    });
     container.scrollTop = container.scrollHeight;
   } catch (err) {
     console.warn('[chat] history failed:', err);
   }
 }
+
+function paintBubbleFocus() {
+  chatBubbles.forEach((b, i) => b.classList.toggle('focused', i === chatBubbleIdx));
+}
+
+function focusBubble(i) {
+  if (chatBubbles.length === 0) return false;
+  const n = chatBubbles.length;
+  const next = Math.max(0, Math.min(n - 1, i));
+  chatBubbleIdx = next;
+  chatBubbles[next].focus();
+  chatBubbles[next].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  return true;
+}
+
+function focusFirstBubble()    { return focusBubble(0); }
+function focusLastBubble()     { return focusBubble(chatBubbles.length - 1); }
+function moveBubbleFocus(d)    { return focusBubble(chatBubbleIdx + d); }
+function isBubbleFocused()     { return chatBubbleIdx >= 0 && document.activeElement?.classList?.contains('bubble'); }
+function leaveBubbleFocus()    { chatBubbleIdx = -1; paintBubbleFocus(); }
+
+async function retryBubble(i) {
+  const m = chatMessages[i];
+  if (!m || m.role !== 'user') return;
+  const text = String(m.content || '').replace(/^\[team-voice\]\s*/, '').trim();
+  if (!text) return;
+  leaveBubbleFocus();
+  submitIntent(text);
+}
+
+/* ---------- Edit-bubble modal ---------- */
+const editBubbleModalEl   = document.getElementById('edit-bubble-modal');
+const editBubbleTextEl    = document.getElementById('edit-bubble-text');
+const editBubbleDictateEl = document.getElementById('edit-bubble-dictate');
+const editBubbleCancelEl  = document.getElementById('edit-bubble-cancel');
+const editBubbleSaveEl    = document.getElementById('edit-bubble-save');
+let editBubbleOpen = false;
+let editBubbleTargetIdx = -1;
+
+function openEditBubbleModal(i) {
+  const m = chatMessages[i];
+  if (!m || m.role !== 'user') return;
+  editBubbleTargetIdx = i;
+  editBubbleTextEl.value = String(m.content || '').replace(/^\[team-voice\]\s*/, '');
+  editBubbleModalEl.hidden = false;
+  editBubbleOpen = true;
+  setTimeout(() => editBubbleTextEl.focus(), 0);
+}
+
+function closeEditBubbleModal() {
+  editBubbleModalEl.hidden = true;
+  editBubbleOpen = false;
+  editBubbleTargetIdx = -1;
+}
+
+function commitEditBubble() {
+  const t = editBubbleTextEl.value.trim();
+  if (!t) { closeEditBubbleModal(); return; }
+  closeEditBubbleModal();
+  leaveBubbleFocus();
+  submitIntent(t);
+}
+
+editBubbleCancelEl?.addEventListener('click', () => closeEditBubbleModal());
+editBubbleSaveEl?.addEventListener('click', () => commitEditBubble());
+editBubbleDictateEl?.addEventListener('click', () => startPTT());
+editBubbleModalEl?.addEventListener('keydown', (e) => {
+  if (!editBubbleOpen) return;
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeEditBubbleModal(); return; }
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault(); e.stopPropagation(); commitEditBubble();
+  }
+});
 
 function _setL2Shortcuts() {
   setShortcuts([
@@ -1489,7 +1633,7 @@ async function executeAction(action, sourceSpec) {
 const PTT_MODES = new Set([MODE_ZOOM, MODE_GRID, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL]);
 function startPTT() {
   if (pttActive) return;
-  if (!PTT_MODES.has(mode)) return;
+  if (!editBubbleOpen && !PTT_MODES.has(mode)) return;
   pttActive = true;
   stopSpeaking();
   if (!speech.supported) {
@@ -1517,6 +1661,11 @@ speech.addEventListener('end', (e) => {
   if (!text) {
     setIndicator('idle', 'No speech detected');
     setTimeout(() => setIndicator('idle', 'Connected'), 1500);
+    return;
+  }
+  if (editBubbleOpen) {
+    editBubbleTextEl.value = text;
+    setIndicator('idle', 'Connected');
     return;
   }
   if (mode === MODE_NEW_PROJ_NAME) {
@@ -2209,7 +2358,7 @@ async function ensureRolesList() {
 }
 
 async function openSettings() {
-  if (settingsOpen) return;
+  if (settingsOpen || editBubbleOpen) return;
   settingsOpen = true;
   settingsModalEl.hidden = false;
   selectSettingsTab('general');
@@ -2426,7 +2575,7 @@ settingsCancelEl?.addEventListener('click', () => closeSettings());
 window.addEventListener('keydown', (e) => {
   // Settings modal owns the keyboard while it's open — let its own
   // handler take care of Esc / Tab / arrows / Enter.
-  if (settingsOpen) return;
+  if (settingsOpen || editBubbleOpen) return;
 
   if (document.activeElement === typedInput) {
     if (e.key === 'Enter') {
@@ -2619,8 +2768,42 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === '[')      { e.preventDefault(); cycleProject(-1); }
     else if (e.key === ']')      { e.preventDefault(); cycleProject(+1); }
   } else if (mode === MODE_ZOOM) {
-    // Up / Right hops to the × close button.
+    // Chat bubble selection. ArrowUp from the surface enters the chat
+    // history at the last bubble; once inside, ArrowUp/Down walks
+    // bubbles, Left/Right cycles their action icons, Enter activates.
+    if (isBubbleFocused()) {
+      if (e.key === 'ArrowUp')   { e.preventDefault(); moveBubbleFocus(-1); return; }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (chatBubbleIdx >= chatBubbles.length - 1) { leaveBubbleFocus(); ring.paint(); return; }
+        moveBubbleFocus(+1); return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const bubble = chatBubbles[chatBubbleIdx];
+        const actions = bubble?.querySelectorAll('.bubble-action');
+        if (!actions || actions.length === 0) return;
+        const active = document.activeElement;
+        const arr = [...actions];
+        const idx = arr.indexOf(active);
+        const next = (idx === -1)
+          ? (e.key === 'ArrowRight' ? 0 : arr.length - 1)
+          : Math.max(0, Math.min(arr.length - 1, idx + (e.key === 'ArrowRight' ? 1 : -1)));
+        e.preventDefault();
+        arr[next].focus();
+        return;
+      }
+      if (e.key === 'Enter' && document.activeElement?.classList?.contains('bubble-action')) {
+        // Activate the focused action icon.
+        e.preventDefault(); document.activeElement.click(); return;
+      }
+      if (e.key === 'Escape') { e.preventDefault(); leaveBubbleFocus(); ring.paint(); return; }
+    }
+    // Up / Right hops to the × close button, unless we're entering the
+    // chat history (handled above) or already on a tile-surface focusable.
     if ((e.key === 'ArrowUp' || e.key === 'ArrowRight') && document.activeElement !== surfaceEl.querySelector('.surface-close')) {
+      if (ring.index === 0 && e.key === 'ArrowUp' && chatBubbles.length > 0) {
+        e.preventDefault(); focusLastBubble(); return;
+      }
       if (ring.index === 0 && focusSurfaceClose()) { e.preventDefault(); return; }
     }
     // Left at the first ring position with explorer open hops back in.
