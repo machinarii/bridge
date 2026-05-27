@@ -637,6 +637,8 @@ function updatePickerShortcuts() {
       action: () => talkToFocusedLead() },
     {                keyboard: 'A', label: 'Activity',
       action: () => toggleActivityDrawer() },
+    {                keyboard: 'M', label: 'Memory',
+      action: () => toggleMemoryDrawer() },
   ]);
 }
 
@@ -1433,7 +1435,6 @@ async function openAddAgentPicker() {
     { gamepad: 'cross',   keyboard: 'Space', label: 'Toggle',   action: () => toggleFocusedAddAgentRole() },
     { gamepad: 'options', keyboard: 'E',     label: 'Explorer', action: () => toggleFileExplorer() },
     {                     keyboard: 'A',     label: 'Activity', action: () => toggleActivityDrawer() },
-    {                     keyboard: 'M',     label: 'Memory',   action: () => toggleMemoryDrawer() },
     { gamepad: 'circle',  keyboard: 'Esc',   label: 'Back',     action: () => renderGrid() },
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Done',
@@ -1492,7 +1493,6 @@ function updateGridShortcuts() {
     { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
     { gamepad: 'options', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
     {                    keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
-    {                    keyboard: 'M', label: 'Memory',   action: () => toggleMemoryDrawer() },
   ];
   if (!isLeadFocused) {
     items.push({ gamepad: 'square', keyboard: 'Space', label: 'Agent on / off',
@@ -2073,7 +2073,6 @@ function _setL2Shortcuts() {
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
     { gamepad: 'options', keyboard: 'E', label: 'Explorer',     action: () => toggleFileExplorer() },
     {                     keyboard: 'A', label: 'Activity',     action: () => toggleActivityDrawer() },
-    {                     keyboard: 'M', label: 'Memory',       action: () => toggleMemoryDrawer() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => pressCross() });
@@ -2345,11 +2344,13 @@ function handleBridgeEvent(ev) {
     }
     case 'note_added':
     case 'file_created': {
-      // If this event belongs to the active project, refresh any open
-      // drawer that mirrors filesystem state — the explorer for any
-      // new file, and the Memory list specifically for note_added.
-      if (!activeProject || ev.projectId !== activeProject.id) break;
-      if (fileExplorerOpen) refreshFileExplorer();
+      // File explorer is per-project — only refresh when the event
+      // matches the active project. Memory is global (L0) — refresh
+      // any time a note lands.
+      if (activeProject && ev.projectId === activeProject.id &&
+          fileExplorerOpen) {
+        refreshFileExplorer();
+      }
       if (memoryDrawerOpen && (ev.type === 'note_added' || ev.kind === 'note')) {
         loadMemoryNotes();
       }
@@ -3043,8 +3044,9 @@ const memoryDrawerEl = document.getElementById('memory-drawer');
 const memoryListEl   = memoryDrawerEl?.querySelector('.memory-list');
 
 function toggleMemoryDrawer() {
-  if (mode === MODE_PROJECTS || mode === MODE_NEW_PROJ_ROLES) return;
-  if (!activeProject) return;
+  // Memory is global — only available on L0 (home). It aggregates
+  // notes across every project rather than belonging to one.
+  if (mode !== MODE_PROJECTS) return;
   if (memoryDrawerOpen) { closeMemoryDrawer(); return; }
   openMemoryDrawer();
 }
@@ -3065,13 +3067,22 @@ function closeMemoryDrawer() {
   memoryDrawerOpen = false;
   document.body.dataset.memoryDrawer = 'closed';
 }
+/* Aggregate notes across every project the renderer knows about.
+ * Each entry keeps its source project so the UI can prefix a crumb. */
 async function loadMemoryNotes() {
-  if (!activeProject) return;
+  memoryNotes = [];
   try {
-    const r = await fetch(`/projects/${activeProject.id}/notes`);
-    if (!r.ok) return;
-    const { items } = await r.json();
-    memoryNotes = items || [];
+    const fetches = projects.map(async (p) => {
+      const r = await fetch(`/projects/${p.id}/notes`);
+      if (!r.ok) return [];
+      const { items } = await r.json();
+      return (items || []).map(n => ({ ...n, projectId: p.id, projectName: p.name }));
+    });
+    const all = (await Promise.all(fetches)).flat();
+    // Newest first. notes.js returns items with mtime / at fields;
+    // fall back to id sort if neither is present.
+    all.sort((a, b) => (b.at || b.mtime || 0) - (a.at || a.mtime || 0));
+    memoryNotes = all;
   } catch (err) {
     console.warn('[memory] load failed:', err);
     memoryNotes = [];
@@ -3084,7 +3095,7 @@ function repaintMemoryList() {
   if (memoryNotes.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'memory-empty';
-    empty.textContent = 'Nothing in memory yet. Agents and you can add notes.';
+    empty.textContent = 'Nothing in memory yet. Notes from any project land here.';
     memoryListEl.appendChild(empty);
     return;
   }
@@ -3093,12 +3104,20 @@ function repaintMemoryList() {
     row.className = 'memory-entry';
     row.tabIndex = 0;
     row.dataset.id = n.id;
+    row.dataset.projectId = n.projectId || '';
     const label = document.createElement('div');
     label.className = 'memory-label';
-    label.textContent = n.label || n.id || '(untitled)';
+    if (n.projectName) {
+      const crumb = document.createElement('span');
+      crumb.className = 'memory-project';
+      crumb.textContent = n.projectName;
+      label.appendChild(crumb);
+      label.appendChild(document.createTextNode(' · '));
+    }
+    label.appendChild(document.createTextNode(n.label || n.id || '(untitled)'));
     const meta = document.createElement('div');
     meta.className = 'memory-meta';
-    meta.textContent = formatBubbleTime(n.at) || '';
+    meta.textContent = formatBubbleTime(n.at || n.mtime) || '';
     row.append(label, meta);
     memoryListEl.appendChild(row);
   }
@@ -3907,7 +3926,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key === 'm' || e.key === 'M') {
-    if (mode === MODE_GRID || mode === MODE_ZOOM || mode === MODE_ADD_AGENT) {
+    if (mode === MODE_PROJECTS) {
       e.preventDefault();
       toggleMemoryDrawer();
       return;

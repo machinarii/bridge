@@ -2110,6 +2110,12 @@ body[data-file-viewer="open"] #surface {
 .memory-entry .memory-meta {
   font-size: 0.78rem; color: var(--fg-dim); letter-spacing: 0.02em;
 }
+/* Project crumb on L0's cross-project Memory list. */
+.memory-entry .memory-project {
+  color: var(--accent, #6ea8ff);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
 .memory-entry:focus,
 .memory-entry:focus-visible {
   background: rgba(255,255,255,0.06);
