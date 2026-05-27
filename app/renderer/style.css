@@ -1135,7 +1135,8 @@ body[data-mode="zoom"] #surface {
   grid-template-columns: repeat(var(--grid-cols, 4), 1fr);
   grid-template-rows: repeat(var(--grid-rows, 2), 1fr);
   gap: 0.75rem;
-  padding: 1rem;
+  /* Mirror .agent-grid (L1): 1rem top/bottom, 0.5rem left/right. */
+  padding: 1rem 0.5rem;
   flex: 1;
   min-height: 0;
 }
