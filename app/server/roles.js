@@ -31,6 +31,9 @@ export const ROLES = [
   { id: 'marketing',   label: 'Marketing',        color: '#ffa1b8',
     namePool: ['Brio','Lark','Verve','Echo'],
     personaSeed: 'energetic' },
+  { id: 'legal',       label: 'Legal',            color: '#a0b8d0',
+    namePool: ['Hollis','Brennan','Sterling','Marsh'],
+    personaSeed: 'thorough, risk-aware' },
 ];
 
 const BY_ID = Object.fromEntries(ROLES.map(r => [r.id, r]));
