@@ -125,7 +125,7 @@ kbd {
   width: 36px; height: 36px;
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer;
-  margin-left: 0.6rem;
+  margin-left: 0;
   flex: 0 0 auto;
   transition: color 120ms, border-color 120ms, background 120ms;
 }
