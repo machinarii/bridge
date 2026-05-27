@@ -1066,12 +1066,12 @@ body[data-mode="zoom"] #surface {
 }
 .agent-view .bubble {
   max-width: 70%;
-  padding: 1.3rem 0.9rem;
+  padding: 0.7rem 0.9rem;
   border-radius: 14px;
   /* Bubble copy uses JetBrains Mono so user prompts and agent
    * responses share one consistent text style (Claude-Code-y vibe). */
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.95rem;
+  font-size: 0.65rem;
   font-weight: 300;
   line-height: 1.45;
   white-space: pre-wrap;
