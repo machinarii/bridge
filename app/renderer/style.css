@@ -1276,7 +1276,8 @@ body[data-mode="zoom"] #surface {
 
 /* ===== Role picker (create-flow step 1) — same tile style as L0/L1 ===== */
 .role-picker {
-  padding: 1rem;
+  /* Mirror the L0 / L1 grids: 1rem top/bottom, 0.5rem left/right. */
+  padding: 1rem 0.5rem;
   height: 100%;
   display: flex;
   flex-direction: column;
