@@ -833,12 +833,16 @@ body[data-mode="zoom"] #surface {
     0 0 16px 2px rgba(255,255,255,0.25);
 }
 #action-bar {
-  display: inline-flex; justify-content: flex-end; align-items: center; gap: 0.5rem;
+  display: inline-flex; justify-content: flex-end; align-items: center;
   flex: 0 0 auto;
   background: rgba(20,22,28,0.92);
   padding: 4px 0;
   border-radius: 10px;
 }
+/* Sibling-combinator spacing instead of `gap`: only applies between
+ * element siblings, never around whitespace text nodes or before the
+ * first child. */
+#action-bar > * + * { margin-left: 0.5rem; }
 #action-bar .action {
   display: inline-flex; align-items: center; gap: 0.4rem;
   padding: 0.25rem 0.6rem;
