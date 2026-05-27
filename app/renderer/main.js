@@ -2335,12 +2335,35 @@ function handleBridgeEvent(ev) {
       pushActivityEntry(ev);
       break;
     }
-    case 'notification':
     case 'note_added':
+    case 'file_created': {
+      // If this event belongs to the active project and the file
+      // explorer is open, refetch the tree so the new file shows up.
+      if (!activeProject || ev.projectId !== activeProject.id) break;
+      if (fileExplorerOpen) refreshFileExplorer();
+      break;
+    }
+    case 'notification':
     case 'token':
     case 'tool':
     default:
       break;
+  }
+}
+
+/* Refetch /projects/:pid/files and re-render entries while keeping
+ * the explorer's current focus index. Used when the server tells us
+ * a new file landed under the project. */
+async function refreshFileExplorer() {
+  if (!activeProject) return;
+  try {
+    const r = await fetch(`/projects/${activeProject.id}/files`);
+    if (!r.ok) return;
+    fileTree = await r.json();
+    rebuildFileEntries();
+    if (explorerFocused) paintFileFocus();
+  } catch (err) {
+    console.warn('[explorer] refresh failed:', err);
   }
 }
 
@@ -3329,6 +3352,24 @@ gp.addEventListener('press', (e) => {
 
 gp.addEventListener('press', (e) => {
   if (e.detail.button === 'options') toggleFileExplorer();
+});
+
+/* Right thumbstick on the controller scrolls the L2 chat-scroll
+ * smoothly. y > 0 = stick deflected down → scroll down; y < 0 →
+ * scroll up. Speed scales with deflection. The gamepad driver
+ * already applies a 0.15 dead-zone. */
+const RSTICK_MAX_PX_PER_TICK = 32;
+gp.addEventListener('rstick', (e) => {
+  if (mode !== MODE_ZOOM) return;
+  const dy = e.detail?.y || 0;
+  if (!dy) return;
+  const chat = surfaceEl?.querySelector?.('.chat-scroll');
+  if (!chat) return;
+  // Override the .chat-scroll's CSS smooth-scroll briefly so this
+  // call lands as a tight per-frame scroll. The auto behavior also
+  // ensures the next legitimate smooth scroll (e.g. arrow-key bubble
+  // focus) still animates.
+  chat.scrollBy({ top: dy * RSTICK_MAX_PX_PER_TICK, left: 0, behavior: 'auto' });
 });
 
 /* L2: speak the currently-focused project/agent name. */
