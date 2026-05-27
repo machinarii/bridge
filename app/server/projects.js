@@ -84,9 +84,8 @@ export async function createProject({ name, goal, roleIds }) {
     seen.add(r); return true;
   });
 
-  // Auto-add TPM if no lead role chosen
-  const hasLead = chosen.includes('pm') || chosen.includes('tpm');
-  if (!hasLead) chosen.push('tpm');
+  // PM is the lead role for every project; auto-add if missing.
+  if (!chosen.includes('pm')) chosen.unshift('pm');
 
   const id = uniqueProjectId(name);
   const usedByRole = new Map();
@@ -102,8 +101,7 @@ export async function createProject({ name, goal, roleIds }) {
     };
   });
 
-  const leadRoleId = chosen.includes('pm') ? 'pm' : 'tpm';
-  const leadAgentId = agents.find(a => a.role === leadRoleId).id;
+  const leadAgentId = agents.find(a => a.role === 'pm').id;
 
   const project = { id, name, goal, createdAt: Date.now(), leadAgentId, agents };
 

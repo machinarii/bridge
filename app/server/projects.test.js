@@ -35,10 +35,10 @@ test('createProject builds a project with auto-named agents', async () => {
   assert.ok(['Cassidy','Marlowe','Quinn','Linden'].includes(pm.name));
 });
 
-test('createProject without pm or tpm auto-adds TPM as lead', async () => {
+test('createProject without pm auto-adds PM as lead', async () => {
   const p = await createProject({ name: 'Test Beta', goal: 'No leads picked', roleIds: ['engineer','qa'] });
-  assert.equal(p.agents.length, 3, 'TPM auto-added');
-  assert.equal(p.agents.find(a => a.id === p.leadAgentId).role, 'tpm');
+  assert.equal(p.agents.length, 3, 'PM auto-added');
+  assert.equal(p.agents.find(a => a.id === p.leadAgentId).role, 'pm');
 });
 
 test('createProject writes charter markdown for each role', async () => {
