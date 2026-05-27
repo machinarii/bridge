@@ -607,11 +607,9 @@ function renderProjects() {
  *  Hidden when "+ New" is focused. */
 function updatePickerShortcuts() {
   if (mode !== MODE_PROJECTS) return;
-  const idx = ring.index ?? pickerIndex;
-  const focused = idx < projects.length ? projects[idx] : null;
-  if (!focused) { setShortcuts([]); return; }
-  const lead = focused.agents.find(a => a.id === focused.leadAgentId);
-  const leadName = lead?.name || 'Lead';
+  // Always show the Hold-to-talk chip on L0; it just no-ops on the
+  // + New project tile (talkToFocusedLead bails when there's no
+  // project to address).
   setShortcuts([
     { gamepad: 'r2', keyboard: 'V', label: `Hold to talk`,
       action: () => talkToFocusedLead() },
