@@ -634,7 +634,12 @@ function createSurfaceCloseButton(onClose) {
   btn.className = 'surface-close';
   btn.type = 'button';
   btn.setAttribute('aria-label', 'Close');
-  btn.textContent = '×';
+  // SVG X — stroke-width: 2.5, ~30% larger than the previous text glyph.
+  btn.innerHTML = `
+    <svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22">
+      <line x1="5" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="19" y1="5" x2="5" y2="19" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>`;
   btn.addEventListener('click', onClose);
   btn.addEventListener('keydown', (e) => {
     // Must stopPropagation — otherwise window's bubble handler runs the
