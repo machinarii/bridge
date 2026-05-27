@@ -852,15 +852,11 @@ async function renderNewProjectRoles() {
   };
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelRolePicker));
 
-  // Invisible row inside the picker — Back · Cancel · Continue,
-  // all right-aligned within the surface.
+  // Invisible row inside the picker — Cancel · Continue, all
+  // right-aligned within the surface. No Back here: the first step
+  // has no previous step in the create flow (home == cancel).
   const row = document.createElement('div');
   row.className = 'role-confirm-row';
-  const backBtn = document.createElement('button');
-  backBtn.type = 'button';
-  backBtn.className = 'role-cancel role-back';
-  backBtn.textContent = 'Back';
-  backBtn.addEventListener('click', tryCancelRolePicker);
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
   cancelBtn.className = 'role-cancel';
@@ -871,12 +867,12 @@ async function renderNewProjectRoles() {
   confirmBtn.className = 'role-confirm';
   confirmBtn.textContent = 'Continue';
   confirmBtn.addEventListener('click', () => advanceFromRolePicker());
-  row.append(backBtn, cancelBtn, confirmBtn);
+  row.append(cancelBtn, confirmBtn);
   wrap.appendChild(row);
 
   surfaceEl.appendChild(wrap);
 
-  ring.set([...tileEls, backBtn, cancelBtn, confirmBtn]);
+  ring.set([...tileEls, cancelBtn, confirmBtn]);
   ring.index = 0;
   ring.paint();
 
