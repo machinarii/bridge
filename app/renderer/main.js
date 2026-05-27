@@ -1978,10 +1978,11 @@ editBubbleDictateEl?.addEventListener('click', () => startPTT());
 /* Focusables inside the edit-bubble modal, in visual order. Same
  * keyboard / d-pad model as the settings modal. */
 function editBubbleFocusables() {
+  // Visual order: textarea → [Cancel] (far left) → [Dictate] [Save and run] (right group).
   const items = [];
   if (editBubbleTextEl)    items.push(editBubbleTextEl);
-  if (editBubbleDictateEl) items.push(editBubbleDictateEl);
   if (editBubbleCancelEl)  items.push(editBubbleCancelEl);
+  if (editBubbleDictateEl) items.push(editBubbleDictateEl);
   if (editBubbleSaveEl)    items.push(editBubbleSaveEl);
   return items;
 }
