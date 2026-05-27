@@ -9,9 +9,10 @@
     "stt": "bash -c 'source app/stt/.venv/bin/activate && python app/stt/parakeet_server.py'",
     "electron": "electron .",
     "dev": "electron .",
-    "build:mac": "electron-builder --mac",
-    "build:mac:arm64": "electron-builder --mac --arm64",
-    "build:mac:x64": "electron-builder --mac --x64"
+    "fetch:python": "bash build/fetch-python.sh",
+    "build:mac": "npm run fetch:python && electron-builder --mac",
+    "build:mac:arm64": "npm run fetch:python && electron-builder --mac --arm64",
+    "build:mac:x64": "npm run fetch:python && electron-builder --mac --x64"
   },
   "devDependencies": {
     "electron": "^32.0.0",
@@ -37,6 +38,10 @@
         "from": "app/stt",
         "to": "stt",
         "filter": ["**/*.py", "requirements.txt", "README.md"]
+      },
+      {
+        "from": "build/python-${arch}/python",
+        "to": "python"
       }
     ],
     "mac": {

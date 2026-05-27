@@ -20,7 +20,29 @@ Logs from the Node server and (optionally) the Parakeet child
 process stream to the terminal. DevTools opens via the Bridge menu
 or ⌥⌘I.
 
-## Optional: install local Parakeet STT
+## Local Parakeet STT
+
+### In the packaged `.app`
+
+Python is **bundled** with the app via `python-build-standalone`. On
+first launch, Electron pip-installs Parakeet's dependencies into the
+user-data directory (`~/Library/Application Support/Bridge/stt-packages/`)
+and shows a one-time "Local STT ready" notification when finished.
+Subsequent launches skip the install and go straight to spawning the
+service.
+
+The user only needs to:
+1. Launch the app once (waits ~1–3 min for the pip install).
+2. Open Settings → General and set **Local STT URL** to
+   `http://localhost:8123/transcribe`.
+
+No Python install, no venv setup, no homebrew.
+
+### Dev mode
+
+When running `npm run dev` from source, Electron falls back to the
+legacy venv path so contributors don't need to fetch python-build-
+standalone for every iteration:
 
 ```bash
 cd app/stt
@@ -30,11 +52,9 @@ pip install -r requirements.txt
 deactivate
 ```
 
-Next time `npm run dev` (or the packaged app) launches, Electron
-detects `app/stt/.venv/bin/python` and starts the Parakeet server on
-`localhost:8123`. Open Settings → General and set **Local STT URL**
-to `http://localhost:8123/transcribe`. Without the venv, Bridge
-falls back to the browser's built-in speech recognition.
+Next `npm run dev` detects `app/stt/.venv/bin/python` and launches
+the Parakeet server. Without the venv, Bridge falls back to the
+browser's built-in speech recognition.
 
 ## Build a `.app` / `.dmg`
 
@@ -46,6 +66,25 @@ npm run build:mac:x64         # Intel only
 # or
 npm run build:mac             # universal (both architectures)
 ```
+
+The `build:mac*` scripts first run `build/fetch-python.sh` to
+download a relocatable Python 3.12 (python-build-standalone) for
+each target architecture into `build/python-arm64/` and
+`build/python-x64/`. Those directories are git-ignored and ~120 MB
+each. electron-builder substitutes `${arch}` at pack time so each
+build only includes the matching Python.
+
+After build, the bundle contains:
+
+```
+Bridge.app/Contents/Resources/
+  python/bin/python3   ← the bundled CPython
+  stt/parakeet_server.py
+  stt/requirements.txt
+```
+
+First launch pip-installs Parakeet's deps into the user-data dir
+(see "Local Parakeet STT" above).
 
 `electron-builder` writes the artifacts to `dist/`:
 
