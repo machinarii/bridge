@@ -672,6 +672,9 @@ body[data-mode="zoom"] #surface {
     radial-gradient(ellipse 140% 90% at 50% -10%, rgba(255,255,255,0.10) 0%, transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
   padding: 1rem;
+  /* Reserve space for the absolutely-positioned .status badge so it
+   * doesn't overlap content above. Matches .project-tile spacing. */
+  padding-bottom: 1.85rem;
   min-height: 130px;
   display: flex; flex-direction: column; justify-content: flex-start;
   cursor: pointer;
@@ -699,7 +702,19 @@ body[data-mode="zoom"] #surface {
 .agent-tile.focused::before { opacity: 0; }
 .agent-tile .name { margin: 0; font-size: 1.4rem; font-weight: 400; }
 .agent-tile .role { opacity: 0.65; font-size: 0.9rem; margin-top: 0.25rem; line-height: 1.35; }
-.agent-tile .status { font-size: 0.8rem; opacity: 0.6; display: inline-flex; align-items: center; gap: 6px; margin-top: auto; }
+.agent-tile .status {
+  /* Pinned to the same bottom-left spot as .project-updated on L0 so
+   * the two grids' metadata lines up visually. */
+  position: absolute;
+  left: 1rem;
+  bottom: 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 300;
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+  display: inline-flex; align-items: center; gap: 6px;
+  pointer-events: none;
+}
 .agent-tile .status .dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--fg-dim);
