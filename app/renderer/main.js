@@ -2040,7 +2040,17 @@ gp.addEventListener('press', (e) => {
     return;
   }
   if (mode === MODE_ADD_AGENT) {
-    if (b === 'up' || b === 'down' || b === 'left' || b === 'right') {
+    if (b === 'down') {
+      const grid = surfaceEl.querySelector('.role-grid');
+      if (grid) {
+        const cols = grid._cols || 4;
+        const n = ring.elements.length;
+        const lastRow = Math.max(0, Math.ceil(n / cols) - 1);
+        const r = Math.floor(ring.index / cols);
+        if (r >= lastRow && enterShortcuts()) return;
+      }
+      roleGridMove('down');
+    } else if (b === 'up' || b === 'left' || b === 'right') {
       roleGridMove(b);
     } else if (b === 'cross')    toggleFocusedAddAgentRole();
     else if (b === 'triangle')   commitAddAgentSelections();
@@ -2529,7 +2539,17 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'Enter')   { e.preventDefault(); advanceFromRolePicker(); }
     else if (e.key === 'Escape')  { e.preventDefault(); renderProjects(); }
   } else if (mode === MODE_ADD_AGENT) {
-    if (dir) { e.preventDefault(); roleGridMove(dir); }
+    if (e.key === 'ArrowDown') {
+      const grid = surfaceEl.querySelector('.role-grid');
+      if (grid) {
+        const cols = grid._cols || 4;
+        const n = ring.elements.length;
+        const lastRow = Math.max(0, Math.ceil(n / cols) - 1);
+        const r = Math.floor(ring.index / cols);
+        if (r >= lastRow && enterShortcuts()) { e.preventDefault(); return; }
+      }
+      e.preventDefault(); roleGridMove('down');
+    } else if (dir) { e.preventDefault(); roleGridMove(dir); }
     else if (e.code === 'Space')  { e.preventDefault(); toggleFocusedAddAgentRole(); }
     else if (e.key === 'Enter')   { e.preventDefault(); commitAddAgentSelections(); }
     else if (e.key === 'Escape')  { e.preventDefault(); renderGrid(); }
