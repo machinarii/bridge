@@ -1121,6 +1121,8 @@ function renderNewProjectName() {
   const nameBackEl   = t.querySelector('#capture-back');
   const nameCancelEl = t.querySelector('#capture-cancel');
   const nameDoneEl   = t.querySelector('#capture-done');
+  // Primary stays disabled until something has been captured.
+  if (nameDoneEl) nameDoneEl.disabled = !newProjName.trim();
   nameBackEl?.addEventListener('click', () => {
     stopMicVisualizer();
     renderNewProjectRoles();
@@ -1170,6 +1172,7 @@ function renderNewProjectGoal() {
   const goalBackEl   = t.querySelector('#capture-back');
   const goalCancelEl = t.querySelector('#capture-cancel');
   const goalDoneEl   = t.querySelector('#capture-done');
+  if (goalDoneEl) goalDoneEl.disabled = !newProjGoal.trim();
   goalBackEl?.addEventListener('click', () => {
     stopMicVisualizer();
     renderNewProjectName();
@@ -2040,6 +2043,9 @@ speech.addEventListener('partial', (e) => {
   // the user sees their words above the visualizer.
   const liveEl = document.querySelector('.capture-tile .mic-live-text');
   if (liveEl) liveEl.textContent = e.detail || '';
+  // Enable the primary action button as soon as any text is recognized.
+  const doneEl = document.getElementById('capture-done');
+  if (doneEl && e.detail && e.detail.trim()) doneEl.disabled = false;
 });
 speech.addEventListener('end', (e) => {
   // SpeechRecognition stopped (browser closed the session). Clear the
