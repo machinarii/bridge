@@ -907,7 +907,7 @@ body[data-mode="zoom"] #surface {
 .agent-view .bubble.user.focused {
   /* Slide left just enough to clear the action row hanging off the
    * bubble's right edge (timestamp + two 38px icons + gaps). */
-  transform: translateX(calc(-6.5rem + 31px));
+  transform: translateX(calc(-6.5rem + 32px));
 }
 .agent-view .bubble .bubble-time {
   flex: 1 1 auto;
