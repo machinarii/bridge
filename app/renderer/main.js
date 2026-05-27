@@ -2452,6 +2452,15 @@ const settingsMcpListEl   = document.getElementById('settings-mcp-list');
 const settingsMcpAddEl    = document.getElementById('settings-mcp-add');
 const settingsGitEnabledEl= document.getElementById('settings-git-enabled');
 const settingsGitIntervalEl = document.getElementById('settings-git-interval');
+const settingsGitStateEl   = document.getElementById('settings-git-state');
+
+function paintGitState() {
+  if (!settingsGitStateEl) return;
+  const on = !!settingsGitEnabledEl?.checked;
+  settingsGitStateEl.textContent = on ? 'Enabled' : 'Disabled';
+  settingsGitStateEl.dataset.on = String(on);
+}
+settingsGitEnabledEl?.addEventListener('change', paintGitState);
 const settingsSaveEl      = document.getElementById('settings-save');
 const settingsCancelEl    = document.getElementById('settings-cancel');
 const settingsTabEls      = [...document.querySelectorAll('.settings-tab')];
@@ -2580,6 +2589,7 @@ async function openSettings() {
   populateMcpList(s.MCP_PLUGINS || []);
   settingsGitEnabledEl.checked = !!s.GIT_AUTOSAVE;
   settingsGitIntervalEl.value = Number(s.GIT_AUTOSAVE_INTERVAL_MIN || 5);
+  paintGitState();
   // Land focus on the first tab so the user can immediately navigate
   // with arrows / d-pad.
   setTimeout(() => settingsTabEls[0]?.focus(), 0);
