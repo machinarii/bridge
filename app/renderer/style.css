@@ -905,10 +905,9 @@ body[data-mode="zoom"] #surface {
   display: inline-flex;
 }
 .agent-view .bubble.user.focused {
-  /* Slide left to make room for the action row that hangs off the
-   * bubble's right edge. ~9.5rem is enough to reveal timestamp +
-   * retry + edit icons + the 0.6rem gap. */
-  transform: translateX(-9.5rem);
+  /* Slide left just enough to clear the action row hanging off the
+   * bubble's right edge (timestamp + two 38px icons + gaps). */
+  transform: translateX(-6.5rem);
 }
 .agent-view .bubble .bubble-time {
   flex: 1 1 auto;
@@ -919,13 +918,14 @@ body[data-mode="zoom"] #surface {
   background: transparent;
   border: 1px solid rgba(255,255,255,0.22);
   color: inherit;
-  width: 28px; height: 28px;
-  border-radius: 6px;
+  width: 38px; height: 38px;
+  border-radius: 8px;
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer;
   flex: 0 0 auto;
   transition: background 120ms, border-color 120ms;
 }
+.agent-view .bubble .bubble-action svg { width: 24px; height: 24px; }
 .agent-view .bubble .bubble-action:hover,
 .agent-view .bubble .bubble-action:focus,
 .agent-view .bubble .bubble-action:focus-visible {
