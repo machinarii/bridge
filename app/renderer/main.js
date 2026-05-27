@@ -1988,6 +1988,10 @@ speech.addEventListener('partial', (e) => {
   if (liveEl) liveEl.textContent = e.detail || '';
 });
 speech.addEventListener('end', (e) => {
+  // SpeechRecognition stopped (browser closed the session). Clear the
+  // pttActive flag so the next screen / button press can re-trigger
+  // recognition cleanly — otherwise startPTT() short-circuits.
+  pttActive = false;
   const text = e.detail;
   if (!text) {
     setIndicator('idle', 'No speech detected');
