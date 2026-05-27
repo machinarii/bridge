@@ -709,17 +709,18 @@ function surfaceContentRect() {
 
 async function openFocused() {
   const idx = ring.index;
-  if (idx === tileCount() - 1) {
-    // "+ New" — enter create flow
-    newProjRoleIds = [];
-    newProjName = '';
-    newProjGoal = '';
-    renderNewProjectRoles();
-    return;
-  }
   const sourceTile = ring.current();
   const sourceRect = sourceTile?.getBoundingClientRect();
   const targetRect = surfaceContentRect();
+  if (idx === tileCount() - 1) {
+    // "+ New" — enter create flow with the same morph as a project tile.
+    newProjRoleIds = [];
+    newProjName = '';
+    newProjGoal = '';
+    zoomStack.push(sourceRect);
+    await forwardMorph(sourceTile, sourceRect, targetRect, () => renderNewProjectRoles());
+    return;
+  }
   zoomStack.push(sourceRect);
   activeProject = withLeadFirst(projects[idx]);
   gridIndex = 0;
