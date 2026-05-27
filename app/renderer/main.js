@@ -27,9 +27,11 @@ let shortcutFocusIdx = -1; // -1 means focus is not in the rail
  * then every #action-bar .action button. */
 function footerFocusables() {
   // Single DOM-order query so nav order is always identical to visual
-  // order in the rail. Anything focusable in #footer-rail counts.
+  // order in the rail. Anything focusable in #footer-rail counts —
+  // chips, action buttons, the notification bell, and the settings
+  // gear.
   return [...document.querySelectorAll(
-    '#footer-rail .sc, #footer-rail .action, #footer-rail #settings-btn'
+    '#footer-rail .sc, #footer-rail .action, #footer-rail #notification-btn, #footer-rail #settings-btn'
   )];
 }
 
