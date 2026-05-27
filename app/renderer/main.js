@@ -2792,6 +2792,7 @@ settingsBtnEl?.addEventListener('keydown', (e) => {
 });
 settingsSaveEl?.addEventListener('click', () => saveSettings());
 settingsCancelEl?.addEventListener('click', () => closeSettings());
+document.getElementById('settings-close')?.addEventListener('click', () => closeSettings());
 
 window.addEventListener('keydown', (e) => {
   // Settings modal owns the keyboard while it's open — let its own
