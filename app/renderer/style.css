@@ -818,7 +818,10 @@ body[data-mode="zoom"] #surface {
 #back-shortcut .sc {
   display: inline-flex; align-items: center; gap: 0.4rem;
   white-space: nowrap;
-  padding: 0.25rem 0.5rem;
+  /* No horizontal padding — the action-bar pill's gap is the only
+   * spacing between Back and Select, and each chip sits flush against
+   * its end of the pill. */
+  padding: 0.25rem 0;
   border-radius: 6px;
   transition: background 120ms, outline-color 120ms;
 }
