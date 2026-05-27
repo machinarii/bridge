@@ -1128,8 +1128,8 @@ body[data-mode="zoom"] #surface {
   padding: 0.6rem 1.6rem;
   cursor: pointer;
   font-family: inherit;
-  font-weight: 400;
-  font-size: var(--steam-body-fs);
+  font-weight: 700;
+  font-size: 20px;
   transition: background 120ms, border-color 120ms;
 }
 .role-confirm:hover {
