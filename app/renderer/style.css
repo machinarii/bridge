@@ -836,7 +836,7 @@ body[data-mode="zoom"] #surface {
   display: inline-flex; justify-content: flex-end; align-items: center; gap: 0.5rem;
   flex: 0 0 auto;
   background: rgba(20,22,28,0.92);
-  padding: 4px 8px;
+  padding: 4px 0;
   border-radius: 10px;
 }
 #action-bar .action {
