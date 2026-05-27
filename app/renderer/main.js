@@ -1104,7 +1104,9 @@ function renderNewProjectName() {
                        action: () => confirmCapture() });
   // Action-row buttons join the focus ring so arrow / d-pad nav works.
   ring.set([nameCancelEl, nameBackEl, nameDoneEl].filter(Boolean));
-  ring.index = ring.elements.length - 1; // primary focused by default
+  ring.index = 0; // Cancel focused by default — leftmost in the row,
+                  // so ArrowDown from the surface-close × lands on it
+                  // first instead of skipping past to the primary.
   ring.paint();
 }
 
@@ -1147,7 +1149,9 @@ function renderNewProjectGoal() {
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => confirmCapture() });
   ring.set([goalCancelEl, goalBackEl, goalDoneEl].filter(Boolean));
-  ring.index = ring.elements.length - 1; // primary focused by default
+  ring.index = 0; // Cancel focused by default — leftmost in the row,
+                  // so ArrowDown from the surface-close × lands on it
+                  // first instead of skipping past to the primary.
   ring.paint();
 }
 
