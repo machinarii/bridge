@@ -574,7 +574,8 @@ function renderProjects() {
     tile.style.setProperty('--tile-color', getProjectColor(p));
     tile.innerHTML = `
       <h2 class="name">${escapeHtml(sentenceCase(p.name))}</h2>
-      <div class="meta">${p.agents.length} agent${p.agents.length===1?'':'s'}</div>`;
+      <div class="meta">${p.agents.length} agent${p.agents.length===1?'':'s'}</div>
+      <div class="project-updated">${escapeHtml(formatProjectUpdated(p.updatedAt || p.createdAt))}</div>`;
     const myIdx = tileEls.length;
     tile.addEventListener('click', () => { pickerIndex = myIdx; ring.index = myIdx; ring.paint(); openFocused(); });
     grid.appendChild(tile);
@@ -635,10 +636,12 @@ function isCreateProjectCommand(text) {
       || /\bproject\b.*\b(new|create)\b/.test(stripped);
 }
 
-/** Route a transcript spoken from L0: create-new-project commands
- *  trigger the create flow; anything else opens the focused project
- *  and forwards the prompt to its lead. */
-async function dispatchHomeUtterance(text) {
+/** Route a transcript spoken from L0. The user is addressing
+ *  "Cassidy" — a single home-level assistant, not the PM of any
+ *  particular project. For now Cassidy understands one command:
+ *  "create new project". Other utterances surface a polite hint;
+ *  a real Cassidy backend can plug in here later. */
+function dispatchHomeUtterance(text) {
   if (!text) return;
   if (isCreateProjectCommand(text)) {
     newProjRoleIds = [];
@@ -647,31 +650,10 @@ async function dispatchHomeUtterance(text) {
     renderNewProjectRoles();
     return;
   }
-  const idx = ring.index ?? pickerIndex;
-  // "+ New" is focused — speak-to-create only; freeform speech here
-  // surfaces a hint instead of vanishing silently.
-  if (idx >= projects.length) {
-    setIndicator('idle', 'Try: "create new project"');
-    setTimeout(() => setIndicator('idle', 'Connected'), 2200);
-    return;
-  }
-  // Zoom into the highlighted project and submit as an intent to its
-  // lead (PM). openFocused captures the rect + morph; submitIntent
-  // posts the text once we land in MODE_ZOOM.
-  await openFocused();
-  await new Promise(r => setTimeout(r, 30));
-  // After openFocused, mode becomes MODE_GRID; we want the lead's
-  // ear, so route to it directly.
-  if (activeProject) {
-    const leadAgent = activeProject.agents.find(a => a.id === activeProject.leadAgentId);
-    if (leadAgent) {
-      // Switch to the lead's zoom view, then submit.
-      gridIndex = activeProject.agents.findIndex(a => a.id === leadAgent.id);
-      if (gridIndex < 0) gridIndex = 0;
-      await enterZoom();
-      submitIntent(text);
-    }
-  }
+  // Acknowledge so the user knows the utterance was heard, even though
+  // a free-form Cassidy response isn't wired yet.
+  setIndicator('idle', 'Cassidy heard you. Try: "create new project"');
+  setTimeout(() => setIndicator('idle', 'Connected'), 2400);
 }
 
 /* ---------- Top-right close (×) button on L1 / L2 ---------- */
@@ -783,6 +765,27 @@ async function openFocused() {
 }
 
 function tileCount() { return projects.length + 1; }
+
+/** Compact "Updated X ago" string for a project tile timestamp. */
+function formatProjectUpdated(at) {
+  if (!at) return '';
+  const diff = Date.now() - Number(at);
+  if (diff < 0 || !Number.isFinite(diff)) return '';
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'Updated just now';
+  if (m < 60) return `Updated ${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `Updated ${h} hr ago`;
+  const d = Math.floor(h / 24);
+  if (d === 1) return 'Updated yesterday';
+  if (d < 7) return `Updated ${d} days ago`;
+  const w = Math.floor(d / 7);
+  if (w < 5) return `Updated ${w} wk ago`;
+  const mo = Math.floor(d / 30);
+  if (mo < 12) return `Updated ${mo} mo ago`;
+  const y = Math.floor(d / 365);
+  return `Updated ${y} yr ago`;
+}
 
 async function renderNewProjectRoles() {
   mode = MODE_NEW_PROJ_ROLES;
