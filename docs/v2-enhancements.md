@@ -320,14 +320,16 @@ is absent the bubble renders normally.
 ## Suggested rollout order
 
 1. **Event channel** (architectural prereq — without it, none of the
-   below works).
+   below works). **DONE**
 2. **§1 live verb status** — smallest UI change; immediately makes L1
-   feel alive.
-3. **§3 in-project activity feed** — first feed to ship, builds on the
+   feel alive. **DONE**
+3. **§7 rich response formatting** — biggest perceived-quality jump
+   per LoC. Markdown + action cards in agent bubbles.
+4. **§3 in-project activity feed** — first feed to ship, builds on the
    same event stream.
-4. **§6 notifications** — unblocks approval-gate workflows.
-5. **§4 inter-agent delegation in chat** — surfaces the existing
+5. **§6 notifications** — unblocks approval-gate workflows.
+6. **§4 inter-agent delegation in chat** — surfaces the existing
    delegate-and-resume mechanics.
-6. **§2 cross-project feed** — once §3's drawer pattern is stable.
-7. **§5 shared memory panel** — wires existing notes into the
+7. **§2 cross-project feed** — once §3's drawer pattern is stable.
+8. **§5 shared Memory panel** — wires existing notes into the
    left-panel system.
