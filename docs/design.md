@@ -472,8 +472,9 @@ overlapping platform conventions:
   action affordances, voice-first secondary nav.
 - **Xbox UX guidelines** — ABXY mapping, safe-area discipline, "focus is
   sacred," shoulder buttons reserved for traversal/cycling.
-- **Steam OS / Big Picture / Steam Deck** — chunky tap targets, generous
-  rounded corners, persistent action footer, gamepad-first text fields.
+- **Steam OS / Big Picture / Steam Deck** — chunky selection targets,
+  generous rounded corners, persistent action footer, gamepad-first
+  text fields.
 
 ### 11.0 Steam OS sizing guidelines
 
@@ -498,8 +499,9 @@ Applied to:
   on-screen text input row.
 
 The footer rail's action-bar chips are intentionally smaller (~36 px)
-because they're persistent and selection is by glyph, not tap target —
-this is the same compromise Steam makes with its bottom button hints.
+because they're persistent and selection is by glyph, not a primary
+selection target — this is the same compromise Steam makes with its
+bottom button hints.
 
 Where the three platforms disagree, Bridge falls back to what's common to
 all three.
