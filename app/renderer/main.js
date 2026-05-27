@@ -616,14 +616,62 @@ function updatePickerShortcuts() {
   ]);
 }
 
-/** Open the focused project, wait for the morph to land, then start
- *  PTT so the user can talk to the lead immediately. */
-async function talkToFocusedLead() {
-  // No-op when "+ New" is focused — there's no lead to talk to.
-  const idx = ring.index ?? pickerIndex;
-  if (idx >= projects.length) return;
-  await openFocused();
+/** L0 push-to-talk: just start PTT — speech.end will dispatch the
+ *  transcript either as a "create new project" command or as a
+ *  prompt for the highlighted project's lead. */
+function talkToFocusedLead() {
   startPTT();
+}
+
+/** Match common phrasings for "create new project" / "new project" /
+ *  "make a project". Returns true if the transcript reads as a
+ *  create-project command. */
+function isCreateProjectCommand(text) {
+  if (!text) return false;
+  const t = text.toLowerCase().trim();
+  // Strip very common filler at the head.
+  const stripped = t.replace(/^(please|hey|ok(?:ay)?,?|let'?s|i (?:want to|wanna)|can you|could you)\s+/, '');
+  return /\b(new|create|make|start|begin|add)\b.*\bproject\b/.test(stripped)
+      || /\bproject\b.*\b(new|create)\b/.test(stripped);
+}
+
+/** Route a transcript spoken from L0: create-new-project commands
+ *  trigger the create flow; anything else opens the focused project
+ *  and forwards the prompt to its lead. */
+async function dispatchHomeUtterance(text) {
+  if (!text) return;
+  if (isCreateProjectCommand(text)) {
+    newProjRoleIds = [];
+    newProjName = '';
+    newProjGoal = '';
+    renderNewProjectRoles();
+    return;
+  }
+  const idx = ring.index ?? pickerIndex;
+  // "+ New" is focused — speak-to-create only; freeform speech here
+  // surfaces a hint instead of vanishing silently.
+  if (idx >= projects.length) {
+    setIndicator('idle', 'Try: "create new project"');
+    setTimeout(() => setIndicator('idle', 'Connected'), 2200);
+    return;
+  }
+  // Zoom into the highlighted project and submit as an intent to its
+  // lead (PM). openFocused captures the rect + morph; submitIntent
+  // posts the text once we land in MODE_ZOOM.
+  await openFocused();
+  await new Promise(r => setTimeout(r, 30));
+  // After openFocused, mode becomes MODE_GRID; we want the lead's
+  // ear, so route to it directly.
+  if (activeProject) {
+    const leadAgent = activeProject.agents.find(a => a.id === activeProject.leadAgentId);
+    if (leadAgent) {
+      // Switch to the lead's zoom view, then submit.
+      gridIndex = activeProject.agents.findIndex(a => a.id === leadAgent.id);
+      if (gridIndex < 0) gridIndex = 0;
+      await enterZoom();
+      submitIntent(text);
+    }
+  }
 }
 
 /* ---------- Top-right close (×) button on L1 / L2 ---------- */
@@ -1830,7 +1878,7 @@ async function executeAction(action, sourceSpec) {
 }
 
 /* ---------- PTT + intent submission ---------- */
-const PTT_MODES = new Set([MODE_ZOOM, MODE_GRID, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL]);
+const PTT_MODES = new Set([MODE_PROJECTS, MODE_ZOOM, MODE_GRID, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL]);
 function startPTT() {
   if (pttActive) return;
   if (!editBubbleOpen && !PTT_MODES.has(mode)) return;
@@ -1882,6 +1930,7 @@ speech.addEventListener('end', (e) => {
   }
   if (mode === MODE_ZOOM) { submitIntent(text); return; }
   if (mode === MODE_GRID) { submitTeamIntent(text); return; }
+  if (mode === MODE_PROJECTS) { dispatchHomeUtterance(text); return; }
 });
 speech.addEventListener('error', (e) => {
   setIndicator('error', `Speech error: ${e.detail}`);
