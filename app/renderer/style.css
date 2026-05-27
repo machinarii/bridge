@@ -344,6 +344,13 @@ kbd {
 }
 #edit-bubble-text:focus { border-color: var(--focus); }
 
+/* Cancel sits at the far left of the edit-bubble row; Dictate +
+ * Save and run group on the right via auto margin. */
+.edit-bubble-row {
+  justify-content: flex-start;
+}
+.edit-bubble-row #edit-bubble-dictate { margin-left: auto; }
+
 #settings-modal[hidden] { display: none !important; }
 #settings-modal {
   position: fixed; inset: 0;
