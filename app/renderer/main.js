@@ -782,20 +782,26 @@ async function renderNewProjectRoles() {
   }
   wrap.appendChild(grid);
 
-  // Invisible row inside the picker with a right-aligned Confirm button.
+  // Invisible row inside the picker — Cancel on the left of Continue,
+  // both right-aligned within the surface.
   const row = document.createElement('div');
   row.className = 'role-confirm-row';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'role-cancel';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', () => renderProjects());
   const confirmBtn = document.createElement('button');
   confirmBtn.type = 'button';
   confirmBtn.className = 'role-confirm';
-  confirmBtn.textContent = 'Confirm';
+  confirmBtn.textContent = 'Continue';
   confirmBtn.addEventListener('click', () => advanceFromRolePicker());
-  row.appendChild(confirmBtn);
+  row.append(cancelBtn, confirmBtn);
   wrap.appendChild(row);
 
   surfaceEl.appendChild(wrap);
 
-  ring.set([...tileEls, confirmBtn]);
+  ring.set([...tileEls, cancelBtn, confirmBtn]);
   ring.index = 0;
   ring.paint();
 
@@ -852,8 +858,8 @@ function advanceFromRolePicker() {
 
 function goBackInCreateFlow() {
   if (mode === MODE_NEW_PROJ_GOAL) renderNewProjectName();
-  else if (mode === MODE_NEW_PROJ_NAME) renderNewProjectRoles();
-  else renderProjects();
+  else if (mode === MODE_NEW_PROJ_NAME) { stopMicVisualizer(); renderNewProjectRoles(); }
+  else { stopMicVisualizer(); renderProjects(); }
 }
 
 function confirmCapture() {
@@ -865,6 +871,84 @@ function confirmCapture() {
     finalizeNewProject();
   }
 }
+/* ---------- Capture-screen mic visualizer ----------
+ * Reactive bars + "Speak now" label. Uses AudioContext + getUserMedia
+ * to read live mic input (runs alongside SpeechRecognition without
+ * conflict in modern browsers). */
+let micViz = null;
+let micVizFrame = null;
+const MIC_BAR_COUNT = 7;
+
+function captureValueInner(text) {
+  if (text) return escapeHtml(text);
+  // Mic visualizer markup. Bars are static here; heights are updated
+  // by animateMicBars() each rAF tick.
+  const bars = Array.from({ length: MIC_BAR_COUNT }, () => '<div class="bar"></div>').join('');
+  return `
+    <div class="mic-stack">
+      <div class="mic-bars">${bars}</div>
+      <div class="mic-label">Speak now</div>
+    </div>`;
+}
+
+async function startMicVisualizer() {
+  // No-op if we already have a running visualizer.
+  if (micViz) { animateMicBars(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) throw new Error('AudioContext unavailable');
+    const ac = new Ctx();
+    const source = ac.createMediaStreamSource(stream);
+    const analyser = ac.createAnalyser();
+    analyser.fftSize = 64;
+    analyser.smoothingTimeConstant = 0.6;
+    source.connect(analyser);
+    micViz = { ac, analyser, stream, data: new Uint8Array(analyser.frequencyBinCount) };
+    animateMicBars();
+  } catch (err) {
+    console.warn('[mic-viz] failed:', err.message);
+  }
+}
+
+function stopMicVisualizer() {
+  if (micVizFrame) { cancelAnimationFrame(micVizFrame); micVizFrame = null; }
+  if (micViz) {
+    try { micViz.stream.getTracks().forEach(t => t.stop()); } catch {}
+    try { micViz.ac.close(); } catch {}
+    micViz = null;
+  }
+}
+
+function animateMicBars() {
+  if (!micViz) return;
+  const bars = document.querySelectorAll('.capture-tile .mic-bars .bar');
+  if (bars.length === 0) {
+    // Capture screen isn't visible anymore — keep checking until it is
+    // or until the visualizer is stopped from elsewhere.
+    micVizFrame = requestAnimationFrame(animateMicBars);
+    return;
+  }
+  const { analyser, data } = micViz;
+  analyser.getByteFrequencyData(data);
+  // Spread the bars across the lower-frequency portion of the
+  // spectrum where speech mostly sits, with a gentle peak in the
+  // middle for a more "wave"-like shape.
+  const usable = Math.min(data.length, 16);
+  bars.forEach((bar, i) => {
+    const t = i / (bars.length - 1);          // 0..1
+    const bin = Math.floor(t * (usable - 1)); // sample within usable bins
+    // Slight center-bias hump (Hann-window-ish) so the middle bars
+    // tend to be tallest when input is flat.
+    const center = 1 - Math.abs(t - 0.5) * 2;
+    const raw = data[bin] / 255;
+    const lvl = Math.min(1, raw + center * 0.12);
+    const h = 6 + lvl * 54; // 6..60 px
+    bar.style.height = `${h}px`;
+  });
+  micVizFrame = requestAnimationFrame(animateMicBars);
+}
+
 function renderNewProjectName() {
   mode = MODE_NEW_PROJ_NAME;
   setBreadcrumbs([{ label: 'Projects' }, { label: 'New project' }, { label: 'Name' }]);
@@ -873,11 +957,18 @@ function renderNewProjectName() {
   t.className = 'capture-tile';
   t.innerHTML = `
     <h2>Name this project</h2>
-    <div class="capture-value">${escapeHtml(newProjName) || '<span class="placeholder">(Speak now)</span>'}</div>
+    <div class="capture-value ${newProjName ? 'has-value' : ''}">${captureValueInner(newProjName)}</div>
     ${newProjRoleIds.includes('pm') || newProjRoleIds.includes('tpm')
       ? ''
-      : '<div class="lead-badge">Cadence will lead this team.</div>'}`;
+      : '<div class="lead-badge">Cadence will lead this team.</div>'}
+    <div class="role-confirm-row">
+      <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
+      <button type="button" class="role-confirm" id="capture-done">Done</button>
+    </div>`;
   surfaceEl.appendChild(t);
+  t.querySelector('#capture-cancel')?.addEventListener('click', () => { stopMicVisualizer(); renderProjects(); });
+  t.querySelector('#capture-done')?.addEventListener('click', () => confirmCapture());
+  startMicVisualizer();
   renderActionBar([
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
   ]);
@@ -897,8 +988,15 @@ function renderNewProjectGoal() {
   t.className = 'capture-tile';
   t.innerHTML = `
     <h2>What is this project's goal?</h2>
-    <div class="capture-value">${escapeHtml(newProjGoal) || '<span class="placeholder">(Speak now)</span>'}</div>`;
+    <div class="capture-value ${newProjGoal ? 'has-value' : ''}">${captureValueInner(newProjGoal)}</div>
+    <div class="role-confirm-row">
+      <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
+      <button type="button" class="role-confirm" id="capture-done">Done</button>
+    </div>`;
   surfaceEl.appendChild(t);
+  t.querySelector('#capture-cancel')?.addEventListener('click', () => { stopMicVisualizer(); renderProjects(); });
+  t.querySelector('#capture-done')?.addEventListener('click', () => confirmCapture());
+  startMicVisualizer();
   renderActionBar([
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
   ]);
@@ -1083,20 +1181,25 @@ async function openAddAgentPicker() {
   }
   wrap.appendChild(grid);
 
-  // Invisible row inside the picker with a right-aligned Confirm button.
+  // Invisible row inside the picker — Cancel on the left of Continue.
   const row = document.createElement('div');
   row.className = 'role-confirm-row';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'role-cancel';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', () => renderGrid());
   const confirmBtn = document.createElement('button');
   confirmBtn.type = 'button';
   confirmBtn.className = 'role-confirm';
-  confirmBtn.textContent = 'Confirm';
+  confirmBtn.textContent = 'Continue';
   confirmBtn.addEventListener('click', () => commitAddAgentSelections());
-  row.appendChild(confirmBtn);
+  row.append(cancelBtn, confirmBtn);
   wrap.appendChild(row);
 
   surfaceEl.appendChild(wrap);
 
-  ring.set([...tileEls, confirmBtn]);
+  ring.set([...tileEls, cancelBtn, confirmBtn]);
   // Land focus on the first togglable role; if every role is already
   // on the project (rare — PM lock plus full team), fall through to 0.
   const startIdx = firstOpenTile ? tileEls.indexOf(firstOpenTile) : 0;
@@ -2962,6 +3065,7 @@ function showTeamSummary(spec) {
 }
 
 async function finalizeNewProject() {
+  stopMicVisualizer();
   setIndicator('thinking', 'Customizing team charters…');
   try {
     const r = await fetch('/projects', {
