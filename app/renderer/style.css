@@ -906,6 +906,22 @@ body[data-mode="zoom"] #surface {
   background: var(--fg-dim);
   transition: background 200ms, box-shadow 200ms;
 }
+/* v2 §8 — Speaking indicator: while an agent's TTS plays, its tile
+ * (L1) and surface (L2) get a soft pulsing outline so the user
+ * always knows which agent is currently talking. */
+.agent-tile[data-speaking="true"] {
+  animation: agent-speaking 1.4s ease-in-out infinite;
+}
+@keyframes agent-speaking {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%      { box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent, #6ea8ff) 30%, transparent); }
+}
+body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
+  box-shadow:
+    0 0 0 2px color-mix(in oklab, var(--accent, #6ea8ff) 55%, transparent),
+    0 0 24px 6px color-mix(in oklab, var(--accent, #6ea8ff) 25%, transparent);
+}
+
 /* Live verb states drive dot + label affordance. */
 .agent-tile[data-status="drafting"]  .status .dot {
   background: var(--accent, #6ea8ff);
