@@ -463,6 +463,13 @@ let agentBusy = {};
 let agentStatus = {}; // { [agentId]: 'idle'|'drafting'|'analyzing'|'waiting' }
 const VERB_LABELS = { idle: 'Idle', drafting: 'Drafting', analyzing: 'Analyzing', waiting: 'Waiting' };
 function verbLabel(v) { return VERB_LABELS[v] || 'Idle'; }
+
+/* v2 — in-project activity feed: events received from the SSE channel
+ * scoped to activeProject. Capped to a sliding window so we don't
+ * grow unbounded. */
+const ACTIVITY_LIMIT = 200;
+let projectActivity = []; // [{ at, projectId, kind: 'activity'|'delegate', text, agentId? }]
+let activityDrawerOpen = false;
 let inflightController = null;
 let pttActive = false;
 
@@ -1415,6 +1422,7 @@ async function openAddAgentPicker() {
   setShortcuts([
     { gamepad: 'cross',   keyboard: 'Space', label: 'Toggle',   action: () => toggleFocusedAddAgentRole() },
     { gamepad: 'options', keyboard: 'E',     label: 'Explorer', action: () => toggleFileExplorer() },
+    {                     keyboard: 'A',     label: 'Activity', action: () => toggleActivityDrawer() },
     {                     keyboard: 'S',     label: 'Skills',   action: () => toggleSkillsDrawer() },
     { gamepad: 'circle',  keyboard: 'Esc',   label: 'Back',     action: () => renderGrid() },
   ]);
@@ -1473,6 +1481,7 @@ function updateGridShortcuts() {
     { gamepad: 'l1', keyboard: '[', label: 'Prev project', action: () => cycleProject(-1) },
     { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
     { gamepad: 'options', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
+    {                    keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
     {                    keyboard: 'S', label: 'Skills',   action: () => toggleSkillsDrawer() },
   ];
   if (!isLeadFocused) {
@@ -1934,6 +1943,7 @@ function _setL2Shortcuts() {
     { gamepad: 'l1',      keyboard: '[', label: 'Prev agent',   action: () => cycleAgent(-1) },
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
     { gamepad: 'options', keyboard: 'E', label: 'Explorer',     action: () => toggleFileExplorer() },
+    {                     keyboard: 'A', label: 'Activity',     action: () => toggleActivityDrawer() },
     {                     keyboard: 'S', label: 'Skills',       action: () => toggleSkillsDrawer() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
@@ -2197,13 +2207,98 @@ function handleBridgeEvent(ev) {
     // future features (activity feed, notifications, delegate lines)
     // can hook in without touching the subscriber wiring.
     case 'activity':
-    case 'delegate':
+    case 'delegate': {
+      // Keep only events for the active project; rest is discarded.
+      // (Once the cross-project feed in §2 lands we'll branch.)
+      if (!activeProject || ev.projectId !== activeProject.id) break;
+      pushActivityEntry(ev);
+      break;
+    }
     case 'notification':
     case 'note_added':
     case 'token':
     case 'tool':
     default:
       break;
+  }
+}
+
+function pushActivityEntry(ev) {
+  const entry = {
+    at: ev.at || Date.now(),
+    projectId: ev.projectId,
+    kind: ev.type, // 'activity' | 'delegate'
+  };
+  if (ev.type === 'activity') {
+    entry.text = ev.summary || '';
+    entry.agentId = ev.agentId;
+  } else if (ev.type === 'delegate') {
+    const from = agentNameFromId(ev.fromAgentId);
+    const to   = agentNameFromId(ev.toAgentId);
+    const task = (ev.task || '').slice(0, 140);
+    entry.text = `${from} → ${to}${task ? ': ' + task : ''}`;
+    entry.fromAgentId = ev.fromAgentId;
+    entry.toAgentId = ev.toAgentId;
+  }
+  if (!entry.text) return;
+  projectActivity.unshift(entry);
+  if (projectActivity.length > ACTIVITY_LIMIT) projectActivity.length = ACTIVITY_LIMIT;
+  if (activityDrawerOpen) repaintActivityList();
+}
+
+function agentNameFromId(agentId) {
+  if (!activeProject || !agentId) return agentId || '';
+  const a = activeProject.agents.find(x => x.id === agentId);
+  return a?.name || agentId;
+}
+
+function toggleActivityDrawer() {
+  if (mode === MODE_PROJECTS || mode === MODE_NEW_PROJ_ROLES) return;
+  if (!activeProject) return;
+  if (activityDrawerOpen) { closeActivityDrawer(); return; }
+  openActivityDrawer();
+}
+function openActivityDrawer() {
+  const el = document.getElementById('activity-drawer');
+  if (!el) return;
+  syncExplorerHeights();
+  el.hidden = false;
+  activityDrawerOpen = true;
+  document.body.dataset.activityDrawer = 'open';
+  // Mutually exclusive with the other left drawers.
+  if (fileExplorerOpen) closeFileExplorer();
+  if (skillsDrawerOpen) closeSkillsDrawer();
+  repaintActivityList();
+}
+function closeActivityDrawer() {
+  const el = document.getElementById('activity-drawer');
+  if (!el) return;
+  el.hidden = true;
+  activityDrawerOpen = false;
+  document.body.dataset.activityDrawer = 'closed';
+}
+function repaintActivityList() {
+  const list = document.querySelector('#activity-drawer .activity-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (projectActivity.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'activity-empty';
+    empty.textContent = 'No team activity yet.';
+    list.appendChild(empty);
+    return;
+  }
+  for (const entry of projectActivity) {
+    const row = document.createElement('div');
+    row.className = `activity-entry activity-${entry.kind}`;
+    const line = document.createElement('div');
+    line.className = 'activity-line';
+    line.textContent = entry.text;
+    const meta = document.createElement('div');
+    meta.className = 'activity-meta';
+    meta.textContent = formatBubbleTime(entry.at) || '';
+    row.append(line, meta);
+    list.appendChild(row);
   }
 }
 
@@ -2282,6 +2377,10 @@ async function exitToProjects() {
   closeFileViewer();
   if (fileExplorerOpen) closeFileExplorer();
   if (skillsDrawerOpen) closeSkillsDrawer();
+  if (activityDrawerOpen) closeActivityDrawer();
+  // Reset the in-project activity feed so we don't leak entries from
+  // one project into the next.
+  projectActivity = [];
   const fromProjectId = activeProject?.id;
   popZoomRect(); // discard stale cached rect; we'll compute fresh
   await backZoomWithSnapshot(
@@ -2412,6 +2511,7 @@ function openSkillsDrawer() {
   skillsDrawerOpen = true;
   document.body.dataset.skillsDrawer = 'open';
   if (fileExplorerOpen) closeFileExplorer();
+  if (activityDrawerOpen) closeActivityDrawer();
 }
 function closeSkillsDrawer() {
   skillsDrawerEl.hidden = true;
@@ -2465,6 +2565,7 @@ async function openFileExplorer() {
   document.body.dataset.fileDrawer = 'open';
   if (drawerOpen) closeHistoryDrawer();
   if (skillsDrawerOpen) closeSkillsDrawer();
+  if (activityDrawerOpen) closeActivityDrawer();
 }
 
 function closeFileExplorer() {
@@ -3198,6 +3299,13 @@ window.addEventListener('keydown', (e) => {
     if (mode === MODE_GRID || mode === MODE_ZOOM || mode === MODE_ADD_AGENT) {
       e.preventDefault();
       toggleSkillsDrawer();
+      return;
+    }
+  }
+  if (e.key === 'a' || e.key === 'A') {
+    if (mode === MODE_GRID || mode === MODE_ZOOM || mode === MODE_ADD_AGENT) {
+      e.preventDefault();
+      toggleActivityDrawer();
       return;
     }
   }
