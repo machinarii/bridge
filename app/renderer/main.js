@@ -2445,7 +2445,7 @@ document.getElementById('brand')?.addEventListener('click', (e) => {
 const settingsBtnEl       = document.getElementById('settings-btn');
 const settingsModalEl     = document.getElementById('settings-modal');
 const settingsApiKeyEl    = document.getElementById('settings-api-key');
-const settingsApiMetaEl   = document.getElementById('settings-api-key-current');
+const settingsApiMetaEl   = document.getElementById('settings-api-key-current'); // removed from DOM; keep null-safe
 const settingsModelEl     = document.getElementById('settings-model');
 const settingsRoleModelsEl= document.getElementById('settings-role-models');
 const settingsMcpListEl   = document.getElementById('settings-mcp-list');
@@ -2597,7 +2597,6 @@ async function openSettings() {
   settingsModalEl.hidden = false;
   selectSettingsTab('general');
   settingsApiKeyEl.value = '';
-  settingsApiMetaEl.textContent = '';
   let s = {};
   try {
     const r = await fetch('/settings');
@@ -2605,9 +2604,6 @@ async function openSettings() {
   } catch {}
   apiKeyIsSet = !!s.OPENROUTER_API_KEY_SET;
   if (apiKeyIsSet) settingsApiKeyEl.value = API_KEY_PLACEHOLDER;
-  settingsApiMetaEl.textContent = apiKeyIsSet
-    ? `Current: ${s.OPENROUTER_API_KEY} — leave as-is to keep.`
-    : 'No key set.';
   await Promise.all([ensureModelsList(), ensureRolesList()]);
   populateModelSelect(s.OPENROUTER_MODEL || '');
   populateRoleModels(s.OPENROUTER_MODEL_BY_ROLE || {});
