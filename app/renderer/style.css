@@ -2108,6 +2108,18 @@ body[data-file-viewer="open"] #surface {
   font-style: italic;
   color: color-mix(in oklab, var(--accent, #6ea8ff) 60%, var(--fg));
 }
+/* Cross-project feed (L0): project name crumb in front of the line. */
+.activity-entry .activity-project {
+  color: var(--accent, #6ea8ff);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.activity-entry:focus,
+.activity-entry:focus-visible {
+  outline: 1px solid var(--focus, #ffffff);
+  outline-offset: -1px;
+  background: rgba(255,255,255,0.04);
+}
 .activity-empty {
   padding: 1rem; font-size: 0.9rem; font-weight: 300;
   color: var(--fg-dim); font-style: italic; text-align: center;
