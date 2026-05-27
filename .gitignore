@@ -3,3 +3,15 @@ node_modules/
 .env
 app/state/
 .DS_Store
+
+# Electron + builder artifacts
+dist/
+out/
+
+# Local Parakeet venv (opt-in install)
+app/stt/.venv/
+app/stt/__pycache__/
+
+# Editor / IDE
+.vscode/
+.idea/
