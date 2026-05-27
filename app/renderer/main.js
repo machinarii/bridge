@@ -2447,6 +2447,7 @@ function repaintNotificationMenu() {
     const row = document.createElement('div');
     row.className = 'notification-entry';
     row.dataset.id = n.id;
+    row.tabIndex = 0; // keyboard / d-pad reachable
     const title = document.createElement('div');
     title.className = 'notif-title';
     title.textContent = n.title;
@@ -2501,6 +2502,84 @@ function closeNotificationMenu() {
 function toggleNotificationMenu() {
   if (notificationsOpen) closeNotificationMenu(); else openNotificationMenu();
 }
+
+/* Items focusable inside the notification menu, in visual order
+ * (top → bottom of the floating panel). Used by the menu's own
+ * keyboard handler. */
+function notificationMenuItems() {
+  const menu = document.getElementById('notification-menu');
+  if (!menu) return [];
+  // Notification entries first (visual top of the floating panel),
+  // then Clear all in the header.
+  const entries = [...menu.querySelectorAll('.notification-entry')];
+  const clearBtn = document.getElementById('notification-clear');
+  return [...entries, ...(clearBtn ? [clearBtn] : [])];
+}
+
+/* Focus first / last item, or step. Returns false when there's
+ * nothing focusable (empty menu). */
+function focusFirstNotifEntry() {
+  const items = notificationMenuItems();
+  if (items.length === 0) return false;
+  items[0].focus();
+  return true;
+}
+function focusLastNotifEntry() {
+  const items = notificationMenuItems();
+  if (items.length === 0) return false;
+  items[items.length - 1].focus();
+  return true;
+}
+function stepNotifEntry(delta) {
+  const items = notificationMenuItems();
+  if (items.length === 0) return false;
+  const idx = items.indexOf(document.activeElement);
+  if (idx < 0) { items[0].focus(); return true; }
+  const next = idx + delta;
+  if (next < 0) {
+    // Above the topmost entry → return focus to the bell icon.
+    document.getElementById('notification-btn')?.focus();
+    return true;
+  }
+  if (next >= items.length) {
+    // Below the last item → also return focus to the bell.
+    document.getElementById('notification-btn')?.focus();
+    return true;
+  }
+  items[next].focus();
+  return true;
+}
+
+/* Menu-scoped keyboard handler — bound on the floating panel itself
+ * so it only fires while the menu is open and an entry holds focus. */
+document.getElementById('notification-menu')?.addEventListener('keydown', (e) => {
+  if (!notificationsOpen) return;
+  const active = document.activeElement;
+  const onEntry = active?.classList?.contains('notification-entry');
+  if (e.key === 'Escape') {
+    e.preventDefault(); e.stopPropagation();
+    closeNotificationMenu();
+    document.getElementById('notification-btn')?.focus();
+    return;
+  }
+  if (e.key === 'ArrowUp')   { e.preventDefault(); e.stopPropagation(); stepNotifEntry(-1); return; }
+  if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); stepNotifEntry(+1); return; }
+  // Left / Right cycle action buttons inside the focused entry.
+  if (onEntry && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    const btns = [...active.querySelectorAll('.notif-actions button')];
+    if (btns.length === 0) return;
+    e.preventDefault(); e.stopPropagation();
+    btns[e.key === 'ArrowRight' ? 0 : btns.length - 1].focus();
+    return;
+  }
+  if (e.key === 'Enter' && onEntry) {
+    // Enter on an entry → click the primary action if one exists.
+    const primary = active.querySelector('.notif-actions .notif-primary')
+                 || active.querySelector('.notif-actions button');
+    if (primary) { e.preventDefault(); e.stopPropagation(); primary.click(); }
+    return;
+  }
+});
 function clearAllNotifications() {
   notifications = [];
   saveNotifs();
@@ -2516,9 +2595,19 @@ document.getElementById('notification-btn')?.addEventListener('keydown', (e) => 
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault(); e.stopPropagation();
     toggleNotificationMenu();
+    // Auto-walk focus into the menu so the user can immediately
+    // step through entries with Up/Down.
+    if (notificationsOpen) setTimeout(() => focusFirstNotifEntry(), 0);
   } else if (e.key === 'Escape' && notificationsOpen) {
     e.preventDefault(); e.stopPropagation();
     closeNotificationMenu();
+  } else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && notificationsOpen) {
+    // Step into the menu — Up lands on the topmost entry (visually
+    // closest to where the user's eye is going), Down does the same
+    // for symmetry.
+    e.preventDefault(); e.stopPropagation();
+    if (e.key === 'ArrowUp') focusFirstNotifEntry();
+    else                     focusLastNotifEntry();
   }
 });
 document.getElementById('notification-clear')?.addEventListener('click', (e) => {
@@ -2999,6 +3088,27 @@ gp.addEventListener('press', (e) => {
   // Settings modal takes over gamepad while open.
   if (settingsOpen) {
     handleSettingsGamepad(b);
+    return;
+  }
+
+  // Notification menu takes over while open — Up/Down step entries,
+  // Cross activates the focused entry's primary action, Circle closes.
+  if (notificationsOpen) {
+    if (b === 'up')     { stepNotifEntry(-1); return; }
+    if (b === 'down')   { stepNotifEntry(+1); return; }
+    if (b === 'cross') {
+      const active = document.activeElement;
+      if (active?.classList?.contains('notification-entry')) {
+        const primary = active.querySelector('.notif-actions .notif-primary')
+                     || active.querySelector('.notif-actions button');
+        primary?.click();
+        return;
+      }
+      if (active && typeof active.click === 'function') { active.click(); return; }
+    }
+    if (b === 'circle') { closeNotificationMenu();
+                          document.getElementById('notification-btn')?.focus();
+                          return; }
     return;
   }
 
