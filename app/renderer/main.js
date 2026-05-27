@@ -807,12 +807,14 @@ async function renderNewProjectRoles() {
     <p class="project-goal">Pick one or more roles for your team.</p>`;
   surfaceEl.appendChild(heading);
 
-  // Lazy-load role catalog
-  if (!window._roles) {
+  // Always fetch fresh — the catalog can change between sessions
+  // (e.g. roles renamed / added on the server) and we don't want a
+  // long-lived cache to hide that.
+  try {
     const r = await fetch('/roles');
     const data = await r.json();
-    window._roles = data.roles;
-  }
+    window._roles = data.roles || [];
+  } catch { window._roles = window._roles || []; }
   // PM stays at the top-left; everything else is alphabetized by label.
   const roles = [...window._roles].sort((a, b) => {
     if (a.id === 'pm') return -1;
@@ -1298,12 +1300,12 @@ let addAgentSelected = new Set(); // role ids checked in this session
 
 async function openAddAgentPicker() {
   if (!activeProject) return;
-  if (!window._roles) {
-    try {
-      const r = await fetch('/roles');
-      if (r.ok) window._roles = (await r.json()).roles || [];
-    } catch { window._roles = []; }
-  }
+  // Always fetch fresh so renames / additions on the server show up
+  // without a hard page reload.
+  try {
+    const r = await fetch('/roles');
+    if (r.ok) window._roles = (await r.json()).roles || [];
+  } catch { window._roles = window._roles || []; }
   const usedRoles = new Set(activeProject.agents.map(a => a.role));
   // Every role is shown. Existing agents are pre-checked and locked
   // (cannot be removed from this screen).
