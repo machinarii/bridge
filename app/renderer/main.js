@@ -1079,12 +1079,15 @@ function renderNewProjectName() {
   const tryCancelNameCapture = () => {
     maybeConfirmCancel(!!newProjName.trim(), () => { stopMicVisualizer(); renderProjects(); });
   };
-  t.querySelector('#capture-back')?.addEventListener('click', () => {
+  const nameBackEl   = t.querySelector('#capture-back');
+  const nameCancelEl = t.querySelector('#capture-cancel');
+  const nameDoneEl   = t.querySelector('#capture-done');
+  nameBackEl?.addEventListener('click', () => {
     stopMicVisualizer();
     renderNewProjectRoles();
   });
-  t.querySelector('#capture-cancel')?.addEventListener('click', tryCancelNameCapture);
-  t.querySelector('#capture-done')?.addEventListener('click', () => confirmCapture());
+  nameCancelEl?.addEventListener('click', tryCancelNameCapture);
+  nameDoneEl?.addEventListener('click', () => confirmCapture());
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelNameCapture));
   startMicVisualizer();
   // Auto-start speech recognition so the user can just speak. Partial
@@ -1099,7 +1102,10 @@ function renderNewProjectName() {
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => confirmCapture() });
-  ring.set([]);
+  // Action-row buttons join the focus ring so arrow / d-pad nav works.
+  ring.set([nameCancelEl, nameBackEl, nameDoneEl].filter(Boolean));
+  ring.index = ring.elements.length - 1; // primary focused by default
+  ring.paint();
 }
 
 function renderNewProjectGoal() {
@@ -1120,12 +1126,15 @@ function renderNewProjectGoal() {
   const tryCancelGoalCapture = () => {
     maybeConfirmCancel(!!newProjGoal.trim(), () => { stopMicVisualizer(); renderProjects(); });
   };
-  t.querySelector('#capture-back')?.addEventListener('click', () => {
+  const goalBackEl   = t.querySelector('#capture-back');
+  const goalCancelEl = t.querySelector('#capture-cancel');
+  const goalDoneEl   = t.querySelector('#capture-done');
+  goalBackEl?.addEventListener('click', () => {
     stopMicVisualizer();
     renderNewProjectName();
   });
-  t.querySelector('#capture-cancel')?.addEventListener('click', tryCancelGoalCapture);
-  t.querySelector('#capture-done')?.addEventListener('click', () => confirmCapture());
+  goalCancelEl?.addEventListener('click', tryCancelGoalCapture);
+  goalDoneEl?.addEventListener('click', () => confirmCapture());
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelGoalCapture));
   startMicVisualizer();
   setTimeout(() => startPTT(), 80);
@@ -1137,7 +1146,9 @@ function renderNewProjectGoal() {
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => confirmCapture() });
-  ring.set([]);
+  ring.set([goalCancelEl, goalBackEl, goalDoneEl].filter(Boolean));
+  ring.index = ring.elements.length - 1; // primary focused by default
+  ring.paint();
 }
 
 function gridLayout(n) {
@@ -2558,7 +2569,13 @@ gp.addEventListener('press', (e) => {
     return;
   }
   if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
-    if (b === 'cross')   confirmCapture();
+    if (b === 'left')        ring.move(-1);
+    else if (b === 'right')  ring.move(+1);
+    else if (b === 'cross') {
+      const cur = ring.current();
+      if (cur && typeof cur.click === 'function') cur.click();
+      else confirmCapture();
+    }
     else if (b === 'circle') goBackInCreateFlow();
     return;
   }
@@ -3106,9 +3123,19 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'Enter')   { e.preventDefault(); commitAddAgentSelections(); }
     else if (e.key === 'Escape')  { e.preventDefault(); renderGrid(); }
   } else if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
-    if (e.key === 'ArrowDown') { e.preventDefault(); enterShortcuts(); return; }
-    if (e.key === 'Enter')        { e.preventDefault(); confirmCapture(); }
-    else if (e.key === 'Escape')  { e.preventDefault(); goBackInCreateFlow(); }
+    // Action-row buttons (Cancel · Back · Continue/Create) form the
+    // ring. Left/Right walks them; Enter activates the focused one.
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); ring.move(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); ring.move(+1); return; }
+    if (e.key === 'ArrowDown')  { e.preventDefault(); enterShortcuts(); return; }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const cur = ring.current();
+      if (cur && typeof cur.click === 'function') cur.click();
+      else confirmCapture();
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); goBackInCreateFlow(); return; }
   }
 
   // Surface holds "close viewer" focus — Enter closes; Left returns to ×.
