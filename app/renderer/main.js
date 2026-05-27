@@ -2479,6 +2479,20 @@ let settingsModelsList = []; // shared OpenRouter model list
 let settingsRolesList = []; // [{ id, label }]
 let settingsMcpEntries = []; // [{ id, name, enabled }]
 
+/* Visual placeholder shown in the API key input when the server
+ * already has a key. Treated as "unchanged" on save — sending it
+ * back as the value would overwrite the real key with asterisks. */
+const API_KEY_PLACEHOLDER = '*'.repeat(30);
+let apiKeyIsSet = false;
+settingsApiKeyEl?.addEventListener('focus', () => {
+  if (settingsApiKeyEl.value === API_KEY_PLACEHOLDER) settingsApiKeyEl.value = '';
+});
+settingsApiKeyEl?.addEventListener('blur', () => {
+  if (apiKeyIsSet && settingsApiKeyEl.value === '') {
+    settingsApiKeyEl.value = API_KEY_PLACEHOLDER;
+  }
+});
+
 function selectSettingsTab(name) {
   for (const t of settingsTabEls) t.setAttribute('aria-selected', String(t.dataset.tab === name));
   for (const p of settingsPaneEls) p.hidden = (p.dataset.tab !== name);
