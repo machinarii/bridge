@@ -999,6 +999,24 @@ body[data-mode="zoom"] #surface {
 .agent-view .agent-header {
   display: flex; align-items: center; gap: 14px;
   margin-bottom: 18px;
+  /* Faded mask layer behind the heading — chat content scrolling up
+   * dissolves into the heading via a downward fade rather than a
+   * hard cutoff at the top of the chat-scroll. */
+  position: relative;
+  z-index: 2;
+}
+.agent-view .agent-header::after {
+  content: '';
+  position: absolute;
+  left: -1.5rem; right: -1.5rem;
+  top: -1.25rem;            /* extend up over .agent-view padding */
+  bottom: -1.25rem;          /* extend down across into chat-scroll */
+  z-index: -1;               /* sit behind heading content but in front of bubbles */
+  pointer-events: none;
+  background: linear-gradient(to bottom,
+    color-mix(in oklab, var(--bg-elev) 92%, transparent) 0%,
+    color-mix(in oklab, var(--bg-elev) 88%, transparent) 55%,
+    transparent 100%);
 }
 .agent-view .agent-header .agent-title {
   display: flex; flex-direction: column;
@@ -1051,16 +1069,15 @@ body[data-mode="zoom"] #surface {
   flex-direction: column;
   gap: 0.7rem;
   scroll-behavior: smooth;
-  /* Fade the top edge so chat content gradually dissolves into the
-   * header area instead of being abruptly clipped behind it. */
+  /* The top fade now lives on .agent-header::after (behind the
+   * heading); the chat-scroll only needs the bottom dissolve so the
+   * tile-surface / hint area below feels seamless. */
   -webkit-mask-image: linear-gradient(to bottom,
-      transparent 0, transparent 6px,
-      rgba(0,0,0,1) 56px,
+      rgba(0,0,0,1) 0%,
       rgba(0,0,0,1) calc(100% - 8px),
       transparent 100%);
           mask-image: linear-gradient(to bottom,
-      transparent 0, transparent 6px,
-      rgba(0,0,0,1) 56px,
+      rgba(0,0,0,1) 0%,
       rgba(0,0,0,1) calc(100% - 8px),
       transparent 100%);
 }
