@@ -132,43 +132,74 @@ handoff class.
 
 ---
 
-## 5. Shared project scratchpad (L1/L2 left panel)
+## 5. Shared project scratchpad (independent left panel, `S` key)
 
-Reuse the **left-panel pattern** again — a pinned-notes panel
-accessible on L1 (and L2) showing the team's shared scratchpad: open
-questions, decisions, recent notes any agent has dropped. Editable by
-the user; agents append automatically when they `take_note`.
+A **standalone left-side drawer** — separate element from the
+Explorer / Activity Feed drawers, opened with the **`S` keyboard
+shortcut**. Same visual pattern as `#file-drawer` (rounded card,
+matching surface-top / surface-bottom CSS vars, list of entries with
+Enter to open / edit), but it's its own DOM node and its own toggle.
 
-- Mirrors the file drawer's drawer behavior: focusable list,
-  Enter to open / edit, separate add-note affordance later.
-- Could be a third tab inside the same left drawer alongside Files +
-  Activity Feed.
+Contents: pinned notes the team has accumulated — open questions,
+decisions, recent notes any agent has dropped. Editable by the user;
+agents append automatically when they `take_note`.
 
-**Implementation sketch.** This is the persistent project state we
-already have (`app/state/<projectId>/notes/`). Just wire a left-panel
-view of it that updates on the events channel when a `note_added`
-event fires.
+**Shortcut conflict to resolve.** `S` is currently bound to the
+Skills drawer. Skills is unused right now (the `+ Add skill` flow was
+removed), so the cleanest path is to repurpose `S` for Scratchpad and
+either delete the Skills drawer or move it behind a different key.
+Decide before implementation.
+
+**Mutually-exclusive with other drawers.** Opening Scratchpad closes
+the Explorer (and the Activity Feed, once that exists), and vice
+versa — same swap behavior the Explorer ↔ Skills drawer pair has
+today.
+
+**Implementation sketch.** Reuses the persistent project state we
+already have (`app/state/<projectId>/notes/`). New `#scratchpad-drawer`
+sibling of `#file-drawer`, sharing all the same styles via a
+`.drawer.left` class. Subscribes to the SSE events channel and
+appends new note entries as `note_added` events fire so the list
+updates live while an agent is working.
 
 ---
 
-## 6. Notifications: icon + center, with macOS-style toast
+## 6. Notifications
 
-New notification system, replacing the need for a top status line.
-Two surfaces:
+Two **independent** UI elements driven by the same event stream:
 
-- **Notification icon** in the footer rail, immediately **left of the
-  settings gear**. Bell-style SVG, same hit target size as the gear.
-  A small dot indicates unread; a count badge appears for ≥1 unread.
-- **Notification menu** opens when the icon is activated. Steam OS-
-  style list: each entry has a title, body, timestamp, and (optionally)
-  inline action buttons (e.g., `Approve` / `Dismiss` for permission
+### 6a. Notification icon + menu (footer rail)
+
+- **Icon** in the footer rail, immediately **left of the settings
+  gear**. Bell-style SVG, same hit target size as the gear. A small
+  dot indicates unread; a count badge appears for ≥1 unread.
+- **Menu** opens when the icon is activated — Steam OS-style list:
+  each entry has a title, body, timestamp, and (optionally) inline
+  action buttons (e.g., `Approve` / `Dismiss` for permission
   prompts). Same focus / nav model as the rest of the rail.
-- **Toast card** appears top-right (macOS-style) when a new
-  notification arrives. Slides in, persists ~4s by default (or
-  indefinitely if it requires action), then collapses into the menu.
-  Card uses the standard Steam OS sizing tokens.
+- Entries persist in the menu until the user dismisses or clears
+  them; this is the durable history of team activity.
 
-What ends up here:
+### 6b. macOS-style toast (separate component)
+
+A **distinct UI element**, not part of the notification menu. When a
+new notification arrives, a card slides in **top-right of the
+screen** (macOS-style):
+
+- Independent DOM node, independent CSS, independent focus model.
+- Slides in, persists ~4s for informational notifications, or
+  **indefinitely** if it requires an action.
+- Auto-dismisses → does **not** disappear from the menu; the menu
+  still holds the durable copy.
+- Multiple toasts stack vertically with a small gap.
+- Card uses the standard Steam OS sizing tokens.
+
+The toast is the transient, surface-level alert; the menu is the
+ledger. They subscribe to the same events but render and dismiss on
+independent timelines.
+
+### What surfaces here
+
 - Agent needs approval to take a material action.
 - An agent has finished a long-running task.
 - A delegated task has resumed back to the lead.
@@ -177,16 +208,20 @@ What ends up here:
 This subsumes the "team-level status bar" idea — the user can see
 everything important without dedicating chrome to it.
 
-**Implementation sketch.** Server emits `notification` events; the
-renderer maintains an in-memory queue (and persists unread count
-to sessionStorage). Three UI components:
-  - `#notification-btn` in the footer rail
-  - `#notification-menu` modal (Steam-OS list)
-  - `#notification-toast-stack` fixed top-right container, cards
-    auto-dismiss
+### Implementation sketch
+
+Server emits `notification` events; the renderer maintains an
+in-memory queue (and persists unread count to sessionStorage). Three
+UI components, each independent:
+
+  - `#notification-btn` — footer rail icon (left of gear)
+  - `#notification-menu` — Steam-OS list modal opened from the icon
+  - `#notification-toast-stack` — fixed top-right container, slides
+    cards in / out independently of the menu
 
 Notification entries that require action emit follow-up `approval`
-events back to the server when the user clicks Approve / Dismiss.
+events back to the server when the user clicks Approve / Dismiss in
+either the toast OR the menu.
 
 ---
 
