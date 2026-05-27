@@ -676,7 +676,11 @@ function createSurfaceCloseButton(onClose) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault(); e.stopPropagation();
       onClose();
-    } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft' ||
+               e.key === 'ArrowUp'   || e.key === 'ArrowRight') {
+      // Any arrow key releases the × focus and hands it back to the
+      // surface ring. Up/Right have no natural neighbor (X sits at
+      // the top-right corner), so we still treat them as "leave".
       e.preventDefault(); e.stopPropagation();
       btn.blur();
       ring.paint();
@@ -2982,6 +2986,18 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'Enter')   { e.preventDefault(); advanceFromRolePicker(); }
     else if (e.key === 'Escape')  { e.preventDefault(); renderProjects(); }
   } else if (mode === MODE_ADD_AGENT) {
+    // Up / Right from the top-right of the grid hops to the × close button.
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowRight') && document.activeElement !== surfaceEl.querySelector('.surface-close')) {
+      const grid = surfaceEl.querySelector('.role-grid');
+      if (grid) {
+        const cols = grid._cols || 4;
+        const r = Math.floor(ring.index / cols);
+        const c = ring.index % cols;
+        if ((e.key === 'ArrowUp' && r === 0) || (e.key === 'ArrowRight' && c === cols - 1)) {
+          if (focusSurfaceClose()) { e.preventDefault(); return; }
+        }
+      }
+    }
     if (e.key === 'ArrowDown') {
       const grid = surfaceEl.querySelector('.role-grid');
       if (grid) {
