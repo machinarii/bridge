@@ -885,18 +885,33 @@ body[data-mode="zoom"] #surface {
 .agent-view .bubble .bubble-content {
   display: block;
 }
+/* Action row hangs OUTSIDE the bubble (to the side opposite the
+ * bubble's alignment) so it doesn't push the bubble's content. */
 .agent-view .bubble .bubble-actions {
   display: none;
   align-items: center;
   gap: 0.5rem;
-  margin-top: 0.4rem;
-  padding-top: 0.4rem;
-  border-top: 1px solid rgba(255,255,255,0.10);
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 0.78rem;
   color: rgba(255,255,255,0.75);
+  white-space: nowrap;
 }
 .agent-view .bubble.focused .bubble-actions {
   display: inline-flex;
+}
+/* Agent bubbles (left-aligned): actions sit immediately to the right
+ * of the bubble. User bubbles (right-aligned): actions sit to the
+ * left so they stay inside the chat-scroll. */
+.agent-view .bubble.agent .bubble-actions {
+  left: 100%;
+  margin-left: 0.6rem;
+}
+.agent-view .bubble.user .bubble-actions {
+  right: 100%;
+  margin-right: 0.6rem;
+  flex-direction: row-reverse;
 }
 .agent-view .bubble .bubble-time {
   flex: 1 1 auto;
