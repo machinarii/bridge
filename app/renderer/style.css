@@ -836,20 +836,11 @@ body[data-mode="zoom"] #surface {
     0 0 16px 2px rgba(255,255,255,0.25);
 }
 #action-bar {
-  /* No gap — using margin between children to avoid the flex
-   * whitespace-item bug and to keep the Back chip flush against the
-   * pill's left edge. Right padding stays so Select doesn't bleed
-   * into the pill's right edge. */
-  display: inline-flex; justify-content: flex-end; align-items: center;
+  display: inline-flex; justify-content: flex-end; align-items: center; gap: 0.5rem;
   flex: 0 0 auto;
   background: rgba(20,22,28,0.92);
-  padding: 4px 10px 4px 0;
+  padding: 4px 0;
   border-radius: 10px;
-}
-#action-bar > * + * {
-  /* Replaces gap: spacing only between siblings, never before the
-   * first or after the last. */
-  margin-left: 0.5rem;
 }
 #action-bar .action {
   display: inline-flex; align-items: center; gap: 0.4rem;
