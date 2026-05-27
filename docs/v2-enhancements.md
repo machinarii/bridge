@@ -5,7 +5,7 @@ surface" → "team workspace where the user supervises multiple agents
 working in parallel." Inspired by Claude Cowork's multi-agent model.
 
 These are deliberately scoped to surface what the team is *already*
-doing (via `team.runTeamVoice`, `delegate-and-resume`, scratchpad,
+doing (via `team.runTeamVoice`, `delegate-and-resume`, memory,
 autosave) rather than re-architect the orchestrator.
 
 ---
@@ -127,40 +127,42 @@ italicized prefix).
 
 **Implementation sketch.** When the delegation event fires, append a
 `{ role: 'system', content: 'Cassidy → Forge: <task>' }` turn to both
-agents' scratchpads. Renderer renders `bubble.system` with the
+agents' memorys. Renderer renders `bubble.system` with the
 handoff class.
 
 ---
 
-## 5. Shared project scratchpad (independent left panel, `S` key)
+## 5. Shared project Memory (independent left panel, `M` key)
 
 A **standalone left-side drawer** — separate element from the
-Explorer / Activity Feed drawers, opened with the **`S` keyboard
+Explorer / Activity Feed drawers, opened with the **`M` keyboard
 shortcut**. Same visual pattern as `#file-drawer` (rounded card,
 matching surface-top / surface-bottom CSS vars, list of entries with
 Enter to open / edit), but it's its own DOM node and its own toggle.
 
-Contents: pinned notes the team has accumulated — open questions,
+Contents: the team's accumulated working knowledge — open questions,
 decisions, recent notes any agent has dropped. Editable by the user;
-agents append automatically when they `take_note`.
+agents append automatically when they `take_note`. "Memory" matches
+the Claude vocabulary and scales naturally if Bridge later adds
+per-agent memories alongside the project-wide one.
 
-**Shortcut conflict to resolve.** `S` is currently bound to the
-Skills drawer. Skills is unused right now (the `+ Add skill` flow was
-removed), so the cleanest path is to repurpose `S` for Scratchpad and
-either delete the Skills drawer or move it behind a different key.
-Decide before implementation.
+**Skills drawer cleanup.** The `S` key + Skills drawer were
+scaffolded earlier but the `+ Add skill` flow was removed. Drop the
+Skills drawer entirely when shipping Memory (or move it behind a
+different key if it's revived later). `M` is unbound today, so no
+shortcut conflict.
 
-**Mutually-exclusive with other drawers.** Opening Scratchpad closes
+**Mutually-exclusive with other drawers.** Opening Memory closes
 the Explorer (and the Activity Feed, once that exists), and vice
 versa — same swap behavior the Explorer ↔ Skills drawer pair has
 today.
 
 **Implementation sketch.** Reuses the persistent project state we
-already have (`app/state/<projectId>/notes/`). New `#scratchpad-drawer`
+already have (`app/state/<projectId>/notes/`). New `#memory-drawer`
 sibling of `#file-drawer`, sharing all the same styles via a
 `.drawer.left` class. Subscribes to the SSE events channel and
-appends new note entries as `note_added` events fire so the list
-updates live while an agent is working.
+appends new entries as `note_added` events fire so the list updates
+live while an agent is working.
 
 ---
 
@@ -170,13 +172,23 @@ Two **independent** UI elements driven by the same event stream:
 
 ### 6a. Notification icon + menu (footer rail)
 
-- **Icon** in the footer rail, immediately **left of the settings
-  gear**. Bell-style SVG, same hit target size as the gear. A small
-  dot indicates unread; a count badge appears for ≥1 unread.
-- **Menu** opens when the icon is activated — Steam OS-style list:
-  each entry has a title, body, timestamp, and (optionally) inline
-  action buttons (e.g., `Approve` / `Dismiss` for permission
-  prompts). Same focus / nav model as the rest of the rail.
+The notification surface is a single **icon that doubles as the menu
+opener** — the icon shows the live unread count, and selecting it
+reveals a list anchored **just above** the icon (not a centered
+modal, not in the rail itself).
+
+- **Icon** sits in the footer rail, immediately **left of the
+  settings gear**. Bell-style SVG, same hit target size as the gear.
+  Displays the unread count as a small numeric badge when ≥ 1; bare
+  icon when 0.
+- **Menu** appears as a floating panel **immediately above the icon
+  on activation** (Enter / click / d-pad Cross). Anchored to the
+  icon's position, slides up briefly on open, dismisses on Esc /
+  Circle / clicking outside.
+- **Menu contents** — Steam-OS-style list, newest first: each entry
+  has a title, body, timestamp, and (optionally) inline action
+  buttons (e.g., `Approve` / `Dismiss` for permission prompts). Same
+  focus / nav model as the rest of the rail.
 - Entries persist in the menu until the user dismisses or clears
   them; this is the durable history of team activity.
 
@@ -249,5 +261,5 @@ either the toast OR the menu.
 5. **§4 inter-agent delegation in chat** — surfaces the existing
    delegate-and-resume mechanics.
 6. **§2 cross-project feed** — once §3's drawer pattern is stable.
-7. **§5 shared scratchpad panel** — wires existing notes into the
+7. **§5 shared memory panel** — wires existing notes into the
    left-panel system.
