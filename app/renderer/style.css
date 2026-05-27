@@ -1244,17 +1244,31 @@ body[data-mode="zoom"] #surface {
 /* ===== Capture tile (name + goal steps) ===== */
 .capture-tile {
   padding: 2rem;
-  max-width: 720px;
-  margin: 0 auto;
+  /* Allow the value field to grow much wider than the previous 720px
+   * cap — the heading + value sit together vertically centered inside
+   * the surface. */
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
 }
-.capture-tile h2 { margin: 0 0 0.5rem; font-size: 1.6rem; font-weight: 400; }
-.capture-tile .hint { opacity: 0.6; margin-bottom: 1.5rem; }
+.capture-tile h2 { margin: 0; font-size: 1.6rem; font-weight: 400; text-align: center; }
+.capture-tile .hint { opacity: 0.6; margin: 0; text-align: center; }
 .capture-tile .capture-value {
   font-size: 1.4rem;
   min-height: 2.5em;
-  padding: 1rem;
+  padding: 1.5rem;
   background: rgba(255,255,255,0.06);
-  border-radius: 8px;
+  border-radius: var(--steam-radius);
+  /* ~4x the old apparent width: was ~720px capped; now spans up to
+   * 80vw / 1200px. */
+  width: min(1200px, 80vw);
+  box-sizing: border-box;
 }
 .capture-tile .placeholder { opacity: 0.4; }
 .capture-tile .lead-badge {
