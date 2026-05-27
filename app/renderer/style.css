@@ -285,10 +285,19 @@ kbd {
   transition: background 120ms, border-color 120ms;
   flex: 0 0 auto;
 }
-.stepper-btn:first-child {
+/* Layout is [input] [−] [+]: input rounded only on the left, −
+ * flush in the middle (no rounded corners), + rounded only on the
+ * right. Borders share edges. */
+.stepper #settings-git-interval {
   border-radius: var(--steam-radius) 0 0 var(--steam-radius);
+  border-right: 0;
 }
-.stepper-btn:last-child {
+.stepper-btn#settings-git-interval-dec {
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+}
+.stepper-btn#settings-git-interval-inc {
   border-radius: 0 var(--steam-radius) var(--steam-radius) 0;
 }
 .stepper-btn:hover {
@@ -300,11 +309,6 @@ kbd {
   outline: 2px solid var(--focus, #ffffff);
   outline-offset: 2px;
   z-index: 1;
-}
-.stepper #settings-git-interval {
-  border-radius: 0;
-  border-left: 0;
-  border-right: 0;
 }
 /* Hide the native number input arrows so we own the increment UX. */
 .stepper input[type="number"] { -moz-appearance: textfield; }
