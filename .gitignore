@@ -16,6 +16,11 @@ app/stt/__pycache__/
 build/python-arm64/
 build/python-x64/
 
+# Option B: pre-installed deps + pre-downloaded HF model (~2GB total)
+build/site-packages-arm64/
+build/site-packages-x64/
+build/hf-cache/
+
 # Editor / IDE
 .vscode/
 .idea/
