@@ -260,8 +260,12 @@ kbd {
   text-align: left;
 }
 .settings-pane[data-tab="git"] .settings-field--row {
+  flex-direction: row;
   justify-content: flex-start;
   align-items: center;
+  align-self: flex-start;
+  text-align: left;
+  width: auto;
 }
 .settings-pane[data-tab="git"] #settings-git-interval { max-width: 80px; text-align: center; }
 
