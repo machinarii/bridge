@@ -952,10 +952,13 @@ const MIC_BAR_COUNT = 7;
 function captureValueInner(text) {
   if (text) return escapeHtml(text);
   // Mic visualizer markup. Bars are static here; heights are updated
-  // by animateMicBars() each rAF tick.
+  // by animateMicBars() each rAF tick. The .mic-live-text slot above
+  // the bars is filled by the speech 'partial' listener while the
+  // user is dictating.
   const bars = Array.from({ length: MIC_BAR_COUNT }, () => '<div class="bar"></div>').join('');
   return `
     <div class="mic-stack">
+      <div class="mic-live-text" aria-live="polite"></div>
       <div class="mic-bars">${bars}</div>
       <div class="mic-label">Speak now</div>
     </div>`;
@@ -1919,6 +1922,10 @@ function endPTT() {
 
 speech.addEventListener('partial', (e) => {
   if (e.detail) setIndicator('listening', `“${e.detail}”`);
+  // Mirror the live transcript into the capture screen's mic-stack so
+  // the user sees their words above the visualizer.
+  const liveEl = document.querySelector('.capture-tile .mic-live-text');
+  if (liveEl) liveEl.textContent = e.detail || '';
 });
 speech.addEventListener('end', (e) => {
   const text = e.detail;
