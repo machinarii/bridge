@@ -7,7 +7,7 @@ import { listRoles } from './roles.js';
 import { listProjects, getProject, createProject, setAgentEnabled, addAgent } from './projects.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
-import { setLastSpec, getContext } from './scratchpad.js';
+import { setLastSpec, getContext, lastActivityAt } from './scratchpad.js';
 import { runTeamVoice } from './team.js';
 import {
   notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
@@ -139,7 +139,15 @@ app.get('/roles', (_req, res) => {
 });
 
 app.get('/projects', (_req, res) => {
-  res.json({ projects: listProjects() });
+  // Enrich each project with the most-recent scratchpad activity
+  // across its agents. Falls back to createdAt when there's nothing
+  // logged yet so the UI always has something to render.
+  const enriched = listProjects().map(p => {
+    const agentIds = p.agents.map(a => a.id);
+    const last = lastActivityAt(agentIds);
+    return { ...p, updatedAt: last || p.createdAt };
+  });
+  res.json({ projects: enriched });
 });
 
 app.get('/projects/:pid', (req, res) => {

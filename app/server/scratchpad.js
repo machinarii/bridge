@@ -50,6 +50,19 @@ function record(agentId) {
 
 export function getContext(agentId) { return record(agentId); }
 
+/** Most recent updatedAt across the given agent ids. Returns null if
+ *  none of those agents have a scratchpad record yet (i.e. no
+ *  activity since project creation). */
+export function lastActivityAt(agentIds) {
+  const data = load();
+  let max = 0;
+  for (const id of agentIds || []) {
+    const r = data[id];
+    if (r?.updatedAt && r.updatedAt > max) max = r.updatedAt;
+  }
+  return max || null;
+}
+
 export function appendTurn(agentId, role, content) {
   const r = record(agentId);
   r.messages.push({ role, content, at: Date.now() });
