@@ -863,9 +863,10 @@ body[data-mode="zoom"] #surface {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* Mirror the L0 / L1 grids: 0.5rem left/right (matches
-   * .agent-grid and .project-picker side padding). */
-  padding: 0.5rem;
+  /* 0.5rem all sides to match the L0/L1 grids, plus extra
+   * padding-right so the scrollbar lives in its own gutter and
+   * doesn't graze the bubbles. */
+  padding: 0.5rem 1.75rem 0.5rem 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
