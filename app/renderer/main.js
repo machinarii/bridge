@@ -745,6 +745,15 @@ async function renderNewProjectRoles() {
   setBreadcrumbs([{ label: 'Projects' }, { label: 'New project' }, { label: 'Roles' }]);
   surfaceEl.innerHTML = '';
 
+  // Page heading — matches the add-agent screen's heading shape so
+  // both role-picker variants read consistently.
+  const heading = document.createElement('header');
+  heading.className = 'project-heading';
+  heading.innerHTML = `
+    <h2 class="project-title">New project</h2>
+    <p class="project-goal">Pick one or more roles for your team.</p>`;
+  surfaceEl.appendChild(heading);
+
   // Lazy-load role catalog
   if (!window._roles) {
     const r = await fetch('/roles');
@@ -782,8 +791,13 @@ async function renderNewProjectRoles() {
   }
   wrap.appendChild(grid);
 
-  // Close × at top-right exits to L0 (same as Cancel).
-  surfaceEl.appendChild(createSurfaceCloseButton(() => renderProjects()));
+  // Close × at top-right and Cancel both abort to L0, but confirm first
+  // if the user has selected any role beyond the default PM.
+  const tryCancelRolePicker = () => {
+    const hasSelections = newProjRoleIds.some(r => r !== 'pm');
+    maybeConfirmCancel(hasSelections, () => renderProjects());
+  };
+  surfaceEl.appendChild(createSurfaceCloseButton(tryCancelRolePicker));
 
   // Invisible row inside the picker — Cancel on the left of Continue,
   // both right-aligned within the surface.
@@ -793,7 +807,7 @@ async function renderNewProjectRoles() {
   cancelBtn.type = 'button';
   cancelBtn.className = 'role-cancel';
   cancelBtn.textContent = 'Cancel';
-  cancelBtn.addEventListener('click', () => renderProjects());
+  cancelBtn.addEventListener('click', tryCancelRolePicker);
   const confirmBtn = document.createElement('button');
   confirmBtn.type = 'button';
   confirmBtn.className = 'role-confirm';
@@ -969,10 +983,12 @@ function renderNewProjectName() {
       <button type="button" class="role-confirm" id="capture-done">Done</button>
     </div>`;
   surfaceEl.appendChild(t);
-  t.querySelector('#capture-cancel')?.addEventListener('click', () => { stopMicVisualizer(); renderProjects(); });
+  const tryCancelNameCapture = () => {
+    maybeConfirmCancel(!!newProjName.trim(), () => { stopMicVisualizer(); renderProjects(); });
+  };
+  t.querySelector('#capture-cancel')?.addEventListener('click', tryCancelNameCapture);
   t.querySelector('#capture-done')?.addEventListener('click', () => confirmCapture());
-  // Close × at top-right exits the create flow back to L0.
-  surfaceEl.appendChild(createSurfaceCloseButton(() => { stopMicVisualizer(); renderProjects(); }));
+  surfaceEl.appendChild(createSurfaceCloseButton(tryCancelNameCapture));
   startMicVisualizer();
   renderActionBar([
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
@@ -999,9 +1015,12 @@ function renderNewProjectGoal() {
       <button type="button" class="role-confirm" id="capture-done">Done</button>
     </div>`;
   surfaceEl.appendChild(t);
-  t.querySelector('#capture-cancel')?.addEventListener('click', () => { stopMicVisualizer(); renderProjects(); });
+  const tryCancelGoalCapture = () => {
+    maybeConfirmCancel(!!newProjGoal.trim(), () => { stopMicVisualizer(); renderProjects(); });
+  };
+  t.querySelector('#capture-cancel')?.addEventListener('click', tryCancelGoalCapture);
   t.querySelector('#capture-done')?.addEventListener('click', () => confirmCapture());
-  surfaceEl.appendChild(createSurfaceCloseButton(() => { stopMicVisualizer(); renderProjects(); }));
+  surfaceEl.appendChild(createSurfaceCloseButton(tryCancelGoalCapture));
   startMicVisualizer();
   renderActionBar([
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
@@ -1150,7 +1169,10 @@ async function openAddAgentPicker() {
     <h2 class="project-title">Add agent</h2>
     <p class="project-goal">Pick one or more roles to add.</p>`;
   surfaceEl.appendChild(heading);
-  surfaceEl.appendChild(createSurfaceCloseButton(() => renderGrid()));
+  // Close × — confirms if the user has any new selections.
+  surfaceEl.appendChild(createSurfaceCloseButton(() => {
+    maybeConfirmCancel(addAgentSelected.size > 0, () => renderGrid());
+  }));
 
   // Locked (already on project) first, alphabetized; then the rest,
   // also alphabetized. Focus lands on the first togglable tile.
@@ -1188,13 +1210,16 @@ async function openAddAgentPicker() {
   wrap.appendChild(grid);
 
   // Invisible row inside the picker — Cancel on the left of Continue.
+  const tryCancelAddAgent = () => {
+    maybeConfirmCancel(addAgentSelected.size > 0, () => renderGrid());
+  };
   const row = document.createElement('div');
   row.className = 'role-confirm-row';
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
   cancelBtn.className = 'role-cancel';
   cancelBtn.textContent = 'Cancel';
-  cancelBtn.addEventListener('click', () => renderGrid());
+  cancelBtn.addEventListener('click', tryCancelAddAgent);
   const confirmBtn = document.createElement('button');
   confirmBtn.type = 'button';
   confirmBtn.className = 'role-confirm';
@@ -1554,6 +1579,50 @@ async function retryBubble(i) {
   leaveBubbleFocus();
   submitIntent(text);
 }
+
+/* ---------- Confirm-cancel modal ----------
+ * Shown when the user tries to abandon a flow that has unsaved
+ * selections / input. Single shared modal: callers pass a callback
+ * to run on Yes. Esc / No just dismisses. */
+const confirmCancelModalEl = document.getElementById('confirm-cancel-modal');
+const confirmCancelYesEl   = document.getElementById('confirm-cancel-yes');
+const confirmCancelNoEl    = document.getElementById('confirm-cancel-no');
+let confirmCancelOpen = false;
+let confirmCancelPending = null; // function to run on Yes
+
+function maybeConfirmCancel(hasUnsaved, onCancel) {
+  if (!hasUnsaved) { onCancel(); return; }
+  confirmCancelPending = onCancel;
+  confirmCancelOpen = true;
+  confirmCancelModalEl.hidden = false;
+  setTimeout(() => confirmCancelNoEl.focus(), 0);
+}
+
+function closeConfirmCancel() {
+  confirmCancelModalEl.hidden = true;
+  confirmCancelOpen = false;
+  confirmCancelPending = null;
+}
+
+confirmCancelNoEl?.addEventListener('click', () => closeConfirmCancel());
+confirmCancelYesEl?.addEventListener('click', () => {
+  const fn = confirmCancelPending;
+  closeConfirmCancel();
+  if (fn) fn();
+});
+confirmCancelModalEl?.addEventListener('keydown', (e) => {
+  if (!confirmCancelOpen) return;
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeConfirmCancel(); return; }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault(); e.stopPropagation();
+    (document.activeElement === confirmCancelYesEl ? confirmCancelNoEl : confirmCancelYesEl)?.focus();
+    return;
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault(); e.stopPropagation();
+    (document.activeElement === confirmCancelYesEl ? confirmCancelYesEl : confirmCancelNoEl).click();
+  }
+});
 
 /* ---------- Edit-bubble modal ---------- */
 const editBubbleModalEl   = document.getElementById('edit-bubble-modal');
@@ -2491,7 +2560,7 @@ async function ensureRolesList() {
 }
 
 async function openSettings() {
-  if (settingsOpen || editBubbleOpen) return;
+  if (settingsOpen || editBubbleOpen || confirmCancelOpen) return;
   settingsOpen = true;
   settingsModalEl.hidden = false;
   selectSettingsTab('general');
@@ -2708,7 +2777,7 @@ settingsCancelEl?.addEventListener('click', () => closeSettings());
 window.addEventListener('keydown', (e) => {
   // Settings modal owns the keyboard while it's open — let its own
   // handler take care of Esc / Tab / arrows / Enter.
-  if (settingsOpen || editBubbleOpen) return;
+  if (settingsOpen || editBubbleOpen || confirmCancelOpen) return;
 
   if (document.activeElement === typedInput) {
     if (e.key === 'Enter') {
