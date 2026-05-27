@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { listRoles } from './roles.js';
-import { listProjects, getProject, createProject, setAgentEnabled } from './projects.js';
+import { listProjects, getProject, createProject, setAgentEnabled, addAgent } from './projects.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, getContext } from './scratchpad.js';
@@ -162,6 +162,18 @@ app.post('/projects', async (req, res) => {
 app.get('/projects/:pid/autosave', async (req, res) => {
   if (!getProject(req.params.pid)) return res.status(404).json({ error: 'unknown project' });
   res.json(await autosaveStatus(req.params.pid));
+});
+
+app.post('/projects/:pid/agents', async (req, res) => {
+  try {
+    const roleId = String(req.body?.roleId || '').trim();
+    if (!roleId) return res.status(400).json({ error: 'roleId required' });
+    const p = await addAgent(req.params.pid, roleId);
+    notifyStateChange(p.id, `Agent added (${roleId})`);
+    res.json(p);
+  } catch (err) {
+    res.status(400).json({ error: String(err?.message || err) });
+  }
 });
 
 app.patch('/projects/:pid/agents/:aid', (req, res) => {

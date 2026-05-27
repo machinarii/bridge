@@ -126,6 +126,36 @@ export async function createProject({ name, goal, roleIds }) {
   return project;
 }
 
+export async function addAgent(projectId, roleId) {
+  const p = getProject(projectId);
+  if (!p) throw new Error('unknown project');
+  const role = getRole(roleId);
+  if (!role) throw new Error(`unknown role: ${roleId}`);
+  if (p.agents.some(a => a.role === roleId)) {
+    throw new Error(`role already on project: ${roleId}`);
+  }
+  const usedByRole = new Map();
+  for (const a of p.agents) {
+    const used = usedByRole.get(a.role) || new Set();
+    used.add(a.name);
+    usedByRole.set(a.role, used);
+  }
+  const agent = {
+    id: `${p.id}__${roleId}`,
+    role: roleId,
+    name: pickName(roleId, usedByRole),
+    color: role.color,
+    persona: role.personaSeed,
+    enabled: true,
+  };
+  p.agents.push(agent);
+  save();
+  // Best-effort: regenerate charters (idempotent — overwrites existing).
+  try { await generateProjectCharters(p); }
+  catch (err) { console.warn(`[addAgent] charter generation failed: ${err.message}`); }
+  return p;
+}
+
 export function setAgentEnabled(projectId, agentId, enabled) {
   const p = getProject(projectId);
   if (!p) throw new Error('unknown project');
