@@ -259,13 +259,12 @@ kbd {
   align-items: flex-start;
   text-align: left;
 }
-.settings-pane[data-tab="git"] .settings-field--row {
-  flex-direction: row;
-  justify-content: flex-start;
+/* Heading sits on its own line; checkbox + state below it as a row. */
+.git-toggle {
+  display: inline-flex;
   align-items: center;
-  align-self: flex-start;
-  text-align: left;
-  width: auto;
+  gap: 1rem;
+  margin-top: 0.5rem;
 }
 .settings-pane[data-tab="git"] #settings-git-interval { max-width: 80px; text-align: center; }
 
@@ -325,7 +324,7 @@ kbd {
   flex-direction: row; align-items: center; justify-content: flex-start;
   gap: 1rem;
 }
-.settings-field--row input[type="checkbox"] {
+.git-toggle input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   width: 32px; height: 32px;
@@ -339,13 +338,13 @@ kbd {
   flex: 0 0 auto;
   transition: background 120ms, border-color 120ms;
 }
-.settings-field--row input[type="checkbox"]:hover { border-color: rgba(255,255,255,0.65); }
-.settings-field--row input[type="checkbox"]:focus,
-.settings-field--row input[type="checkbox"]:focus-visible {
+.git-toggle input[type="checkbox"]:hover { border-color: rgba(255,255,255,0.65); }
+.git-toggle input[type="checkbox"]:focus,
+.git-toggle input[type="checkbox"]:focus-visible {
   outline: 2px solid var(--focus, #ffffff);
   outline-offset: 2px;
 }
-.settings-field--row input[type="checkbox"]:checked {
+.git-toggle input[type="checkbox"]:checked {
   background-color: var(--focus, #ffffff);
   border-color: var(--focus, #ffffff);
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='none' stroke='%230b0f14' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' d='M3 8.5l3 3 7-7'/></svg>");
