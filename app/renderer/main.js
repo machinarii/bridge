@@ -781,9 +781,21 @@ async function renderNewProjectRoles() {
     tileEls.push(t);
   }
   wrap.appendChild(grid);
+
+  // Invisible row inside the picker with a right-aligned Confirm button.
+  const row = document.createElement('div');
+  row.className = 'role-confirm-row';
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = 'role-confirm';
+  confirmBtn.textContent = 'Confirm';
+  confirmBtn.addEventListener('click', () => advanceFromRolePicker());
+  row.appendChild(confirmBtn);
+  wrap.appendChild(row);
+
   surfaceEl.appendChild(wrap);
 
-  ring.set(tileEls);
+  ring.set([...tileEls, confirmBtn]);
   ring.index = 0;
   ring.paint();
 
@@ -1070,9 +1082,21 @@ async function openAddAgentPicker() {
     if (!firstOpenTile && !isLocked) firstOpenTile = t;
   }
   wrap.appendChild(grid);
+
+  // Invisible row inside the picker with a right-aligned Confirm button.
+  const row = document.createElement('div');
+  row.className = 'role-confirm-row';
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = 'role-confirm';
+  confirmBtn.textContent = 'Confirm';
+  confirmBtn.addEventListener('click', () => commitAddAgentSelections());
+  row.appendChild(confirmBtn);
+  wrap.appendChild(row);
+
   surfaceEl.appendChild(wrap);
 
-  ring.set(tileEls);
+  ring.set([...tileEls, confirmBtn]);
   // Land focus on the first togglable role; if every role is already
   // on the project (rare — PM lock plus full team), fall through to 0.
   const startIdx = firstOpenTile ? tileEls.indexOf(firstOpenTile) : 0;
