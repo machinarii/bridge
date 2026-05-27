@@ -52,7 +52,7 @@ export function getContext(agentId) { return record(agentId); }
 
 export function appendTurn(agentId, role, content) {
   const r = record(agentId);
-  r.messages.push({ role, content });
+  r.messages.push({ role, content, at: Date.now() });
   if (r.messages.length > HISTORY_TURN_LIMIT) {
     r.messages = r.messages.slice(-HISTORY_TURN_LIMIT);
   }
