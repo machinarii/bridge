@@ -56,14 +56,45 @@ function uniqueProjectId(name) {
   throw new Error('too many id collisions');
 }
 
-function pickName(roleId, usedByRole) {
-  const role = getRole(roleId);
-  const used = usedByRole.get(roleId) || new Set();
-  for (const n of role.namePool) {
-    if (!used.has(n)) { used.add(n); usedByRole.set(roleId, used); return n; }
+/* All agent names already in use across every project — used to
+ * keep names globally unique so two agents never share a name. */
+function namesInUseAcrossProjects() {
+  const out = new Set();
+  for (const p of load().projects) {
+    for (const a of (p.agents || [])) {
+      if (a?.name) out.add(a.name);
+    }
   }
-  // Exhausted pool (shouldn't happen with single-instance roles)
-  return role.namePool[0];
+  return out;
+}
+
+/* Pick an unused name for `roleId`. Skips:
+ *   - names already taken by another agent on THIS project (usedLocal)
+ *   - names already taken on any OTHER project (usedGlobal)
+ * If the role's namePool is exhausted, fall back to "<first> N" with
+ * a numeric suffix so the result is still unique. */
+function pickName(roleId, usedLocal, usedGlobal) {
+  const role = getRole(roleId);
+  const used = usedLocal.get(roleId) || new Set();
+  const taken = (n) => used.has(n) || (usedGlobal && usedGlobal.has(n));
+  for (const n of role.namePool) {
+    if (!taken(n)) {
+      used.add(n); usedLocal.set(roleId, used);
+      if (usedGlobal) usedGlobal.add(n);
+      return n;
+    }
+  }
+  // Pool exhausted — suffix with the lowest free integer.
+  const base = role.namePool[0];
+  for (let i = 2; i < 9999; i++) {
+    const cand = `${base} ${i}`;
+    if (!taken(cand)) {
+      used.add(cand); usedLocal.set(roleId, used);
+      if (usedGlobal) usedGlobal.add(cand);
+      return cand;
+    }
+  }
+  return base;
 }
 
 export function listProjects() { return load().projects.slice(); }
@@ -89,12 +120,15 @@ export async function createProject({ name, goal, roleIds }) {
 
   const id = uniqueProjectId(name);
   const usedByRole = new Map();
+  // Names taken by every agent on every existing project — passed to
+  // pickName so the new project doesn't pick anyone else's name.
+  const usedGlobal = namesInUseAcrossProjects();
   const agents = chosen.map(roleId => {
     const r = getRole(roleId);
     return {
       id: `${id}__${roleId}`,
       role: roleId,
-      name: pickName(roleId, usedByRole),
+      name: pickName(roleId, usedByRole, usedGlobal),
       color: r.color,
       persona: r.personaSeed,
       enabled: true,
@@ -138,10 +172,12 @@ export async function addAgent(projectId, roleId) {
     used.add(a.name);
     usedByRole.set(a.role, used);
   }
+  // Global uniqueness: include every other project's agent names too.
+  const usedGlobal = namesInUseAcrossProjects();
   const agent = {
     id: `${p.id}__${roleId}`,
     role: roleId,
-    name: pickName(roleId, usedByRole),
+    name: pickName(roleId, usedByRole, usedGlobal),
     color: role.color,
     persona: role.personaSeed,
     enabled: true,
