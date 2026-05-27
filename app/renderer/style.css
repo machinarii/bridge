@@ -1433,6 +1433,7 @@ body[data-mode="zoom"] #surface {
 
 /* ===== Capture tile (name + goal steps) ===== */
 .capture-tile {
+  position: relative;
   padding: 2rem;
   /* Allow the value field to grow much wider than the previous 720px
    * cap — the heading + value sit together vertically centered inside
@@ -1469,6 +1470,14 @@ body[data-mode="zoom"] #surface {
   display: block;
 }
 .capture-tile .placeholder { opacity: 0.4; }
+
+/* Pin Cancel + Create project to the bottom-right of the surface
+ * instead of letting them sit in the centered flex column. */
+.capture-tile .role-confirm-row {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+}
 
 /* ===== Mic visualizer (capture screens) ===== */
 .mic-stack {
