@@ -62,20 +62,36 @@ async function ensureStt({ resourcesPath, userDataDir, log = console.log }) {
     return null;
   }
 
+  // Path 1 (Option B build): the .app already ships site-packages and
+  // the HF model cache as extra resources. No pip install, no model
+  // download — just point PYTHONPATH / HF_HOME at the bundled dirs.
+  const bundledPkgs  = path.join(resourcesPath, 'stt-packages');
+  const bundledHfDir = path.join(resourcesPath, 'hf-cache');
+  if (exists(bundledPkgs)) {
+    log(`[setup-stt] using bundled stt-packages at ${bundledPkgs}`);
+    const env = { PYTHONPATH: bundledPkgs };
+    if (exists(bundledHfDir)) {
+      env.HF_HOME = bundledHfDir;
+      env.HF_HUB_OFFLINE = '1'; // weights are local; no network reads
+      log(`[setup-stt] HF cache: ${bundledHfDir} (offline mode)`);
+    }
+    return { python, script, pythonPath: bundledPkgs, env };
+  }
+
+  // Path 2 (Option A build / dev): no bundled deps. First launch pip
+  // installs into the user-data directory and writes a marker file.
   const pkgDir   = path.join(userDataDir, 'stt-packages');
   const reqPath  = path.join(resourcesPath, 'stt', 'requirements.txt');
   const marker   = path.join(pkgDir, MARKER_NAME);
 
   if (exists(marker)) {
     log('[setup-stt] dependencies already installed');
-    return { python, script, pythonPath: pkgDir };
+    return { python, script, pythonPath: pkgDir, env: { PYTHONPATH: pkgDir } };
   }
 
   fs.mkdirSync(pkgDir, { recursive: true });
   log(`[setup-stt] installing requirements into ${pkgDir} (one-time, may take a few minutes) …`);
 
-  // Use --target so the result is fully relocatable. Disable cache to
-  // keep the user-data dir slim.
   await exec(python, [
     '-m', 'pip', 'install',
     '--target', pkgDir,
@@ -83,12 +99,10 @@ async function ensureStt({ resourcesPath, userDataDir, log = console.log }) {
     '-r', reqPath,
   ], { log });
 
-  // Drop the marker so subsequent launches skip straight to spawning
-  // the server.
   fs.writeFileSync(marker, new Date().toISOString());
   log('[setup-stt] dependencies ready.');
 
-  return { python, script, pythonPath: pkgDir };
+  return { python, script, pythonPath: pkgDir, env: { PYTHONPATH: pkgDir } };
 }
 
 module.exports = { ensureStt };

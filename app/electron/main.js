@@ -78,15 +78,19 @@ async function startSttIfAvailable() {
       log: (line) => process.stdout.write(typeof line === 'string' ? line : String(line)),
     });
     if (!result) return; // bundled python not present
-    const setupTriggered = !fs.existsSync(path.join(result.pythonPath, 'stt-packages.ready'));
+    // Detect Option-A "first run pip install just happened" so we can
+    // fire a one-time notification. Option-B bundled builds skip the
+    // marker entirely since deps are already in Resources.
+    const markerPath = path.join(result.pythonPath, 'stt-packages.ready');
+    const isBundled = result.pythonPath.startsWith(process.resourcesPath);
+    const setupTriggered = !isBundled && !fs.existsSync(markerPath);
     spawnParakeet({
       cmd: result.python,
       args: [result.script],
       cwd: path.join(process.resourcesPath, 'stt'),
-      env: { PYTHONPATH: result.pythonPath, PARAKEET_PORT: String(STT_PORT) },
+      env: { ...(result.env || {}), PARAKEET_PORT: String(STT_PORT) },
     });
     if (setupTriggered && Notification.isSupported()) {
-      // Only fires on the very first run; subsequent launches skip.
       new Notification({
         title: 'Bridge — Local STT ready',
         body: 'Parakeet is set up and running locally.',

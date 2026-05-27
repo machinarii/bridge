@@ -10,8 +10,9 @@
     "electron": "electron .",
     "dev": "electron .",
     "fetch:python": "bash build/fetch-python.sh",
-    "build:mac": "npm run fetch:python && electron-builder --mac",
-    "build:mac:arm64": "npm run fetch:python && electron-builder --mac --arm64",
+    "prepare:stt": "bash build/prepare-stt.sh",
+    "build:mac": "npm run fetch:python && npm run prepare:stt && electron-builder --mac --arm64",
+    "build:mac:arm64": "npm run fetch:python && npm run prepare:stt && electron-builder --mac --arm64",
     "build:mac:x64": "npm run fetch:python && electron-builder --mac --x64"
   },
   "devDependencies": {
@@ -42,12 +43,20 @@
       {
         "from": "build/python-${arch}/python",
         "to": "python"
+      },
+      {
+        "from": "build/site-packages-${arch}",
+        "to": "stt-packages"
+      },
+      {
+        "from": "build/hf-cache",
+        "to": "hf-cache"
       }
     ],
     "mac": {
       "target": [
-        { "target": "dmg",  "arch": ["arm64", "x64"] },
-        { "target": "zip",  "arch": ["arm64", "x64"] }
+        { "target": "dmg", "arch": ["arm64"] },
+        { "target": "zip", "arch": ["arm64"] }
       ],
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
