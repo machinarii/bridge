@@ -2730,11 +2730,17 @@ settingsModalEl?.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Left/Right within pane on buttons cycles between Cancel and Save.
-  if (!isTab && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
-      (active === settingsCancelEl || active === settingsSaveEl)) {
+  // Left/Right walk the focusables list — same as Up/Down — so the
+  // user can reach the − / + stepper buttons (visually to the right
+  // of the interval input) without pressing ArrowDown twice.
+  if (!isTab && e.key === 'ArrowRight') {
     e.preventDefault(); e.stopPropagation();
-    (active === settingsSaveEl ? settingsCancelEl : settingsSaveEl)?.focus();
+    focusNextInModal(+1);
+    return;
+  }
+  if (!isTab && e.key === 'ArrowLeft') {
+    e.preventDefault(); e.stopPropagation();
+    focusNextInModal(-1);
     return;
   }
 
