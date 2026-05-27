@@ -1433,7 +1433,7 @@ async function openAddAgentPicker() {
     { gamepad: 'cross',   keyboard: 'Space', label: 'Toggle',   action: () => toggleFocusedAddAgentRole() },
     { gamepad: 'options', keyboard: 'E',     label: 'Explorer', action: () => toggleFileExplorer() },
     {                     keyboard: 'A',     label: 'Activity', action: () => toggleActivityDrawer() },
-    {                     keyboard: 'S',     label: 'Skills',   action: () => toggleSkillsDrawer() },
+    {                     keyboard: 'M',     label: 'Memory',   action: () => toggleMemoryDrawer() },
     { gamepad: 'circle',  keyboard: 'Esc',   label: 'Back',     action: () => renderGrid() },
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Done',
@@ -1492,7 +1492,7 @@ function updateGridShortcuts() {
     { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
     { gamepad: 'options', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
     {                    keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
-    {                    keyboard: 'S', label: 'Skills',   action: () => toggleSkillsDrawer() },
+    {                    keyboard: 'M', label: 'Memory',   action: () => toggleMemoryDrawer() },
   ];
   if (!isLeadFocused) {
     items.push({ gamepad: 'square', keyboard: 'Space', label: 'Agent on / off',
@@ -2073,7 +2073,7 @@ function _setL2Shortcuts() {
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
     { gamepad: 'options', keyboard: 'E', label: 'Explorer',     action: () => toggleFileExplorer() },
     {                     keyboard: 'A', label: 'Activity',     action: () => toggleActivityDrawer() },
-    {                     keyboard: 'S', label: 'Skills',       action: () => toggleSkillsDrawer() },
+    {                     keyboard: 'M', label: 'Memory',       action: () => toggleMemoryDrawer() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => pressCross() });
@@ -2345,10 +2345,14 @@ function handleBridgeEvent(ev) {
     }
     case 'note_added':
     case 'file_created': {
-      // If this event belongs to the active project and the file
-      // explorer is open, refetch the tree so the new file shows up.
+      // If this event belongs to the active project, refresh any open
+      // drawer that mirrors filesystem state — the explorer for any
+      // new file, and the Memory list specifically for note_added.
       if (!activeProject || ev.projectId !== activeProject.id) break;
       if (fileExplorerOpen) refreshFileExplorer();
+      if (memoryDrawerOpen && (ev.type === 'note_added' || ev.kind === 'note')) {
+        loadMemoryNotes();
+      }
       break;
     }
     case 'notification':
@@ -2435,7 +2439,7 @@ function openActivityDrawer() {
   document.body.dataset.activityDrawer = 'open';
   // Mutually exclusive with the other left drawers.
   if (fileExplorerOpen) closeFileExplorer();
-  if (skillsDrawerOpen) closeSkillsDrawer();
+  if (memoryDrawerOpen) closeMemoryDrawer();
   // Update the header to reflect the scope (project vs cross-project).
   const headerEl = el.querySelector('header span');
   if (headerEl) headerEl.textContent = activeProject ? 'Activity' : 'Activity · all projects';
@@ -2911,7 +2915,7 @@ async function exitToProjects() {
   stopSpeaking();
   closeFileViewer();
   if (fileExplorerOpen) closeFileExplorer();
-  if (skillsDrawerOpen) closeSkillsDrawer();
+  if (memoryDrawerOpen) closeMemoryDrawer();
   if (activityDrawerOpen) closeActivityDrawer();
   // allActivity is intentionally NOT cleared — the L0 cross-project
   // feed accumulates across projects. Per-project filtering at render
@@ -3027,48 +3031,76 @@ let fileEntries = [];
 let explorerFocused = false; // true while keyboard nav is inside the explorer
 let folderState = { charters: true, notes: true }; // default open
 let userFolders = []; // [{ key: 'user_<ts>', label: 'Name' }] — client-side
-let projectSkills = {}; // { [projectId]: [{ name, desc }] } — client-side
-let skillsDrawerOpen = false;
+/* v2 §5 — shared project Memory drawer. Replaces the now-defunct
+ * Skills drawer (S binding). Reuses the existing notes backend:
+ *   GET /projects/:pid/notes  →  [{ id, label, ... }]
+ * Subscribes to file_created / note_added events on the SSE channel
+ * so the list updates live while an agent (or the user) adds notes. */
+let memoryDrawerOpen = false;
+let memoryNotes = []; // [{ id, label, at }]
 
-const skillsDrawerEl = document.getElementById('skills-drawer');
-const skillsListEl   = skillsDrawerEl?.querySelector('.skills-list');
+const memoryDrawerEl = document.getElementById('memory-drawer');
+const memoryListEl   = memoryDrawerEl?.querySelector('.memory-list');
 
-function toggleSkillsDrawer() {
+function toggleMemoryDrawer() {
   if (mode === MODE_PROJECTS || mode === MODE_NEW_PROJ_ROLES) return;
   if (!activeProject) return;
-  if (skillsDrawerOpen) { closeSkillsDrawer(); return; }
-  openSkillsDrawer();
+  if (memoryDrawerOpen) { closeMemoryDrawer(); return; }
+  openMemoryDrawer();
 }
-function openSkillsDrawer() {
+async function openMemoryDrawer() {
+  if (!memoryDrawerEl) return;
   syncExplorerHeights();
-  rebuildSkillsList();
-  skillsDrawerEl.hidden = false;
-  skillsDrawerOpen = true;
-  document.body.dataset.skillsDrawer = 'open';
+  memoryDrawerEl.hidden = false;
+  memoryDrawerOpen = true;
+  document.body.dataset.memoryDrawer = 'open';
+  // Mutually exclusive with the other left drawers.
   if (fileExplorerOpen) closeFileExplorer();
   if (activityDrawerOpen) closeActivityDrawer();
+  await loadMemoryNotes();
 }
-function closeSkillsDrawer() {
-  skillsDrawerEl.hidden = true;
-  skillsDrawerOpen = false;
-  document.body.dataset.skillsDrawer = 'closed';
+function closeMemoryDrawer() {
+  if (!memoryDrawerEl) return;
+  memoryDrawerEl.hidden = true;
+  memoryDrawerOpen = false;
+  document.body.dataset.memoryDrawer = 'closed';
 }
-function rebuildSkillsList() {
-  const list = projectSkills[activeProject.id] || [];
-  skillsListEl.innerHTML = '';
-  if (list.length === 0) {
+async function loadMemoryNotes() {
+  if (!activeProject) return;
+  try {
+    const r = await fetch(`/projects/${activeProject.id}/notes`);
+    if (!r.ok) return;
+    const { items } = await r.json();
+    memoryNotes = items || [];
+  } catch (err) {
+    console.warn('[memory] load failed:', err);
+    memoryNotes = [];
+  }
+  repaintMemoryList();
+}
+function repaintMemoryList() {
+  if (!memoryListEl) return;
+  memoryListEl.innerHTML = '';
+  if (memoryNotes.length === 0) {
     const empty = document.createElement('div');
-    empty.className = 'skills-empty';
-    empty.textContent = 'No skills yet.';
-    skillsListEl.appendChild(empty);
+    empty.className = 'memory-empty';
+    empty.textContent = 'Nothing in memory yet. Agents and you can add notes.';
+    memoryListEl.appendChild(empty);
     return;
   }
-  for (const s of list) {
+  for (const n of memoryNotes) {
     const row = document.createElement('div');
-    row.className = 'skill-entry';
-    row.innerHTML = `<div class="skill-name">${escapeHtml(s.name)}</div>
-                     <div class="skill-desc">${escapeHtml(s.desc || '')}</div>`;
-    skillsListEl.appendChild(row);
+    row.className = 'memory-entry';
+    row.tabIndex = 0;
+    row.dataset.id = n.id;
+    const label = document.createElement('div');
+    label.className = 'memory-label';
+    label.textContent = n.label || n.id || '(untitled)';
+    const meta = document.createElement('div');
+    meta.className = 'memory-meta';
+    meta.textContent = formatBubbleTime(n.at) || '';
+    row.append(label, meta);
+    memoryListEl.appendChild(row);
   }
 }
 
@@ -3099,7 +3131,7 @@ async function openFileExplorer() {
   paintFileFocus();
   document.body.dataset.fileDrawer = 'open';
   if (drawerOpen) closeHistoryDrawer();
-  if (skillsDrawerOpen) closeSkillsDrawer();
+  if (memoryDrawerOpen) closeMemoryDrawer();
   if (activityDrawerOpen) closeActivityDrawer();
 }
 
@@ -3874,10 +3906,10 @@ window.addEventListener('keydown', (e) => {
     toggleFileExplorer();
     return;
   }
-  if (e.key === 's' || e.key === 'S') {
+  if (e.key === 'm' || e.key === 'M') {
     if (mode === MODE_GRID || mode === MODE_ZOOM || mode === MODE_ADD_AGENT) {
       e.preventDefault();
-      toggleSkillsDrawer();
+      toggleMemoryDrawer();
       return;
     }
   }
