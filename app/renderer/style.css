@@ -269,9 +269,12 @@ kbd {
 .settings-pane[data-tab="git"] #settings-git-interval { max-width: 80px; text-align: center; }
 
 .stepper {
-  display: inline-flex; align-items: center; gap: 0.5rem;
+  display: inline-flex; align-items: center; gap: 0;
   width: max-content;
 }
+/* Breathing room between the input and the − / + group; the buttons
+ * themselves stay flush against each other to read as one set. */
+.stepper-btn#settings-git-interval-dec { margin-left: 0.5rem; }
 .stepper-btn {
   appearance: none;
   background: rgba(255,255,255,0.04);
@@ -288,11 +291,15 @@ kbd {
   transition: background 120ms, border-color 120ms;
   flex: 0 0 auto;
 }
-/* Layout is [input] [−] [+] as three standalone controls, each
- * with its own border + rounded corners. The wrapper's gap provides
- * the breathing room between them. */
-.stepper-btn {
-  border-radius: var(--steam-radius);
+/* Layout: [input]   [−][+]. Input is standalone with full rounded
+ * corners; − and + are joined as one set (− rounded left, + rounded
+ * right, sharing their inner edge). */
+.stepper-btn#settings-git-interval-dec {
+  border-radius: var(--steam-radius) 0 0 var(--steam-radius);
+  border-right: 0;
+}
+.stepper-btn#settings-git-interval-inc {
+  border-radius: 0 var(--steam-radius) var(--steam-radius) 0;
 }
 .stepper-btn:hover {
   background: rgba(255,255,255,0.08);
