@@ -237,14 +237,18 @@ kbd {
 .settings-pane[hidden] { display: none !important; }
 .settings-pane {
   display: flex; flex-direction: column; gap: 1rem;
+  align-items: flex-start;
   /* Lock pane height so the modal doesn't jump between tabs. */
   height: 50vh; min-height: 360px; max-height: 60vh;
   overflow-y: auto;
   padding-right: 4px;
 }
+.settings-pane[data-tab="git"] .settings-field { width: 100%; align-items: flex-start; }
+.settings-pane[data-tab="git"] #settings-git-interval { max-width: 140px; }
 
 .settings-field--row {
-  flex-direction: row; align-items: center; justify-content: space-between;
+  flex-direction: row; align-items: center; justify-content: flex-start;
+  gap: 1rem;
 }
 .settings-field--row input[type="checkbox"] {
   appearance: none;
