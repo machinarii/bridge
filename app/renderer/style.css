@@ -1456,9 +1456,8 @@ body[data-mode="zoom"] #surface {
   padding: 1.5rem;
   background: rgba(255,255,255,0.06);
   border-radius: var(--steam-radius);
-  /* ~4x the old apparent width: was ~720px capped; now spans up to
-   * 80vw / 1200px. */
-  width: min(1200px, 80vw);
+  /* 20% narrower than the previous 80vw / 1200px width. */
+  width: min(960px, 64vw);
   box-sizing: border-box;
   /* Centered while the mic visualizer is showing; flips to
    * left-aligned once recognized text takes the slot. */
