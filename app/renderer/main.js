@@ -900,6 +900,45 @@ function toggleFocusedRole() {
   if (toggle) toggle.dataset.checked = String(newProjRoleIds.includes(id));
 }
 
+/* ArrowDown handler used by both the new-project role picker and the
+ * add-agent picker. Returns true if it absorbed the keypress
+ * (focusing a non-tile button or the footer rail), false if the
+ * caller should fall through to plain grid-down navigation. */
+function advanceDownFromRolePicker() {
+  const items = ring.elements;
+  if (items.length === 0) return false;
+  const cur = items[ring.index];
+  const isTile = !!cur?.classList?.contains('role-tile');
+  const firstNonTileIdx = items.findIndex(el => !el.classList?.contains('role-tile'));
+
+  if (!isTile) {
+    // Already on Cancel/Back/Continue/Create — drop into the footer.
+    if (enterShortcuts()) return true;
+    return false;
+  }
+  // On a role tile. If a tile sits directly below the focused one,
+  // let roleGridMove walk to it; otherwise land on the first non-tile
+  // ring item (typically Cancel).
+  const grid = surfaceEl.querySelector('.role-grid');
+  const cols = grid?._cols || 4;
+  const r = Math.floor(ring.index / cols);
+  const c = ring.index % cols;
+  const tileCount = (firstNonTileIdx === -1) ? items.length : firstNonTileIdx;
+  const tileLastRow = Math.max(0, Math.ceil(tileCount / cols) - 1);
+  const targetTileIdx = (r + 1) * cols + c;
+  if (r < tileLastRow && targetTileIdx < tileCount) {
+    return false; // there's another tile row below — fall through
+  }
+  if (firstNonTileIdx >= 0) {
+    ring.index = firstNonTileIdx;
+    ring.paint();
+    return true;
+  }
+  // No buttons in the ring — fall back to entering the footer.
+  if (enterShortcuts()) return true;
+  return false;
+}
+
 function roleGridMove(dir) {
   const cols = 4;
   const n = ring.elements.length;
@@ -1067,9 +1106,9 @@ function renderNewProjectName() {
   t.innerHTML = `
     <h2>Name this project</h2>
     <div class="capture-value ${newProjName ? 'has-value' : ''}">${captureValueInner(newProjName)}</div>
-    ${newProjRoleIds.includes('pm') || newProjRoleIds.includes('tpm')
+    ${newProjRoleIds.includes('pm')
       ? ''
-      : '<div class="lead-badge">Cadence will lead this team.</div>'}
+      : '<div class="lead-badge">Cassidy will lead this team.</div>'}
     <div class="role-confirm-row">
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
       <button type="button" class="role-cancel role-back" id="capture-back">Back</button>
@@ -3086,18 +3125,20 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'Enter') { e.preventDefault(); openFocused(); }
   } else if (mode === MODE_NEW_PROJ_ROLES) {
     if (e.key === 'ArrowDown') {
-      const grid = surfaceEl.querySelector('.role-grid');
-      if (grid) {
-        const cols = grid._cols || 4;
-        const n = ring.elements.length;
-        const lastRow = Math.max(0, Math.ceil(n / cols) - 1);
-        const r = Math.floor(ring.index / cols);
-        if (r >= lastRow && enterShortcuts()) { e.preventDefault(); return; }
-      }
-      e.preventDefault(); roleGridMove('down');
+      e.preventDefault();
+      if (advanceDownFromRolePicker()) return;
+      roleGridMove('down');
     } else if (dir) { e.preventDefault(); roleGridMove(dir); }
     else if (e.code === 'Space')  { e.preventDefault(); toggleFocusedRole(); }
-    else if (e.key === 'Enter')   { e.preventDefault(); advanceFromRolePicker(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const cur = ring.current();
+      if (cur && !cur.classList?.contains('role-tile') && typeof cur.click === 'function') {
+        cur.click();
+      } else {
+        advanceFromRolePicker();
+      }
+    }
     else if (e.key === 'Escape')  { e.preventDefault(); renderProjects(); }
   } else if (mode === MODE_ADD_AGENT) {
     // Up / Right from the top-right of the grid hops to the × close button.
@@ -3113,18 +3154,20 @@ window.addEventListener('keydown', (e) => {
       }
     }
     if (e.key === 'ArrowDown') {
-      const grid = surfaceEl.querySelector('.role-grid');
-      if (grid) {
-        const cols = grid._cols || 4;
-        const n = ring.elements.length;
-        const lastRow = Math.max(0, Math.ceil(n / cols) - 1);
-        const r = Math.floor(ring.index / cols);
-        if (r >= lastRow && enterShortcuts()) { e.preventDefault(); return; }
-      }
-      e.preventDefault(); roleGridMove('down');
+      e.preventDefault();
+      if (advanceDownFromRolePicker()) return;
+      roleGridMove('down');
     } else if (dir) { e.preventDefault(); roleGridMove(dir); }
     else if (e.code === 'Space')  { e.preventDefault(); toggleFocusedAddAgentRole(); }
-    else if (e.key === 'Enter')   { e.preventDefault(); commitAddAgentSelections(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const cur = ring.current();
+      if (cur && !cur.classList?.contains('role-tile') && typeof cur.click === 'function') {
+        cur.click();
+      } else {
+        commitAddAgentSelections();
+      }
+    }
     else if (e.key === 'Escape')  { e.preventDefault(); renderGrid(); }
   } else if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
     // Action-row buttons (Cancel · Back · Continue/Create) form the
