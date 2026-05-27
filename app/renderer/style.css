@@ -1049,7 +1049,7 @@ body[data-mode="zoom"] #surface {
   margin-right: -1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.7rem;
   scroll-behavior: smooth;
   /* Fade the top edge so chat content gradually dissolves into the
    * header area instead of being abruptly clipped behind it. */
