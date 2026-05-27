@@ -2589,8 +2589,10 @@ async function openSettings() {
     const r = await fetch('/settings');
     if (r.ok) s = await r.json();
   } catch {}
-  settingsApiMetaEl.textContent = s.OPENROUTER_API_KEY_SET
-    ? `Current: ${s.OPENROUTER_API_KEY} — leave blank to keep.`
+  apiKeyIsSet = !!s.OPENROUTER_API_KEY_SET;
+  if (apiKeyIsSet) settingsApiKeyEl.value = API_KEY_PLACEHOLDER;
+  settingsApiMetaEl.textContent = apiKeyIsSet
+    ? `Current: ${s.OPENROUTER_API_KEY} — leave as-is to keep.`
     : 'No key set.';
   await Promise.all([ensureModelsList(), ensureRolesList()]);
   populateModelSelect(s.OPENROUTER_MODEL || '');
@@ -2748,7 +2750,9 @@ settingsModalEl?.addEventListener('keydown', (e) => {
 async function saveSettings() {
   const updates = {};
   const apiKey = settingsApiKeyEl.value.trim();
-  if (apiKey) updates.OPENROUTER_API_KEY = apiKey;
+  // Don't ship the placeholder back — that would clobber the real
+  // key with literal asterisks.
+  if (apiKey && apiKey !== API_KEY_PLACEHOLDER) updates.OPENROUTER_API_KEY = apiKey;
   const model = (settingsModelEl.value || '').trim();
   if (model) updates.OPENROUTER_MODEL = model;
 
