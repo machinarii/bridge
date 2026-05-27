@@ -195,7 +195,7 @@ kbd {
 
 .settings-card {
   position: relative;
-  width: min(680px, 92vw);
+  width: min(850px, 92vw);
   background: var(--bg-elev);
   border: 1px solid #1d2734;
   border-radius: var(--radius);
