@@ -12,7 +12,7 @@ import { runTeamVoice } from './team.js';
 import {
   notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
 } from './autosave.js';
-import { subscribe as subscribeEvents } from './events.js';
+import { subscribe as subscribeEvents, publish as publishEvent } from './events.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -263,6 +263,9 @@ app.post('/projects/:pid/agents', async (req, res) => {
     if (!roleId) return res.status(400).json({ error: 'roleId required' });
     const p = await addAgent(req.params.pid, roleId);
     notifyStateChange(p.id, `Agent added (${roleId})`);
+    // Charter file got written for the new role — tell the renderer
+    // so the explorer's Charters section refreshes.
+    publishEvent({ type: 'file_created', projectId: p.id, kind: 'charter', file: `${roleId}.md` });
     res.json(p);
   } catch (err) {
     res.status(400).json({ error: String(err?.message || err) });
@@ -297,6 +300,16 @@ app.post('/projects/:pid/notes', (req, res) => {
   if (!body) return res.status(400).json({ error: 'empty note' });
   const note = appendNote(req.params.pid, body);
   notifyStateChange(req.params.pid, 'Note added');
+  // Tell every connected renderer so an open explorer refreshes
+  // its file tree in real time.
+  publishEvent({
+    type: 'file_created',
+    projectId: req.params.pid,
+    kind: 'note',
+    file: note?.id || '',
+    label: note?.label || '',
+  });
+  publishEvent({ type: 'note_added', projectId: req.params.pid, noteId: note?.id });
   res.json(note);
 });
 

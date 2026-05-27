@@ -107,5 +107,19 @@ export class GamepadInput extends EventTarget {
       }
       this._lastStickDir = stickDir;
     }
+
+    /* Right stick: axes[2]=X, axes[3]=Y. We don't use it for nav —
+     * just expose its deflection so listeners can drive smooth
+     * scrolling (e.g. chat at L2). Dead-zone matches the left stick. */
+    const rx = pad.axes[2] || 0;
+    const ry = pad.axes[3] || 0;
+    const RDEAD = 0.15;
+    const ax2 = Math.abs(rx) < RDEAD ? 0 : rx;
+    const ay2 = Math.abs(ry) < RDEAD ? 0 : ry;
+    if (ax2 || ay2 || this._lastRStickAx !== 0 || this._lastRStickAy !== 0) {
+      this._lastRStickAx = ax2;
+      this._lastRStickAy = ay2;
+      this.dispatchEvent(new CustomEvent('rstick', { detail: { x: ax2, y: ay2 } }));
+    }
   }
 }
