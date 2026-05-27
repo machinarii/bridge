@@ -1,0 +1,57 @@
+{
+  "name": "bridge",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Bridge — a multi-agent command center, packaged as a macOS app.",
+  "main": "app/electron/main.js",
+  "scripts": {
+    "server": "node app/server/server.js",
+    "stt": "bash -c 'source app/stt/.venv/bin/activate && python app/stt/parakeet_server.py'",
+    "electron": "electron .",
+    "dev": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:mac:arm64": "electron-builder --mac --arm64",
+    "build:mac:x64": "electron-builder --mac --x64"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.machinarii.bridge",
+    "productName": "Bridge",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "app/electron/**/*",
+      "app/server/**/*",
+      "app/renderer/**/*",
+      "!app/server/node_modules/.cache/**/*",
+      "!app/stt/.venv/**/*",
+      "!app/state/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "app/stt",
+        "to": "stt",
+        "filter": ["**/*.py", "requirements.txt", "README.md"]
+      }
+    ],
+    "mac": {
+      "target": [
+        { "target": "dmg",  "arch": ["arm64", "x64"] },
+        { "target": "zip",  "arch": ["arm64", "x64"] }
+      ],
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "writeUpdateInfo": false
+    }
+  }
+}
