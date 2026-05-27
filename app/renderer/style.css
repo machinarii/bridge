@@ -772,17 +772,15 @@ body[data-mode="zoom"] #surface {
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.06);
   overflow: hidden;
+  /* Match the L1 surface backdrop exactly so the L2 container reads
+   * as "the same room, zoomed in" rather than a new visual context. */
   background:
-    radial-gradient(ellipse 140% 90% at 50% -10%, color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%, transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
+    radial-gradient(ellipse 120% 80% at 50% -10%,
+      color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%,
+      transparent 60%),
+    var(--bg-elev);
 }
-.agent-view::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--agent-color, #6ea8ff) 14%, transparent) 0%, transparent 35%);
-  pointer-events: none;
-  opacity: 0.7;
-}
+.agent-view::before { content: none; }
 .agent-view > * { position: relative; }
 .agent-view .agent-view-hint {
   position: absolute;
