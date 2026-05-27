@@ -1495,13 +1495,13 @@ body[data-mode="zoom"] #surface {
 .capture-tile .placeholder { opacity: 0.4; }
 
 /* Pin the action row to the bottom of the surface and stretch it
- * across the full width so the auto-margin on .role-confirm can
- * push the primary button to the right while Cancel / Back stay
- * on the left. Matches the role-picker row inset (1rem). */
+ * across the full width. Left / right insets match .role-picker
+ * (0.5rem horizontal padding) so the row aligns with the previous
+ * screen's button column. */
 .capture-tile .role-confirm-row {
   position: absolute;
-  left: 1rem;
-  right: 1rem;
+  left: 0.5rem;
+  right: 0.5rem;
   bottom: 1rem;
 }
 
