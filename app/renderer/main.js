@@ -782,6 +782,9 @@ async function renderNewProjectRoles() {
   }
   wrap.appendChild(grid);
 
+  // Close × at top-right exits to L0 (same as Cancel).
+  surfaceEl.appendChild(createSurfaceCloseButton(() => renderProjects()));
+
   // Invisible row inside the picker — Cancel on the left of Continue,
   // both right-aligned within the surface.
   const row = document.createElement('div');
@@ -968,6 +971,8 @@ function renderNewProjectName() {
   surfaceEl.appendChild(t);
   t.querySelector('#capture-cancel')?.addEventListener('click', () => { stopMicVisualizer(); renderProjects(); });
   t.querySelector('#capture-done')?.addEventListener('click', () => confirmCapture());
+  // Close × at top-right exits the create flow back to L0.
+  surfaceEl.appendChild(createSurfaceCloseButton(() => { stopMicVisualizer(); renderProjects(); }));
   startMicVisualizer();
   renderActionBar([
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
@@ -996,6 +1001,7 @@ function renderNewProjectGoal() {
   surfaceEl.appendChild(t);
   t.querySelector('#capture-cancel')?.addEventListener('click', () => { stopMicVisualizer(); renderProjects(); });
   t.querySelector('#capture-done')?.addEventListener('click', () => confirmCapture());
+  surfaceEl.appendChild(createSurfaceCloseButton(() => { stopMicVisualizer(); renderProjects(); }));
   startMicVisualizer();
   renderActionBar([
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
