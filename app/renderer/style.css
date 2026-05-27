@@ -868,7 +868,7 @@ body[data-mode="zoom"] #surface {
 }
 .agent-view .bubble {
   max-width: 70%;
-  padding: 0.95rem 0.9rem;
+  padding: 1.3rem 0.9rem;
   border-radius: 14px;
   font-weight: 300;
   line-height: 1.4;
