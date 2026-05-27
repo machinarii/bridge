@@ -1573,14 +1573,16 @@ async function renderChatHistory(container, agent) {
       content.textContent = promptText;
       bubble.appendChild(content);
 
-      const actions = document.createElement('div');
-      actions.className = 'bubble-actions';
-      const time = document.createElement('span');
-      time.className = 'bubble-time';
-      time.textContent = formatBubbleTime(m.at);
-      actions.appendChild(time);
-
+      // Timestamp + retry / edit only render on user-authored bubbles.
+      // Agent bubbles stay clean (no floating metadata).
       if (isUser) {
+        const actions = document.createElement('div');
+        actions.className = 'bubble-actions';
+        const time = document.createElement('span');
+        time.className = 'bubble-time';
+        time.textContent = formatBubbleTime(m.at);
+        actions.appendChild(time);
+
         const btnRow = document.createElement('div');
         btnRow.className = 'bubble-action-row';
 
@@ -1609,8 +1611,8 @@ async function renderChatHistory(container, agent) {
         btnRow.appendChild(edit);
 
         actions.appendChild(btnRow);
+        bubble.appendChild(actions);
       }
-      bubble.appendChild(actions);
 
       bubble.addEventListener('focus', () => {
         chatBubbleIdx = i;
