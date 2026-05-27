@@ -11,7 +11,7 @@ import { getRole } from './roles.js';
 import { interpretIntent } from './orchestrator.js';
 import { appendTurn, getContext } from './scratchpad.js';
 import { getModelForRole, getDefaultModel } from './models.js';
-import { emitStatus, emitActivity, emitDelegate } from './events.js';
+import { emitStatus, emitActivity, emitDelegate, emitNotification } from './events.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const FANOUT_CAP = 5;
@@ -219,6 +219,12 @@ export async function runTeamVoice({ projectId, text }) {
   appendTurn(lead.id, 'assistant', summary.body || '');
   emitStatus(projectId, lead.id, 'idle');
   emitActivity(projectId, `${lead.name}: ${summary.title || 'team voice complete'}`, lead.id);
+  emitNotification({
+    kind: 'info',
+    projectId,
+    title: 'Team responded',
+    body: `${lead.name}: ${summary.title || (summary.body || '').slice(0, 140) || 'Team voice complete.'}`,
+  });
 
   return { routing: { assignments: kept, summary_intent: routing.summary_intent, dropped: dropped.length },
            perAgent, delegations: delegationLog, summary };

@@ -246,6 +246,13 @@ app.post('/projects', async (req, res) => {
     const { name, goal, roleIds } = req.body || {};
     const p = await createProject({ name, goal, roleIds });
     initProjectRepo(p.id).then(() => notifyStateChange(p.id, 'Project created'));
+    publishEvent({
+      type: 'notification',
+      kind: 'info',
+      projectId: p.id,
+      title: 'Project created',
+      body: `${p.name} · ${p.agents.length} agent${p.agents.length === 1 ? '' : 's'} assembled.`,
+    });
     res.json(p);
   } catch (err) {
     res.status(400).json({ error: String(err?.message || err) });
@@ -266,6 +273,14 @@ app.post('/projects/:pid/agents', async (req, res) => {
     // Charter file got written for the new role — tell the renderer
     // so the explorer's Charters section refreshes.
     publishEvent({ type: 'file_created', projectId: p.id, kind: 'charter', file: `${roleId}.md` });
+    const newAgent = p.agents[p.agents.length - 1];
+    publishEvent({
+      type: 'notification',
+      kind: 'info',
+      projectId: p.id,
+      title: 'Agent added',
+      body: `${newAgent?.name || roleId} joined ${p.name}.`,
+    });
     res.json(p);
   } catch (err) {
     res.status(400).json({ error: String(err?.message || err) });

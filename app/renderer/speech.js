@@ -69,17 +69,29 @@ if (typeof window !== 'undefined' && window.speechSynthesis) {
   pickVoice();
 }
 
-export function speak(text, { interrupt = true } = {}) {
+/* Module-level event emitter for TTS lifecycle so callers can mark
+ * which agent tile is "currently talking." */
+class SpeechBus extends EventTarget {}
+export const speechBus = new SpeechBus();
+
+export function speak(text, { interrupt = true, agentId = null } = {}) {
   if (!('speechSynthesis' in window) || !text) return;
-  if (interrupt) window.speechSynthesis.cancel();
+  if (interrupt) {
+    window.speechSynthesis.cancel();
+    speechBus.dispatchEvent(new CustomEvent('end'));
+  }
   const utt = new SpeechSynthesisUtterance(text);
   const v = pickVoice();
   if (v) utt.voice = v;
   utt.rate = 1.02;
   utt.pitch = 1.0;
+  utt.onstart = () => speechBus.dispatchEvent(new CustomEvent('start', { detail: { agentId } }));
+  utt.onend   = () => speechBus.dispatchEvent(new CustomEvent('end',   { detail: { agentId } }));
+  utt.onerror = () => speechBus.dispatchEvent(new CustomEvent('end',   { detail: { agentId } }));
   window.speechSynthesis.speak(utt);
 }
 
 export function stopSpeaking() {
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  speechBus.dispatchEvent(new CustomEvent('end'));
 }

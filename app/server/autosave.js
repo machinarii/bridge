@@ -17,6 +17,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listProjects } from './projects.js';
+import { emitNotification } from './events.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE_DIR = resolve(__dirname, '..', 'state');
@@ -68,6 +69,12 @@ export async function commitProject(projectId, message = 'Autosave') {
     return true;
   } catch (err) {
     console.warn(`[autosave] commit failed for ${projectId}:`, err.message);
+    emitNotification({
+      kind: 'error',
+      projectId,
+      title: 'Autosave failed',
+      body: err.message || 'Could not commit project state.',
+    });
     return false;
   }
 }

@@ -1,5 +1,5 @@
 import { GamepadInput } from './gamepad.js';
-import { Speech, speak, stopSpeaking } from './speech.js';
+import { Speech, speak, stopSpeaking, speechBus } from './speech.js';
 import { renderMarkdown, attachCodeCopyHandlers } from './md.js';
 import { FocusRing } from './focus.js';
 import { renderTile, renderActionBar } from './tiles.js';
@@ -1637,11 +1637,11 @@ function renderZoom(specOverride) {
     for (const f of focusables) {
       f.addEventListener('click', () => { ring.moveTo(el => el === f); pressCross(); });
     }
-    if (autoSpeak && !specOverride?._silent) speak(autoSpeak);
+    if (autoSpeak && !specOverride?._silent) speak(autoSpeak, { agentId: agent.id });
   } else {
     renderActionBar([]);
     ring.set([]);
-    if (spec.body && !specOverride?._silent) speak(spec.body);
+    if (spec.body && !specOverride?._silent) speak(spec.body, { agentId: agent.id });
   }
   _setL2Shortcuts();
 }
@@ -2543,6 +2543,25 @@ function paintAgentStatus(agentId) {
 
 // Kick the SSE channel off once the renderer is ready.
 startEventStream();
+
+/* v2 — TTS lifecycle: stamp data-speaking on the currently-talking
+ * agent's tile (visible on L1; also on the L2 surface). */
+let _speakingAgentId = null;
+function paintSpeaking(agentId) {
+  // Clear any previous speaker.
+  if (_speakingAgentId) {
+    const prev = document.querySelector(`.agent-tile[data-agent-id="${_speakingAgentId}"]`);
+    prev?.removeAttribute('data-speaking');
+  }
+  _speakingAgentId = agentId || null;
+  document.body.dataset.speaking = agentId ? 'true' : 'idle';
+  if (agentId) {
+    const tile = document.querySelector(`.agent-tile[data-agent-id="${agentId}"]`);
+    if (tile) tile.dataset.speaking = 'true';
+  }
+}
+speechBus.addEventListener('start', (e) => paintSpeaking(e.detail?.agentId || null));
+speechBus.addEventListener('end',   ()  => paintSpeaking(null));
 
 /* ---------- v2 §6 — Notifications ----------
  *
