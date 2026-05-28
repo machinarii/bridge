@@ -11,7 +11,7 @@
  * Quitting the app cleans up the spawned child processes.
  */
 
-const { app, BrowserWindow, shell, Menu, Notification } = require('electron');
+const { app, BrowserWindow, shell, Menu, Notification, session, systemPreferences } = require('electron');
 const path = require('node:path');
 const fs   = require('node:fs');
 const { spawn } = require('node:child_process');
@@ -42,6 +42,18 @@ async function startServer() {
   process.env.PORT = String(PORT);
   // require() will execute server.js — its top-level app.listen runs.
   serverModule = require(serverPath);
+}
+
+/* Cheap synchronous check for whether local STT can run — used to
+ * decide if LOCAL_STT_URL should be auto-defaulted before the window
+ * loads. Dev: app/stt/.venv. Packaged: bundled python (+ either
+ * bundled stt-packages or a previously-installed user-data set). */
+function sttIsAvailable() {
+  if (isDev()) {
+    return fs.existsSync(path.resolve(__dirname, '..', 'stt', '.venv', 'bin', 'python'));
+  }
+  return fs.existsSync(path.join(process.resourcesPath, 'python', 'bin', 'python3'))
+      && fs.existsSync(path.join(process.resourcesPath, 'stt', 'parakeet_server.py'));
 }
 
 /* Boots the local Parakeet STT service.
@@ -188,7 +200,31 @@ app.whenReady().then(async () => {
     ]},
   ]));
 
+  // Grant microphone (and general media) permission requests from the
+  // renderer — Electron denies these by default, which silently breaks
+  // getUserMedia / MediaRecorder. The macOS-level prompt still appears
+  // the first time (gated by NSMicrophoneUsageDescription in Info.plist).
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(permission === 'media' || permission === 'audioCapture' || permission === 'microphone');
+  });
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) =>
+    permission === 'media' || permission === 'audioCapture' || permission === 'microphone');
+  // Proactively trigger the macOS mic-access prompt so the user grants
+  // it up front rather than on first PTT.
+  if (process.platform === 'darwin') {
+    try { await systemPreferences.askForMediaAccess('microphone'); } catch {}
+  }
+
   await startServer();
+  // Default LOCAL_STT_URL to the bundled Parakeet endpoint *before*
+  // the window loads, so the renderer routes voice through it instead
+  // of the browser's webkitSpeechRecognition (which is a no-op inside
+  // Electron — no Google speech API key is shipped). Only set it when
+  // STT is actually available and the user hasn't overridden it.
+  if (sttIsAvailable() && !process.env.LOCAL_STT_URL) {
+    process.env.LOCAL_STT_URL = `http://127.0.0.1:${STT_PORT}/transcribe`;
+    console.log('[bridge] defaulting LOCAL_STT_URL to', process.env.LOCAL_STT_URL);
+  }
   startSttIfAvailable();
   await createWindow();
 });
