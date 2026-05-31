@@ -543,16 +543,15 @@ function topoDiagramSVG(id) {
       <circle class="node" cx="48" cy="9" r="6"/><circle class="node" cx="15" cy="30" r="6"/>
       <circle class="node" cx="81" cy="30" r="6"/><circle class="node" cx="48" cy="51" r="6"/>`,
     'rotating-lead': `
-      <circle class="ring" cx="48" cy="30" r="20"/>
-      <path class="arrow" d="M57 12 A20 20 0 0 1 66 22"/>
-      <polyline class="arrow" points="61,17 66,23 71,18"/>
+      <path class="ring" d="M67 23 A20 20 0 1 1 60 14"/>
+      <polyline class="arrow" points="59,10 64,17 56,16"/>
       <circle class="node lead" cx="48" cy="10" r="6.5"/><circle class="node" cx="68" cy="30" r="6"/>
       <circle class="node" cx="48" cy="50" r="6"/><circle class="node" cx="28" cy="30" r="6"/>`,
     'async-pull': `
-      <rect class="mini" x="7" y="9" width="26" height="11" rx="3"/><rect class="mini" x="7" y="24" width="26" height="11" rx="3"/><rect class="mini" x="7" y="39" width="26" height="11" rx="3"/>
-      <path class="arrow" d="M36 21 L67 18"/><polyline class="arrow" points="62,14 68,18 63,23"/>
-      <path class="arrow" d="M36 38 L67 41"/><polyline class="arrow" points="63,36 68,41 62,45"/>
-      <circle class="node" cx="78" cy="18" r="6"/><circle class="node" cx="78" cy="41" r="6"/>`,
+      <rect class="mini" x="4" y="5" width="27" height="12" rx="3"/><rect class="mini" x="4" y="24" width="27" height="12" rx="3"/><rect class="mini" x="4" y="43" width="27" height="12" rx="3"/>
+      <path class="arrow" d="M34 11 H77"/><polyline class="arrow" points="72,7 78,11 72,15"/>
+      <path class="arrow" d="M34 49 H53 C66 49 61 36 73 31"/><polyline class="arrow" points="67,30 74,30 72,37"/>
+      <circle class="node" cx="86" cy="11" r="6"/><circle class="node" cx="86" cy="43" r="6"/>`,
   }[id] || '';
   return open + body + '</svg>';
 }
