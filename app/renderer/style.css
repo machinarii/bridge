@@ -1612,7 +1612,10 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 #shortcuts-rail .sc.focused .glyph.for-keyboard,
 #back-shortcut .sc.focused .glyph.for-keyboard,
 #primary-shortcut .sc.focused .glyph.for-keyboard {
-  background: rgba(255,255,255,0.18);
+  /* The focused chip is already rgba(255,255,255,0.18) over the footer —
+   * the exact shade the held keycap renders as. Leave the keycap fill
+   * transparent so it matches the hold state instead of stacking lighter. */
+  background: transparent;
   border-color: rgba(255,255,255,0.55);
 }
 
