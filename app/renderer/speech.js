@@ -6,29 +6,43 @@ export class Speech extends EventTarget {
     this.supported = !!Recognition;
     this.recognition = null;
     this.listening = false;
+    this._holding = false;   // true between start() (PTT press) and stop() (release)
+    this._finalText = '';    // accumulated final transcript across the whole hold
     if (this.supported) {
       const r = new Recognition();
       r.lang = 'en-US';
       r.interimResults = true;
-      r.continuous = false;
+      // Stay listening through pauses. With continuous=false the recognizer
+      // ended after the first utterance/silence, so push-to-talk deactivated
+      // the instant the user paused (or immediately, on no speech). We keep it
+      // active for the whole hold and only finalize on release (see onend).
+      r.continuous = true;
       r.maxAlternatives = 1;
-      let finalText = '';
       r.onresult = (e) => {
         let interim = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const t = e.results[i][0].transcript;
-          if (e.results[i].isFinal) finalText += t;
+          if (e.results[i].isFinal) this._finalText += t;
           else interim += t;
         }
-        this.dispatchEvent(new CustomEvent('partial', { detail: (finalText + interim).trim() }));
+        this.dispatchEvent(new CustomEvent('partial', { detail: (this._finalText + interim).trim() }));
       };
       r.onerror = (e) => {
+        // 'no-speech'/'aborted' can fire mid-hold on brief silence. While the
+        // key is still held, swallow it and let onend restart listening.
+        if (this._holding && (e.error === 'no-speech' || e.error === 'aborted')) return;
         this.listening = false;
         this.dispatchEvent(new CustomEvent('error', { detail: e.error || 'unknown' }));
       };
       r.onend = () => {
-        const text = finalText.trim();
-        finalText = '';
+        // The browser stops on silence even with continuous=true. If the user
+        // is still holding, transparently restart so PTT stays active until
+        // they actually release; otherwise finalize the accumulated transcript.
+        if (this._holding) {
+          try { this.recognition.start(); return; } catch { /* fall through to finalize */ }
+        }
+        const text = this._finalText.trim();
+        this._finalText = '';
         this.listening = false;
         this.dispatchEvent(new CustomEvent('end', { detail: text }));
       };
@@ -38,6 +52,8 @@ export class Speech extends EventTarget {
 
   start() {
     if (!this.supported || this.listening) return;
+    this._holding = true;
+    this._finalText = '';
     try {
       this.recognition.start();
       this.listening = true;
@@ -49,6 +65,9 @@ export class Speech extends EventTarget {
   }
 
   stop() {
+    // PTT released: end the hold, then stop. The next onend finalizes and
+    // dispatches the accumulated transcript.
+    this._holding = false;
     if (!this.supported || !this.listening) return;
     try { this.recognition.stop(); } catch {}
   }
