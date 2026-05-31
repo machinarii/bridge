@@ -1606,12 +1606,12 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
     0 0 0 2px var(--focus, #ffffff),
     0 0 16px 2px rgba(255,255,255,0.25);
 }
-/* When the chip is focused, hide the keycap's own outline so the two
- * borders don't double up. */
+/* When the chip is focused, keep the keycap's own outline visible against
+ * the lit chip background — brighter/whiter, same thickness. */
 #shortcuts-rail .sc.focused .glyph.for-keyboard,
 #back-shortcut .sc.focused .glyph.for-keyboard,
 #primary-shortcut .sc.focused .glyph.for-keyboard {
-  border-color: transparent;
+  border-color: rgba(255,255,255,0.85);
 }
 
 /* Brief pulse on just the small key/glyph element when its shortcut

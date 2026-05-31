@@ -514,9 +514,9 @@ let newProjGoal     = '';                // captured during step 4
 // operating rule written into project.md lives server-side (projects.js).
 const TOPOLOGIES = [
   { id: 'hub-and-spoke', heading: 'Hub-and-spoke', subtitle: 'One coordinator, four specialists', desc: 'A coordinator routes work to specialists and gathers their results.' },
-  { id: 'feature-teams', heading: 'Feature teams', subtitle: 'Parallel pods, end-to-end ownership', desc: 'Independent pods each own a workstream from start to finish.' },
-  { id: 'mesh-mob',      heading: 'Mesh / mob', subtitle: 'Everyone on everything', desc: 'The whole team swarms one problem together, no fixed ownership.' },
   { id: 'rotating-lead', heading: 'Rotating lead', subtitle: 'Leadership passes each sprint', desc: 'The lead role hands off each sprint so everyone steers in turn.' },
+  { id: 'mesh-mob',      heading: 'Mesh / mob', subtitle: 'Everyone on everything', desc: 'The whole team swarms one problem together, no fixed ownership.' },
+  { id: 'feature-teams', heading: 'Feature teams', subtitle: 'Parallel pods, end-to-end ownership', desc: 'Independent pods each own a workstream from start to finish.' },
   { id: 'async-pull',    heading: 'Async pull / queue', subtitle: 'Self-assign from a shared backlog', desc: "Members pull the next item from a shared backlog whenever they're free." },
 ];
 
