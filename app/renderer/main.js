@@ -608,7 +608,10 @@ function renderProjects() {
       <div class="meta">${p.agents.length} agent${p.agents.length===1?'':'s'}</div>
       <div class="project-updated">${escapeHtml(formatProjectUpdated(p.updatedAt || p.createdAt))}</div>`;
     const myIdx = tileEls.length;
-    tile.addEventListener('click', () => { pickerIndex = myIdx; ring.index = myIdx; ring.paint(); openFocused(); });
+    // Tap opens; press-and-hold (1.4s) opens the edit modal.
+    tile.addEventListener('pointerdown', () => startProjectHold(myIdx));
+    tile.addEventListener('pointerup',   () => endProjectHold(true));
+    tile.addEventListener('pointerleave', () => cancelProjectHold());
     grid.appendChild(tile);
     tileEls.push(tile);
   }
@@ -633,6 +636,161 @@ function renderProjects() {
                        action: () => openFocused() });
   updatePickerShortcuts();
 }
+
+/* ---------- Project edit (long-press a project tile) ----------
+ * Press & hold a project (mouse / Enter / Cross) for 1.4s to open an edit
+ * modal: Rename, Remove (itself a 3s press-and-hold to confirm), Cancel. */
+const PROJECT_LONGPRESS_MS = 1400;
+const PROJECT_REMOVE_HOLD_MS = 3000;
+
+const projectEditModalEl  = document.getElementById('project-edit-modal');
+const projectEditNameEl   = document.getElementById('project-edit-name');
+const projectEditRenameEl = document.getElementById('project-edit-rename');
+const projectEditRemoveEl = document.getElementById('project-edit-remove');
+const projectEditCancelEl = document.getElementById('project-edit-cancel');
+let projectEditOpen = false;
+let projectEditTarget = null;       // { id, name, idx }
+let projectEditFocusEls = [];
+let projectEditFocusIdx = 0;
+let _projHold = null;               // open-modal long-press: { idx, fired, timer }
+let _removeHold = null;             // remove confirm hold: { timer }
+
+// Light the Select chip (Enter cap / Cross icon) while a project is held — the
+// same held treatment the "Hold to talk" V cap uses during push-to-talk.
+function setSelectHeld(on) {
+  document.querySelectorAll('#primary-shortcut .glyph').forEach(g => g.classList.toggle('held', on));
+}
+
+function startProjectHold(idx) {
+  if (mode !== MODE_PROJECTS || projectEditOpen) return;
+  const p = projects[idx];
+  if (!p) return; // "+ New" tile — no long-press
+  cancelProjectHold();
+  _projHold = { idx, fired: false };
+  _projHold.timer = setTimeout(() => { _projHold.fired = true; openProjectEditModal(p, idx); }, PROJECT_LONGPRESS_MS);
+  setSelectHeld(true);
+}
+function endProjectHold(openIfShort) {
+  if (!_projHold) return false;
+  const { fired, idx } = _projHold;
+  clearTimeout(_projHold.timer);
+  _projHold = null;
+  setSelectHeld(false);
+  if (!fired && openIfShort) { pickerIndex = idx; ring.index = idx; ring.paint(); openFocused(); }
+  return fired;
+}
+function cancelProjectHold() { if (_projHold) { clearTimeout(_projHold.timer); _projHold = null; } setSelectHeld(false); }
+
+function openProjectEditModal(project, idx) {
+  cancelProjectHold();
+  projectEditTarget = { id: project.id, name: project.name, idx };
+  projectEditNameEl.value = project.name;
+  projectEditOpen = true;
+  projectEditModalEl.hidden = false;
+  projectEditFocusEls = [projectEditNameEl, projectEditCancelEl, projectEditRemoveEl, projectEditRenameEl];
+  projectEditFocusIdx = 0;
+  paintProjectEditFocus();
+  setTimeout(() => { projectEditNameEl.focus(); projectEditNameEl.select(); }, 0);
+}
+function closeProjectEditModal() {
+  resetRemoveHold();
+  projectEditOpen = false;
+  projectEditModalEl.hidden = true;
+  projectEditTarget = null;
+}
+function paintProjectEditFocus() {
+  projectEditFocusEls.forEach((el, i) => el.classList.toggle('focused', i === projectEditFocusIdx));
+}
+function moveProjectEditFocus(d) {
+  projectEditFocusIdx = (projectEditFocusIdx + d + projectEditFocusEls.length) % projectEditFocusEls.length;
+  paintProjectEditFocus();
+  projectEditFocusEls[projectEditFocusIdx]?.focus();
+}
+
+async function renameProjectFromModal() {
+  const t = projectEditTarget; if (!t) return;
+  const name = projectEditNameEl.value.trim();
+  if (!name || name === t.name) { closeProjectEditModal(); return; }
+  try {
+    const r = await fetch(`/projects/${encodeURIComponent(t.id)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const updated = await r.json();
+    const p = projects.find(x => x.id === t.id); if (p) p.name = updated.name;
+  } catch (err) { console.error('[rename] failed', err); }
+  closeProjectEditModal();
+  renderProjects();
+}
+
+function startRemoveHold() {
+  if (!projectEditTarget || _removeHold) return;
+  projectEditRemoveEl.classList.add('holding');
+  _removeHold = { timer: setTimeout(() => removeProjectFromModal(), PROJECT_REMOVE_HOLD_MS) };
+}
+function resetRemoveHold() {
+  if (_removeHold) { clearTimeout(_removeHold.timer); _removeHold = null; }
+  projectEditRemoveEl?.classList.remove('holding');
+}
+async function removeProjectFromModal() {
+  const t = projectEditTarget; if (!t) return;
+  resetRemoveHold();
+  try {
+    const r = await fetch(`/projects/${encodeURIComponent(t.id)}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error(await r.text());
+    projects = projects.filter(x => x.id !== t.id);
+  } catch (err) { console.error('[remove] failed', err); }
+  closeProjectEditModal();
+  pickerIndex = Math.max(0, Math.min(pickerIndex, projects.length));
+  renderProjects();
+}
+
+// Modal controls — pointer.
+projectEditCancelEl?.addEventListener('click', () => closeProjectEditModal());
+projectEditRenameEl?.addEventListener('click', () => renameProjectFromModal());
+projectEditRemoveEl?.addEventListener('pointerdown', (e) => { e.preventDefault(); startRemoveHold(); });
+projectEditRemoveEl?.addEventListener('pointerup', () => resetRemoveHold());
+projectEditRemoveEl?.addEventListener('pointerleave', () => resetRemoveHold());
+projectEditRemoveEl?.addEventListener('pointercancel', () => resetRemoveHold());
+projectEditModalEl?.addEventListener('pointerdown', (e) => { if (e.target === projectEditModalEl) closeProjectEditModal(); });
+// Modal keyboard.
+projectEditModalEl?.addEventListener('keydown', (e) => {
+  if (!projectEditOpen) return;
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeProjectEditModal(); return; }
+  // !e.repeat so the still-held Enter that *opened* the modal (auto-repeating)
+  // doesn't immediately fire Rename and close it.
+  if (e.key === 'Enter' && !e.repeat && document.activeElement === projectEditNameEl) { e.preventDefault(); e.stopPropagation(); renameProjectFromModal(); }
+});
+// Hold Enter/Space on the focused Remove button (keyboard) to confirm delete.
+projectEditRemoveEl?.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); e.stopPropagation(); startRemoveHold(); }
+});
+projectEditRemoveEl?.addEventListener('keyup', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); resetRemoveHold(); }
+});
+
+// Gamepad takeover while the modal is open.
+function handleProjectEditGamepad(b) {
+  if (b === 'up' || b === 'left')   { moveProjectEditFocus(-1); return; }
+  if (b === 'down' || b === 'right'){ moveProjectEditFocus(+1); return; }
+  if (b === 'circle') { closeProjectEditModal(); return; }
+  if (b === 'cross') {
+    const el = projectEditFocusEls[projectEditFocusIdx];
+    if (el === projectEditRemoveEl) { startRemoveHold(); return; } // hold Cross; release cancels
+    if (el === projectEditRenameEl) { renameProjectFromModal(); return; }
+    if (el === projectEditCancelEl) { closeProjectEditModal(); return; }
+  }
+}
+// Cross release: cancel a remove-hold in the modal, or finish a tile long-press at L0.
+gp.addEventListener('release', (e) => {
+  if (e.detail.button !== 'cross') return;
+  if (projectEditOpen) { resetRemoveHold(); return; }
+  if (mode === MODE_PROJECTS) endProjectHold(true);
+});
+// Releasing Enter at L0 (no modal) finishes a tile long-press.
+window.addEventListener('keyup', (e) => {
+  if (e.key === 'Enter' && mode === MODE_PROJECTS && !projectEditOpen) endProjectHold(true);
+});
 
 /** On L0, the shortcuts rail reflects the focused project's lead so
  *  the user can talk to that project's PM from the home screen.
@@ -3522,6 +3680,11 @@ gp.addEventListener('press', (e) => {
     handleEditBubbleGamepad(b);
     return;
   }
+  // Project-edit modal takes over while open.
+  if (projectEditOpen) {
+    handleProjectEditGamepad(b);
+    return;
+  }
 
   // Notification menu takes over while open — Up/Down step entries,
   // Cross activates the focused entry's primary action, Circle closes.
@@ -3548,7 +3711,8 @@ gp.addEventListener('press', (e) => {
     if (b === 'left' || b === 'right' || b === 'up' || b === 'down') {
       pickerMove(b);
     } else if (b === 'cross') {
-      openFocused();
+      if (ring.index < projects.length) startProjectHold(ring.index); // hold → edit modal
+      else openFocused();                                             // "+ New" → open now
     } else if (b === 'triangle') {
       toggleActivityDrawer();
     } else if (b === 'square') {
@@ -3835,7 +3999,7 @@ async function ensureRolesList() {
 }
 
 async function openSettings() {
-  if (settingsOpen || editBubbleOpen || confirmCancelOpen) return;
+  if (settingsOpen || editBubbleOpen || confirmCancelOpen || projectEditOpen) return;
   settingsOpen = true;
   settingsModalEl.hidden = false;
   selectSettingsTab('general');
@@ -4102,7 +4266,7 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keydown', (e) => {
   // Settings modal owns the keyboard while it's open — let its own
   // handler take care of Esc / Tab / arrows / Enter.
-  if (settingsOpen || editBubbleOpen || confirmCancelOpen) return;
+  if (settingsOpen || editBubbleOpen || confirmCancelOpen || projectEditOpen) return;
 
   if (document.activeElement === typedInput) {
     if (e.key === 'Enter') {
@@ -4208,7 +4372,11 @@ window.addEventListener('keydown', (e) => {
       }
       e.preventDefault(); pickerMove(dir);
     } else if (dir) { e.preventDefault(); pickerMove(dir); }
-    else if (e.key === 'Enter') { e.preventDefault(); openFocused(); }
+    else if (e.key === 'Enter' && !e.repeat) {
+      e.preventDefault();
+      if (ring.index < projects.length) startProjectHold(ring.index); // hold a project → edit modal
+      else openFocused();                                             // "+ New" → open now
+    }
   } else if (mode === MODE_NEW_PROJ_ROLES) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();

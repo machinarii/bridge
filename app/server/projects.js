@@ -9,7 +9,7 @@
  *   app/state/<projectId>/notes/
  */
 
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRole, listRoles } from './roles.js';
@@ -201,6 +201,27 @@ export function setAgentEnabled(projectId, agentId, enabled) {
   a.enabled = !!enabled;
   save();
   return { ok: true, agent: a };
+}
+
+export function renameProject(id, name) {
+  const p = getProject(id);
+  if (!p) throw new Error('unknown project');
+  const clean = String(name || '').trim();
+  if (!clean) throw new Error('name required');
+  p.name = clean;
+  save();
+  return p;
+}
+
+export function deleteProject(id) {
+  const data = load();
+  const idx = data.projects.findIndex(p => p.id === id);
+  if (idx === -1) throw new Error('unknown project');
+  const [removed] = data.projects.splice(idx, 1);
+  save();
+  // Remove the project's on-disk state (project.md, notes, charters, git repo).
+  try { rmSync(resolve(STATE_DIR, id), { recursive: true, force: true }); } catch {}
+  return { ok: true, id, name: removed.name };
 }
 
 // For tests — clear in-memory cache so tests re-reading disk see fresh state
