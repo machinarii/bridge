@@ -513,12 +513,48 @@ let newProjGoal     = '';                // captured during step 4
 // Work topologies offered after role selection. Display copy lives here; the
 // operating rule written into project.md lives server-side (projects.js).
 const TOPOLOGIES = [
-  { id: 'hub-and-spoke', heading: 'Hub-and-spoke', subtitle: 'One coordinator, four specialists', best: 'Best when someone has the most context' },
-  { id: 'feature-teams', heading: 'Feature teams', subtitle: 'Parallel pods, end-to-end ownership', best: "Best when workstreams don't touch" },
-  { id: 'mesh-mob',      heading: 'Mesh / mob', subtitle: 'Everyone on everything', best: 'Best for hard, ambiguous problems' },
-  { id: 'rotating-lead', heading: 'Rotating lead', subtitle: 'Leadership passes each sprint', best: 'Best for building team-wide ownership' },
-  { id: 'async-pull',    heading: 'Async pull / queue', subtitle: 'Self-assign from a shared backlog', best: 'Best for distributed or async teams' },
+  { id: 'hub-and-spoke', heading: 'Hub-and-spoke', subtitle: 'One coordinator, four specialists', desc: 'A coordinator routes work to specialists and gathers their results.' },
+  { id: 'feature-teams', heading: 'Feature teams', subtitle: 'Parallel pods, end-to-end ownership', desc: 'Independent pods each own a workstream from start to finish.' },
+  { id: 'mesh-mob',      heading: 'Mesh / mob', subtitle: 'Everyone on everything', desc: 'The whole team swarms one problem together, no fixed ownership.' },
+  { id: 'rotating-lead', heading: 'Rotating lead', subtitle: 'Leadership passes each sprint', desc: 'The lead role hands off each sprint so everyone steers in turn.' },
+  { id: 'async-pull',    heading: 'Async pull / queue', subtitle: 'Self-assign from a shared backlog', desc: "Members pull the next item from a shared backlog whenever they're free." },
 ];
+
+/* Small inline diagram for each topology — nodes/links drawn in currentColor
+ * (the lead node uses the accent). Kept on a 96x60 canvas for consistent sizing. */
+function topoDiagramSVG(id) {
+  const open = '<svg class="topo-svg" viewBox="0 0 96 60" aria-hidden="true">';
+  const body = {
+    'hub-and-spoke': `
+      <line class="link" x1="48" y1="30" x2="16" y2="12"/><line class="link" x1="48" y1="30" x2="80" y2="12"/>
+      <line class="link" x1="48" y1="30" x2="16" y2="48"/><line class="link" x1="48" y1="30" x2="80" y2="48"/>
+      <circle class="node" cx="16" cy="12" r="6"/><circle class="node" cx="80" cy="12" r="6"/>
+      <circle class="node" cx="16" cy="48" r="6"/><circle class="node" cx="80" cy="48" r="6"/>
+      <circle class="node lead" cx="48" cy="30" r="8"/>`,
+    'feature-teams': `
+      <line class="link" x1="20" y1="16" x2="20" y2="44"/><line class="link" x1="48" y1="16" x2="48" y2="44"/><line class="link" x1="76" y1="16" x2="76" y2="44"/>
+      <circle class="node" cx="20" cy="14" r="6"/><circle class="node" cx="20" cy="46" r="6"/>
+      <circle class="node" cx="48" cy="14" r="6"/><circle class="node" cx="48" cy="46" r="6"/>
+      <circle class="node" cx="76" cy="14" r="6"/><circle class="node" cx="76" cy="46" r="6"/>`,
+    'mesh-mob': `
+      <line class="link" x1="48" y1="9" x2="15" y2="30"/><line class="link" x1="48" y1="9" x2="81" y2="30"/>
+      <line class="link" x1="48" y1="9" x2="48" y2="51"/><line class="link" x1="15" y1="30" x2="81" y2="30"/>
+      <line class="link" x1="15" y1="30" x2="48" y2="51"/><line class="link" x1="81" y1="30" x2="48" y2="51"/>
+      <circle class="node" cx="48" cy="9" r="6"/><circle class="node" cx="15" cy="30" r="6"/>
+      <circle class="node" cx="81" cy="30" r="6"/><circle class="node" cx="48" cy="51" r="6"/>`,
+    'rotating-lead': `
+      <circle class="ring" cx="48" cy="30" r="20"/>
+      <polyline class="arrow" points="62,15 70,18 68,26"/>
+      <circle class="node lead" cx="48" cy="10" r="6.5"/><circle class="node" cx="68" cy="30" r="6"/>
+      <circle class="node" cx="48" cy="50" r="6"/><circle class="node" cx="28" cy="30" r="6"/>`,
+    'async-pull': `
+      <rect class="mini" x="8" y="9" width="26" height="11" rx="3"/><rect class="mini" x="8" y="24" width="26" height="11" rx="3"/><rect class="mini" x="8" y="39" width="26" height="11" rx="3"/>
+      <path class="arrow" d="M36 18 H66"/><polyline class="arrow" points="61,14 67,18 61,22"/>
+      <path class="arrow" d="M36 30 q18 0 24 12"/><polyline class="arrow" points="55,38 61,43 54,46"/>
+      <circle class="node" cx="78" cy="18" r="6"/><circle class="node" cx="78" cy="43" r="6"/>`,
+  }[id] || '';
+  return open + body + '</svg>';
+}
 
 /* ---------- Explorer height sync ----------
  * The explorer panels are position:fixed cards; their top/bottom track
@@ -1243,12 +1279,10 @@ function renderNewProjectTopology() {
     card.dataset.topoId = topo.id;
     card.dataset.selected = String(newProjTopology === topo.id);
     card.innerHTML = `
-      <span class="topo-radio" aria-hidden="true"></span>
-      <span class="topo-text">
-        <span class="topo-heading">${escapeHtml(topo.heading)}</span>
-        <span class="topo-subtitle">${escapeHtml(topo.subtitle)}</span>
-      </span>
-      <span class="topo-best">${escapeHtml(topo.best)}</span>`;
+      <span class="topo-heading">${escapeHtml(topo.heading)}</span>
+      <span class="topo-subtitle">${escapeHtml(topo.subtitle)}</span>
+      ${topoDiagramSVG(topo.id)}
+      <span class="topo-desc">${escapeHtml(topo.desc)}</span>`;
     card.addEventListener('click', () => { ring.moveTo(el => el === card); chooseTopology(topo.id); });
     list.appendChild(card);
     cardEls.push(card);
