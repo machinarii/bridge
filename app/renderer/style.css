@@ -1880,36 +1880,41 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 /* ===== Work topology picker (new project step 2) ===== */
 .topology-picker { padding: 0.5rem 0.5rem 1rem; display: flex; flex-direction: column; gap: 0.9rem; flex: 1; min-height: 0; }
 .topology-list { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; align-content: start; }
+/* Match the role-tile look on the previous screen: 1px border, the same
+ * layered gradient background, and the same focus treatment. */
 .topology-card {
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.4rem;
   min-width: 0;
-  padding: 0.95rem 0.7rem 1.05rem;
-  border: 1.75px solid rgba(255,255,255,0.12);
-  border-radius: var(--steam-radius, 10px);
-  background: rgba(255,255,255,0.02);
+  position: relative;
+  padding: 1rem 0.8rem 1.1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background:
+    radial-gradient(ellipse 140% 90% at 50% -10%, rgba(255,255,255,0.10) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
   color: var(--fg, #e7ecf3);
   cursor: pointer;
-  transition: border-color 120ms, background 120ms;
-}
-.topology-card[data-selected="true"] {
-  border-color: var(--accent, #6ea8ff);
-  background: rgba(110,168,255,0.08);
+  transition: transform 180ms cubic-bezier(.2,.8,.2,1), background 160ms, border-color 160ms;
 }
 .topology-card.focused {
-  border-color: var(--focus, #ffffff);
-  background: rgba(255,255,255,0.06);
-  box-shadow: 0 0 0 2px var(--focus, #ffffff), 0 0 16px 2px rgba(255,255,255,0.18);
+  background:
+    radial-gradient(ellipse 140% 90% at 50% -10%, rgba(255,255,255,0.18) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%);
+  outline: 1px solid var(--focus, #ffffff);
+  outline-offset: 2px;
+  box-shadow: 0 8px 24px -6px rgba(0,0,0,0.5), 0 0 18px 4px rgba(255,255,255,0.18);
+  transform: translateY(-3px);
 }
-.topo-heading { font-size: 0.98rem; font-weight: 600; color: var(--fg, #e7ecf3); line-height: 1.2; }
-.topo-subtitle { font-size: 0.8rem; color: var(--fg-dim); line-height: 1.25; min-height: 2.1em; }
+.topo-heading { font-size: 1.05rem; font-weight: 400; letter-spacing: -0.01em; color: var(--fg, #e7ecf3); line-height: 1.2; }
+.topo-subtitle { font-size: 0.85rem; opacity: 0.7; line-height: 1.25; min-height: 2.1em; }
 .topo-svg { width: 100%; max-width: 108px; height: auto; margin: 0.35rem 0; }
 .topo-svg .link { stroke: currentColor; stroke-width: 2; fill: none; opacity: 0.42; stroke-linecap: round; }
 .topo-svg .ring { stroke: currentColor; stroke-width: 2; fill: none; opacity: 0.32; }
 .topo-svg .arrow { stroke: currentColor; stroke-width: 2; fill: none; opacity: 0.6; stroke-linecap: round; stroke-linejoin: round; }
 .topo-svg .mini { stroke: currentColor; stroke-width: 2; fill: none; opacity: 0.5; }
 .topo-svg .node { fill: var(--bg-elev, #0b0d12); stroke: currentColor; stroke-width: 2.2; }
-.topo-svg .node.lead { fill: var(--accent, #6ea8ff); stroke: var(--accent, #6ea8ff); }
-.topo-desc { font-size: 0.78rem; color: var(--fg-dim); line-height: 1.35; margin-top: auto; }
+.topo-svg .node.lead { fill: #ffffff; stroke: #ffffff; }
+.topo-desc { font-size: 0.82rem; opacity: 0.7; line-height: 1.35; margin-top: auto; }
 
 .role-picker {
   /* Mirror the L0 / L1 grids: 1rem top/bottom, 0.5rem left/right. */
