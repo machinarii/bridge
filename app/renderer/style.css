@@ -1715,6 +1715,17 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   color: var(--focus, #ffffff);
   filter: drop-shadow(0 0 5px rgba(255,255,255,0.55));
 }
+/* Hold-to-talk chip: the label reserves its width (visibility:hidden while
+ * talking) so the rail never shifts; a small mic visualizer overlays it. */
+.sc.ptt-chip .sc-talk { position: relative; display: inline-flex; align-items: center; }
+.sc.ptt-chip .sc-mic {
+  position: absolute; inset: 0;
+  display: none; align-items: center; justify-content: center; gap: 2.5px;
+  color: var(--fg, #e7ecf3);
+}
+.sc.ptt-chip .sc-mic .bar { width: 2.5px; height: 6px; border-radius: 2px; background: currentColor; }
+.sc.ptt-chip.talking .label { visibility: hidden; }
+.sc.ptt-chip.talking .sc-mic { display: flex; }
 /* Press pulse for the borderless SVG icon — scale only, no background flash. */
 @keyframes gpPress { 0% { transform: scale(1.18); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
 .glyph.for-gamepad.gp-icon.pressed { animation: gpPress 280ms cubic-bezier(.2,.8,.2,1); }
