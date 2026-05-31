@@ -2250,6 +2250,12 @@ function startPTT() {
   if (pttActive) return;
   if (!editBubbleOpen && !PTT_MODES.has(mode)) return;
   pttActive = true;
+  // Drop any footer-rail selection while holding to talk. Otherwise the
+  // focused chip — "Hold to talk" is index 0, so it's the default — keeps
+  // its `.sc.focused` ring for the entire hold and reads as a stuck
+  // "selected" state until release. The post-utterance re-render rebuilds
+  // the rail and resets focus anyway, so clearing it here is safe.
+  if (isShortcutsFocused()) leaveShortcuts();
   stopSpeaking();
   if (localSttUrl) {
     // Local STT path — MediaRecorder → /transcribe proxy → text.
