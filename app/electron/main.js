@@ -36,12 +36,29 @@ function resolveBundled(rel) {
 async function startServer() {
   // Boot the Express server in-process. It registers routes against
   // its own express() instance and calls app.listen on PORT.
-  const serverPath = isDev()
-    ? path.resolve(__dirname, '..', 'server', 'server.js')
-    : path.join(process.resourcesPath, 'app.asar', 'app', 'server', 'server.js');
+  //
+  // server.js is an ES module ("type":"module"), so it MUST be loaded with
+  // dynamic import() — require() throws ERR_REQUIRE_ESM, which previously left
+  // the server unstarted and the window blank (black screen). It's unpacked
+  // from the asar (see build.asarUnpack) so its relative imports + bundled
+  // express resolve on disk.
+  // server.js always sits next to main.js at ../server/server.js — true in dev
+  // and in the packaged app (asar disabled), so one path covers both.
+  const serverPath = path.resolve(__dirname, '..', 'server', 'server.js');
   process.env.PORT = String(PORT);
-  // require() will execute server.js — its top-level app.listen runs.
-  serverModule = require(serverPath);
+  const { pathToFileURL } = require('node:url');
+  serverModule = await import(pathToFileURL(serverPath).href);
+
+  // Don't return until the server is actually accepting connections, so the
+  // window never loads a dead port.
+  for (let i = 0; i < 100; i++) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${PORT}/health`);
+      if (res.ok) return;
+    } catch { /* not up yet */ }
+    await new Promise(r => setTimeout(r, 100));
+  }
+  console.error('[bridge] server did not become healthy on port', PORT);
 }
 
 /* Cheap synchronous check for whether local STT can run — used to
