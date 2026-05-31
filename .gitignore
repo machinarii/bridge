@@ -12,6 +12,9 @@ out/
 app/stt/.venv/
 app/stt/__pycache__/
 
+# Python bytecode from build helpers (e.g. make-icon.py)
+build/__pycache__/
+
 # Bundled python-build-standalone (~120MB per arch, fetched at build)
 build/python-arm64/
 build/python-x64/

@@ -32,13 +32,18 @@
       "app/renderer/**/*",
       "!app/server/node_modules/.cache/**/*",
       "!app/stt/.venv/**/*",
-      "!app/state/**/*"
+      "!app/state/**/*",
+      "!app/server/.env"
     ],
     "extraResources": [
       {
         "from": "app/stt",
         "to": "stt",
-        "filter": ["**/*.py", "requirements.txt", "README.md"]
+        "filter": [
+          "**/*.py",
+          "requirements.txt",
+          "README.md"
+        ]
       },
       {
         "from": "build/python-${arch}/python",
@@ -54,9 +59,20 @@
       }
     ],
     "mac": {
+      "icon": "build/icon.icns",
       "target": [
-        { "target": "dmg", "arch": ["arm64"] },
-        { "target": "zip", "arch": ["arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
       ],
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
@@ -69,6 +85,10 @@
     },
     "dmg": {
       "writeUpdateInfo": false
-    }
+    },
+    "asar": false
+  },
+  "dependencies": {
+    "express": "^4.22.2"
   }
 }
