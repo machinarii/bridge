@@ -1595,6 +1595,34 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .glyph[data-glyph="square"]   { color: #c08bff; }
 .glyph[data-glyph="triangle"] { color: #9cf2c1; }
 
+/* PlayStation SVG glyphs (mono outline, from the Figma controller set).
+ * Drop the keycap circle/border so the icon's own artwork shows, and follow
+ * the chip color via currentColor — no per-button tint. Higher specificity
+ * than the per-glyph color rules above so the mono color wins. */
+.glyph.for-gamepad.gp-icon {
+  width: 24px; height: 18px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: var(--fg-dim);
+}
+.glyph.for-gamepad.gp-icon svg { display: block; width: 100%; height: 100%; }
+.sc.focused .glyph.for-gamepad.gp-icon { color: var(--fg); }
+
+/* Held push-to-talk: the V keycap / R2 icon stay lit for the entire hold
+ * (driven by startPTT/endPTT), not just the brief press flash. */
+.glyph.for-keyboard.held {
+  background: rgba(255,255,255,0.18);
+  border-color: rgba(255,255,255,0.55);
+}
+.glyph.for-gamepad.gp-icon.held {
+  color: var(--focus, #ffffff);
+  filter: drop-shadow(0 0 5px rgba(255,255,255,0.55));
+}
+/* Press pulse for the borderless SVG icon — scale only, no background flash. */
+@keyframes gpPress { 0% { transform: scale(1.18); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
+.glyph.for-gamepad.gp-icon.pressed { animation: gpPress 280ms cubic-bezier(.2,.8,.2,1); }
+
 /* ===== Typed fallback ===== */
 
 #ptt-typed {
