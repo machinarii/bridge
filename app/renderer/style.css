@@ -391,7 +391,17 @@ kbd {
   position: absolute; inset: 0; z-index: 1;
   display: flex; align-items: center; justify-content: center; white-space: nowrap;
 }
-.project-edit-remove.holding .remove-label { color: #11151c; }
+/* During the hold the base label uses the default light color (readable on the
+ * dark part). A dark duplicate is clipped to the red fill's sweep so the text
+ * is dark only where it sits in front of the red bar. */
+.project-edit-remove.holding .remove-label { color: var(--fg, #e7ecf3); }
+.project-edit-remove .remove-label-clip {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: center; white-space: nowrap;
+  color: #11151c;
+  clip-path: inset(0 100% 0 0); /* hidden until the fill sweeps in */
+}
+.project-edit-remove.holding .remove-label-clip { clip-path: inset(0 0 0 0); transition: clip-path 3000ms linear; }
 /* When highlighted, match the other modal buttons (white border + light bg + ring),
  * dropping the red danger styling that's only for the resting state. */
 .project-edit-remove.focused {
