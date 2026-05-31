@@ -12,7 +12,7 @@ const GLYPH_SHAPES = {
 };
 const GLYPH_KEYS = {
   cross:    'Enter',
-  circle:   'Esc',
+  circle:   'Delete', // Back is bound to Delete/Backspace (Esc is reserved for full screen)
   square:   'Space',
   triangle: 'T',
 };
