@@ -726,8 +726,9 @@ async function renameProjectFromModal() {
 }
 
 function setRemoveLabel(text) {
-  const el = projectEditRemoveEl?.querySelector('.remove-label');
-  if (el) el.textContent = text;
+  // Update both the base (light) label and the dark clipped copy that shows
+  // only over the red fill.
+  projectEditRemoveEl?.querySelectorAll('.remove-label, .remove-label-clip').forEach(el => { el.textContent = text; });
 }
 // Default label, or the hold hint when the button is highlighted/focused.
 function removeLabelForState() {
