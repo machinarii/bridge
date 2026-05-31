@@ -2521,7 +2521,7 @@ function setPttHeld(on) {
 /* ---------- Hold-to-talk chip mic visualizer ----------
  * A small, self-contained version of the capture-screen visualizer that lives
  * inside the "Hold to talk" footer chip while the user is holding to talk. */
-const CHIP_BAR_COUNT = 5;
+const CHIP_BAR_COUNT = 9;
 let chipViz = null;
 let chipVizFrame = null;
 let _chipLoud = 0;
