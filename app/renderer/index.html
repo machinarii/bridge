@@ -120,21 +120,22 @@
           </select>
         </label>
         <label class="settings-field">
-          <span>Local STT URL <small style="opacity:0.6">(Parakeet, Whisper, …)</small></span>
+          <span>Local STT URL <small style="opacity:0.6">(Parakeet, Whisper, etc.)</small></span>
           <input type="text" id="settings-stt-url" placeholder="http://localhost:8123/transcribe" autocomplete="off" />
           <small class="settings-meta">Leave blank to use the browser's built-in speech recognition.</small>
         </label>
       </section>
 
       <section class="settings-pane" data-tab="models" hidden>
-        <p class="settings-meta">Optionally pin a model per role. Leave on “Use default” to inherit.</p>
         <div id="settings-role-models"></div>
       </section>
 
       <section class="settings-pane" data-tab="mcp" hidden>
-        <p class="settings-meta">Enable or disable installed MCP plugins for this app.</p>
         <div id="settings-mcp-list"></div>
-        <button type="button" id="settings-mcp-add" class="settings-link">+ Add MCP plugin</button>
+        <button type="button" id="settings-mcp-add" class="settings-link" disabled aria-disabled="true">
+          <span>+ Add MCP</span>
+          <span class="settings-coming-soon">This feature is coming soon.</span>
+        </button>
       </section>
 
       <section class="settings-pane" data-tab="git" hidden>
