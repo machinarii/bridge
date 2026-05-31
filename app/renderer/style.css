@@ -384,7 +384,13 @@ kbd {
   transform: scaleX(0); background: var(--danger, #ff7b86); opacity: 0.9;
 }
 .project-edit-remove.holding .remove-fill { transform: scaleX(1); transition: transform 3000ms linear; }
-.project-edit-remove .remove-label { position: relative; }
+/* Invisible sizer locks the button width to the longest label ("Hold for 3 sec
+ * to delete") so it never resizes as the label changes (incl. the countdown). */
+.project-edit-remove .remove-sizer { visibility: hidden; white-space: nowrap; }
+.project-edit-remove .remove-label {
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: center; white-space: nowrap;
+}
 .project-edit-remove.holding .remove-label { color: #11151c; }
 .project-edit-remove.focused,
 .project-edit-input.focused,
