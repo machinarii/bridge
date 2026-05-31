@@ -1612,8 +1612,8 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 #shortcuts-rail .sc.focused .glyph.for-keyboard,
 #back-shortcut .sc.focused .glyph.for-keyboard,
 #primary-shortcut .sc.focused .glyph.for-keyboard {
-  background: rgba(255,255,255,0.30);
-  border-color: rgba(255,255,255,0.30);
+  background: rgba(255,255,255,0.18);
+  border-color: rgba(255,255,255,0.55);
 }
 
 /* Brief pulse on just the small key/glyph element when its shortcut
