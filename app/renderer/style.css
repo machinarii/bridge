@@ -105,8 +105,8 @@ kbd {
   flex: 0 0 auto;
   margin-right: 0.85rem;
 }
-/* 20% smaller than the previous top-left lockup. */
-#brand-mark { width: 21px; height: 21px; display: block; }
+/* Bridge mark — sized by height; width follows the mark's aspect ratio. */
+#brand-mark { height: 20px; width: auto; display: block; }
 #brand .brand-name {
   font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-size: 0.88rem;
@@ -310,6 +310,32 @@ kbd {
     0 0 0 2px var(--focus, #ffffff),
     0 0 16px 2px rgba(255,255,255,0.25);
 }
+
+#fullscreen-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--fg-dim);
+  width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  margin-left: 0;
+  flex: 0 0 auto;
+  transition: color 120ms, border-color 120ms, background 120ms;
+}
+#fullscreen-btn:hover { color: var(--fg); background: rgba(255,255,255,0.06); }
+#fullscreen-btn:focus,
+#fullscreen-btn:focus-visible,
+#fullscreen-btn.focused {
+  color: var(--fg);
+  outline: none;
+  background: rgba(255,255,255,0.14);
+  box-shadow:
+    0 0 0 2px var(--focus, #ffffff),
+    0 0 16px 2px rgba(255,255,255,0.25);
+}
+#fullscreen-btn svg[hidden] { display: none; }
 
 #confirm-cancel-modal[hidden] { display: none !important; }
 #confirm-cancel-modal {

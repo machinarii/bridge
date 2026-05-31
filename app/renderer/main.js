@@ -31,7 +31,7 @@ function footerFocusables() {
   // chips, action buttons, the notification bell, and the settings
   // gear.
   return [...document.querySelectorAll(
-    '#footer-rail .sc, #footer-rail .action, #footer-rail #notification-btn, #footer-rail #settings-btn'
+    '#footer-rail .sc, #footer-rail .action, #footer-rail #notification-btn, #footer-rail #settings-btn, #footer-rail #fullscreen-btn'
   )];
 }
 
@@ -4015,6 +4015,31 @@ settingsBtnEl?.addEventListener('keydown', (e) => {
 settingsSaveEl?.addEventListener('click', () => saveSettings());
 settingsCancelEl?.addEventListener('click', () => closeSettings());
 document.getElementById('settings-close')?.addEventListener('click', () => closeSettings());
+
+/* ---------- Full-screen toggle ---------- */
+const fullscreenBtnEl = document.getElementById('fullscreen-btn');
+function isFullscreen() { return !!document.fullscreenElement; }
+function toggleFullscreen() {
+  if (isFullscreen()) document.exitFullscreen?.();
+  else document.documentElement.requestFullscreen?.().catch(() => {});
+}
+function paintFullscreenIcon() {
+  if (!fullscreenBtnEl) return;
+  const fs = isFullscreen();
+  fullscreenBtnEl.querySelector('.fs-enter')?.toggleAttribute('hidden', fs);
+  fullscreenBtnEl.querySelector('.fs-exit')?.toggleAttribute('hidden', !fs);
+  const label = fs ? 'Exit full screen' : 'Enter full screen';
+  fullscreenBtnEl.setAttribute('aria-label', label);
+  fullscreenBtnEl.setAttribute('title', fs ? 'Exit full screen' : 'Full screen');
+}
+fullscreenBtnEl?.addEventListener('click', (e) => { e.stopPropagation(); toggleFullscreen(); });
+fullscreenBtnEl?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault(); e.stopPropagation();
+    toggleFullscreen();
+  }
+});
+document.addEventListener('fullscreenchange', paintFullscreenIcon);
 
 window.addEventListener('keydown', (e) => {
   // Settings modal owns the keyboard while it's open — let its own

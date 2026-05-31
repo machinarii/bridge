@@ -19,11 +19,9 @@
 
     <footer id="footer-rail" role="toolbar" aria-label="Shortcuts and actions">
       <a id="brand" href="#" aria-label="Bridge home">
-        <svg id="brand-mark" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <!-- two nodes joined by an arc -->
-          <path d="M5 22 C 12 6, 20 6, 27 22" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"/>
-          <circle cx="5"  cy="22" r="3.2" fill="#ffffff"/>
-          <circle cx="27" cy="22" r="3.2" fill="#ffffff"/>
+        <svg id="brand-mark" viewBox="0 0 150 139.5" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- three nodes joined as a bridge (Bridge mark) -->
+          <path fill="#ffffff" fill-rule="evenodd" clip-rule="evenodd" d="M108 0C112.971 0 117 4.02944 117 9V19.5H123C131.284 19.5 138 26.2157 138 34.5V90H141C145.971 90 150 94.0294 150 99V130.5C150 135.471 145.971 139.5 141 139.5H109.5C104.529 139.5 100.5 135.471 100.5 130.5V126H46.5L46.1133 125.995C38.1362 125.793 31.7068 119.364 31.5049 111.387L31.5 111V105H9C4.02944 105 2.41604e-07 100.971 0 96V49.5C2.41604e-07 44.5294 4.02944 40.5 9 40.5H31.5V34.5C31.5 26.2157 38.2157 19.5 46.5 19.5H76.5V9C76.5 4.02944 80.5294 3.62394e-08 85.5 0H108ZM46.5 25.5C41.5294 25.5 37.5 29.5294 37.5 34.5V40.5H55.5C60.4706 40.5 64.5 44.5294 64.5 49.5V96C64.5 100.971 60.4706 105 55.5 105H37.5V111C37.5 115.971 41.5294 120 46.5 120H100.5V99C100.5 94.0294 104.529 90 109.5 90H132V34.5C132 29.5294 127.971 25.5 123 25.5H117V31.5C117 36.4706 112.971 40.5 108 40.5H85.5C80.5294 40.5 76.5 36.4706 76.5 31.5V25.5H46.5Z"/>
         </svg>
         <span class="brand-name">Bridge</span>
       </a>
@@ -54,6 +52,16 @@
           <path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
             d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2.5"/>
+        </svg>
+      </button>
+      <button id="fullscreen-btn" type="button" aria-label="Enter full screen" title="Full screen">
+        <svg class="fs-enter" viewBox="0 0 24 24" aria-hidden="true" width="22" height="22">
+          <path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"
+            d="M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5"/>
+        </svg>
+        <svg class="fs-exit" viewBox="0 0 24 24" aria-hidden="true" width="22" height="22" hidden>
+          <path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"
+            d="M9 4v5H4 M15 4v5h5 M9 20v-5H4 M15 20v-5h5"/>
         </svg>
       </button>
     </footer>
