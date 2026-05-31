@@ -876,7 +876,7 @@ kbd {
   background: var(--bg-elev);
   border: 1px solid #1d2734;
   border-radius: var(--radius);
-  padding: 28px 32px;
+  padding: 28px;
   overflow: hidden;
   display: flex; flex-direction: column;
   position: relative;
@@ -1887,7 +1887,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 
 /* ===== Role picker (create-flow step 1) — same tile style as L0/L1 ===== */
 /* ===== Work topology picker (new project step 2) ===== */
-.topology-picker { padding: 0.5rem 0.5rem 1rem; display: flex; flex-direction: column; gap: 0.9rem; flex: 1; min-height: 0; }
+.topology-picker { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.9rem; flex: 1; min-height: 0; }
 .topology-list { display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: minmax(0, 1fr); gap: 0.6rem; flex: 1; min-height: 0; }
 /* Match the role-tile look on the previous screen: 1px border, the same
  * layered gradient background, and the same focus treatment. */
