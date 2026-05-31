@@ -1587,7 +1587,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 /* Sibling-combinator spacing instead of `gap`: only applies between
  * element siblings, never around whitespace text nodes or before the
  * first child. */
-#action-bar > * + * { margin-left: 0.5rem; }
+#action-bar > * + * { margin-left: 0; }
 #action-bar .action {
   margin-left: 0;
   display: inline-flex; align-items: center; gap: 0.4rem;
@@ -1628,7 +1628,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
  * the chip color via currentColor — no per-button tint. Higher specificity
  * than the per-glyph color rules above so the mono color wins. */
 .glyph.for-gamepad.gp-icon {
-  width: 24px; height: 18px;
+  width: 34px; height: 28px;
   background: none;
   border: none;
   border-radius: 0;

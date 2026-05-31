@@ -429,7 +429,7 @@ function flashChip(el) {
   setTimeout(() => el.classList.remove('pressed'), 320);
 }
 function flashShortcutByKey(key) {
-  const map = { ' ': 'Space', 'Escape': 'Esc', 'Enter': 'Enter', 'Tab': 'Tab' };
+  const map = { ' ': 'Space', 'Escape': 'Esc', 'Enter': 'Enter', 'Tab': 'Tab', 'Backspace': 'Del', 'Delete': 'Del' };
   let label = map[key];
   if (!label) label = key.length === 1 ? key.toUpperCase() : key;
   for (const kbd of document.querySelectorAll('.glyph.for-keyboard')) {
@@ -645,9 +645,9 @@ function updatePickerShortcuts() {
   setShortcuts([
     { gamepad: 'r2', keyboard: 'V', label: `Hold to talk`,
       action: () => talkToFocusedLead() },
-    {                keyboard: 'A', label: 'Activity',
+    {                gamepad: 'triangle', keyboard: 'A', label: 'Activity',
       action: () => toggleActivityDrawer() },
-    {                keyboard: 'M', label: 'Memory',
+    {                gamepad: 'square', keyboard: 'M', label: 'Memory',
       action: () => toggleMemoryDrawer() },
   ]);
 }
@@ -918,7 +918,7 @@ async function renderNewProjectRoles() {
   ]);
   setShortcuts([
     { gamepad: 'cross',  keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedRole() },
-    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',   action: () => renderProjects() },
+    { gamepad: 'circle', keyboard: 'Del',   label: 'Back',   action: () => renderProjects() },
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Select',
                        action: () => advanceFromRolePicker() });
@@ -1176,7 +1176,7 @@ function renderNewProjectName() {
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
+    { gamepad: 'circle', keyboard: 'Del', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => confirmCapture() });
@@ -1223,7 +1223,7 @@ function renderNewProjectGoal() {
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
+    { gamepad: 'circle', keyboard: 'Del', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => confirmCapture() });
@@ -1444,8 +1444,8 @@ async function openAddAgentPicker() {
   setShortcuts([
     { gamepad: 'cross',   keyboard: 'Space', label: 'Toggle',   action: () => toggleFocusedAddAgentRole() },
     { gamepad: 'options', keyboard: 'E',     label: 'Explorer', action: () => toggleFileExplorer() },
-    {                     keyboard: 'A',     label: 'Activity', action: () => toggleActivityDrawer() },
-    { gamepad: 'circle',  keyboard: 'Esc',   label: 'Back',     action: () => renderGrid() },
+    { gamepad: 'triangle', keyboard: 'A',     label: 'Activity', action: () => toggleActivityDrawer() },
+    { gamepad: 'circle',  keyboard: 'Del',   label: 'Back',     action: () => renderGrid() },
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Done',
                        action: () => commitAddAgentSelections() });
@@ -1502,7 +1502,7 @@ function updateGridShortcuts() {
     { gamepad: 'l1', keyboard: '[', label: 'Prev project', action: () => cycleProject(-1) },
     { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
     { gamepad: 'options', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
-    {                    keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
+    {                    gamepad: 'triangle', keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
   ];
   if (!isLeadFocused) {
     items.push({ gamepad: 'square', keyboard: 'Space', label: 'Agent on / off',
@@ -2082,7 +2082,7 @@ function _setL2Shortcuts() {
     { gamepad: 'l1',      keyboard: '[', label: 'Prev agent',   action: () => cycleAgent(-1) },
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
     { gamepad: 'options', keyboard: 'E', label: 'Explorer',     action: () => toggleFileExplorer() },
-    {                     keyboard: 'A', label: 'Activity',     action: () => toggleActivityDrawer() },
+    {                     gamepad: 'triangle', keyboard: 'A', label: 'Activity',     action: () => toggleActivityDrawer() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => pressCross() });
@@ -3549,6 +3549,10 @@ gp.addEventListener('press', (e) => {
       pickerMove(b);
     } else if (b === 'cross') {
       openFocused();
+    } else if (b === 'triangle') {
+      toggleActivityDrawer();
+    } else if (b === 'square') {
+      toggleMemoryDrawer();
     }
     return;
   }
@@ -3564,6 +3568,7 @@ gp.addEventListener('press', (e) => {
     else if (b === 'cross')   enterZoom();
     else if (b === 'circle')  exitToProjects();
     else if (b === 'square')  toggleFocusedAgentEnabled();
+    else if (b === 'triangle') toggleActivityDrawer();
     return;
   }
 
@@ -3580,6 +3585,7 @@ gp.addEventListener('press', (e) => {
     else if (b === 'circle')             pressCircle();
     else if (b === 'l1')                 cycleAgent(-1);
     else if (b === 'r1')                 cycleAgent(+1);
+    else if (b === 'triangle')           toggleActivityDrawer();
     return;
   }
 
@@ -4219,7 +4225,7 @@ window.addEventListener('keydown', (e) => {
         advanceFromRolePicker();
       }
     }
-    else if (e.key === 'Escape')  { e.preventDefault(); renderProjects(); }
+    else if (e.key === 'Backspace' || e.key === 'Delete')  { e.preventDefault(); renderProjects(); }
   } else if (mode === MODE_ADD_AGENT) {
     // Up / Right from the top-right of the grid hops to the × close button.
     if ((e.key === 'ArrowUp' || e.key === 'ArrowRight') && document.activeElement !== surfaceEl.querySelector('.surface-close')) {
@@ -4248,7 +4254,7 @@ window.addEventListener('keydown', (e) => {
         commitAddAgentSelections();
       }
     }
-    else if (e.key === 'Escape')  { e.preventDefault(); renderGrid(); }
+    else if (e.key === 'Backspace' || e.key === 'Delete')  { e.preventDefault(); renderGrid(); }
   } else if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
     // Action-row buttons (Cancel · Back · Continue/Create) form the
     // ring. Left/Right walks them; Enter activates the focused one.
@@ -4262,7 +4268,7 @@ window.addEventListener('keydown', (e) => {
       else confirmCapture();
       return;
     }
-    if (e.key === 'Escape') { e.preventDefault(); goBackInCreateFlow(); return; }
+    if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); goBackInCreateFlow(); return; }
   }
 
   // Surface holds "close viewer" focus — Enter closes; Left returns to ×.
@@ -4318,7 +4324,7 @@ window.addEventListener('keydown', (e) => {
       e.preventDefault(); gridMove('down');
     } else if (dir) { e.preventDefault(); gridMove(dir); }
     else if (e.key === 'Enter') { e.preventDefault(); enterZoom(); }
-    else if (e.key === 'Escape') { e.preventDefault(); exitToProjects(); }
+    else if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); exitToProjects(); }
     else if (e.code === 'Space') { e.preventDefault(); toggleFocusedAgentEnabled(); }
     else if (e.key === '[')      { e.preventDefault(); cycleProject(-1); }
     else if (e.key === ']')      { e.preventDefault(); cycleProject(+1); }
@@ -4378,7 +4384,7 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')      { e.preventDefault(); ring.move(-1); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); ring.move(+1); }
     else if (e.key === 'Enter')      { e.preventDefault(); pressCross(); }
-    else if (e.key === 'Escape')     { e.preventDefault(); pressCircle(); }
+    else if (e.key === 'Backspace' || e.key === 'Delete')     { e.preventDefault(); pressCircle(); }
     else if (e.key === '[')          { e.preventDefault(); cycleAgent(-1); }
     else if (e.key === ']')          { e.preventDefault(); cycleAgent(+1); }
   }
