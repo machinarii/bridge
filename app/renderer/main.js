@@ -3,6 +3,16 @@ import { Speech, speak, stopSpeaking, speechBus } from './speech.js';
 import { renderMarkdown, attachCodeCopyHandlers } from './md.js';
 import { FocusRing } from './focus.js';
 import { renderTile, renderActionBar } from './tiles.js';
+import { GAMEPAD_ICON_SVG } from './gamepad-icons.js';
+
+/* Render a gamepad glyph: inline the PlayStation SVG icon when we have one
+ * (mono, follows the chip color via currentColor), else fall back to the
+ * legacy text symbol so unmapped buttons still show something. */
+function paintGamepadGlyph(g, key) {
+  const svg = GAMEPAD_ICON_SVG[key];
+  if (svg) { g.classList.add('gp-icon'); g.innerHTML = svg; }
+  else g.textContent = GAMEPAD_GLYPHS[key] || key;
+}
 
 const surfaceEl       = document.getElementById('surface');
 const indicatorEl     = document.getElementById('listening-indicator');     // removed from DOM
@@ -48,7 +58,7 @@ function buildChip(it) {
     const g = document.createElement('span');
     g.className = 'glyph for-gamepad';
     g.dataset.glyph = it.gamepad;
-    g.textContent = GAMEPAD_GLYPHS[it.gamepad] || it.gamepad;
+    paintGamepadGlyph(g, it.gamepad);
     wrap.appendChild(g);
   }
   if (it.keyboard) {
@@ -132,7 +142,7 @@ function setPrimaryShortcut(item) {
     const g = document.createElement('span');
     g.className = 'glyph for-gamepad';
     g.dataset.glyph = item.gamepad;
-    g.textContent = GAMEPAD[item.gamepad] || item.gamepad;
+    paintGamepadGlyph(g, item.gamepad);
     wrap.appendChild(g);
   }
   if (item.keyboard) {
@@ -2256,6 +2266,7 @@ function startPTT() {
   // "selected" state until release. The post-utterance re-render rebuilds
   // the rail and resets focus anyway, so clearing it here is safe.
   if (isShortcutsFocused()) leaveShortcuts();
+  setPttHeld(true); // light the PTT control (V cap / R2 icon) for the whole hold
   stopSpeaking();
   if (localSttUrl) {
     // Local STT path — MediaRecorder → /transcribe proxy → text.
@@ -2267,6 +2278,7 @@ function startPTT() {
     typedWrap.hidden = false;
     typedInput.focus();
     pttActive = false;
+    setPttHeld(false);
     return;
   }
   setIndicator('listening', 'Listening…');
@@ -2276,8 +2288,20 @@ function startPTT() {
 function endPTT() {
   if (!pttActive) return;
   pttActive = false;
+  setPttHeld(false);
   if (localRecorder) { stopLocalRecording(); return; }
   if (speech.supported) speech.stop();
+}
+
+/* Toggle the "held" highlight on the push-to-talk control so it stays lit for
+ * the duration of the hold (not just a press flash). Targets the "Hold to talk"
+ * chip's V keycap and R2 icon; whichever is visible for the current input mode
+ * shows. Hidden/absent glyphs are harmlessly no-ops. */
+function setPttHeld(on) {
+  document.querySelectorAll('.glyph.for-gamepad[data-glyph="r2"]')
+    .forEach(g => g.classList.toggle('held', on));
+  document.querySelectorAll('.glyph.for-keyboard')
+    .forEach(g => { if (g.textContent.trim() === 'V') g.classList.toggle('held', on); });
 }
 
 async function startLocalRecording() {
@@ -2299,6 +2323,7 @@ async function startLocalRecording() {
     setIndicator('listening', 'Listening…');
   } catch (err) {
     pttActive = false;
+    setPttHeld(false);
     setIndicator('error', `Mic: ${err.message}`);
     setTimeout(() => setIndicator('idle', 'Connected'), 2000);
   }
@@ -2360,6 +2385,7 @@ speech.addEventListener('end', (e) => {
   // pttActive flag so the next screen / button press can re-trigger
   // recognition cleanly — otherwise startPTT() short-circuits.
   pttActive = false;
+  setPttHeld(false);
   const text = e.detail;
   if (!text) {
     setIndicator('idle', 'No speech detected');
@@ -2388,6 +2414,8 @@ speech.addEventListener('end', (e) => {
   if (mode === MODE_PROJECTS) { dispatchHomeUtterance(text); return; }
 });
 speech.addEventListener('error', (e) => {
+  pttActive = false;
+  setPttHeld(false);
   setIndicator('error', `Speech error: ${e.detail}`);
   setTimeout(() => setIndicator('idle', 'Connected'), 2000);
 });
