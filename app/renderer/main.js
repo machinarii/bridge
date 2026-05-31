@@ -4069,6 +4069,15 @@ fullscreenBtnEl?.addEventListener('keydown', (e) => {
 });
 document.addEventListener('fullscreenchange', paintFullscreenIcon);
 
+// Cmd/Ctrl+F toggles full screen in and out. Capture phase + preventDefault so
+// it works regardless of focus or open modals and overrides the browser's Find.
+window.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'f' || e.key === 'F')) {
+    e.preventDefault();
+    toggleFullscreen();
+  }
+}, true);
+
 window.addEventListener('keydown', (e) => {
   // Settings modal owns the keyboard while it's open — let its own
   // handler take care of Esc / Tab / arrows / Enter.
