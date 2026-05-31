@@ -68,6 +68,18 @@ function buildChip(it) {
     k.textContent = it.keyboard;
     wrap.appendChild(k);
   }
+  if (it.gamepad === 'r2') {
+    // Hold-to-talk chip: while holding, the label is hidden (its width kept so
+    // the rail doesn't shift) and a small mic visualizer shows in its place.
+    wrap.classList.add('ptt-chip');
+    const talk = document.createElement('span'); talk.className = 'sc-talk';
+    const l = document.createElement('span'); l.className = 'label'; l.textContent = it.label;
+    const mic = document.createElement('span'); mic.className = 'sc-mic'; mic.setAttribute('aria-hidden', 'true');
+    mic.innerHTML = Array.from({ length: CHIP_BAR_COUNT }, () => '<span class="bar"></span>').join('');
+    talk.append(l, mic);
+    wrap.appendChild(talk);
+    return wrap;
+  }
   const l = document.createElement('span');
   l.className = 'label';
   l.textContent = it.label;
@@ -2500,6 +2512,54 @@ function setPttHeld(on) {
     .forEach(g => g.classList.toggle('held', on));
   document.querySelectorAll('.glyph.for-keyboard')
     .forEach(g => { if (g.textContent.trim() === 'V') g.classList.toggle('held', on); });
+  // Swap the Hold-to-talk label for a live mic visualizer while holding.
+  const chips = document.querySelectorAll('.sc.ptt-chip');
+  chips.forEach(c => c.classList.toggle('talking', on));
+  if (on && chips.length) startChipMic(); else stopChipMic();
+}
+
+/* ---------- Hold-to-talk chip mic visualizer ----------
+ * A small, self-contained version of the capture-screen visualizer that lives
+ * inside the "Hold to talk" footer chip while the user is holding to talk. */
+const CHIP_BAR_COUNT = 5;
+let chipViz = null;
+let chipVizFrame = null;
+let _chipLoud = 0;
+async function startChipMic() {
+  if (chipViz) { animateChipBars(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) throw new Error('no AudioContext');
+    const ac = new Ctx();
+    const src = ac.createMediaStreamSource(stream);
+    const an = ac.createAnalyser();
+    an.fftSize = 64; an.smoothingTimeConstant = 0.6;
+    src.connect(an);
+    chipViz = { ac, an, stream, data: new Uint8Array(an.frequencyBinCount) };
+    animateChipBars();
+  } catch (err) { console.warn('[chip-mic] failed:', err.message); }
+}
+function stopChipMic() {
+  if (chipVizFrame) { cancelAnimationFrame(chipVizFrame); chipVizFrame = null; }
+  if (chipViz) {
+    try { chipViz.stream.getTracks().forEach(t => t.stop()); } catch {}
+    try { chipViz.ac.close(); } catch {}
+    chipViz = null;
+  }
+}
+function animateChipBars() {
+  if (!chipViz) return;
+  const bars = document.querySelectorAll('.sc.ptt-chip.talking .sc-mic .bar');
+  if (bars.length === 0) { chipVizFrame = requestAnimationFrame(animateChipBars); return; }
+  chipViz.an.getByteFrequencyData(chipViz.data);
+  const usable = Math.min(chipViz.data.length, 16);
+  let sum = 0; for (let i = 0; i < usable; i++) sum += chipViz.data[i];
+  _chipLoud = _chipLoud * 0.78 + (sum / (usable * 255)) * 0.22;
+  const t = performance.now() / 1000, SPEED = 2.5, BASE = 1, LOUD = 9, MID = 6;
+  const step = (Math.PI * 2) / bars.length, amp = BASE + LOUD * _chipLoud;
+  bars.forEach((b, i) => { b.style.height = `${Math.max(2, MID + Math.sin(t * SPEED + i * step) * amp)}px`; });
+  chipVizFrame = requestAnimationFrame(animateChipBars);
 }
 
 async function startLocalRecording() {
