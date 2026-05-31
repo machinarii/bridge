@@ -1877,6 +1877,33 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 }
 
 /* ===== Role picker (create-flow step 1) — same tile style as L0/L1 ===== */
+/* ===== Work topology picker (new project step 2) ===== */
+.topology-picker { padding: 0.5rem 0.5rem 1rem; display: flex; flex-direction: column; gap: 0.9rem; flex: 1; min-height: 0; }
+.topology-list { display: flex; flex-direction: column; gap: 0.6rem; overflow-y: auto; padding-right: 4px; }
+.topology-card {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.9rem;
+  padding: 0.85rem 1.1rem;
+  border: 1.75px solid rgba(255,255,255,0.12);
+  border-radius: var(--steam-radius, 10px);
+  background: rgba(255,255,255,0.02);
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+.topology-card.focused {
+  border-color: var(--focus, #ffffff);
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 0 0 2px var(--focus, #ffffff), 0 0 16px 2px rgba(255,255,255,0.18);
+}
+.topo-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.35); flex: 0 0 auto; }
+.topology-card[data-selected="true"] .topo-radio {
+  border-color: var(--accent, #6ea8ff);
+  background: radial-gradient(circle, var(--accent, #6ea8ff) 0 42%, transparent 48%);
+}
+.topo-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.topo-heading { font-size: 1.05rem; font-weight: 500; color: var(--fg, #e7ecf3); }
+.topo-subtitle { font-size: 0.85rem; color: var(--fg-dim); }
+.topo-best { font-size: 0.78rem; color: var(--fg-dim); opacity: 0.85; text-align: right; white-space: nowrap; }
+
 .role-picker {
   /* Mirror the L0 / L1 grids: 1rem top/bottom, 0.5rem left/right. */
   padding: 1rem 0.5rem;

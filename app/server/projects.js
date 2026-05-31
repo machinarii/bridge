@@ -19,6 +19,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE_DIR = resolve(__dirname, '..', 'state');
 const FILE = join(STATE_DIR, 'projects.json');
 
+/* Work topologies — how the team operates. The `rule` is written into the
+ * project's project.md so the orchestrator and the user share one source of
+ * truth for how work should flow. */
+export const TOPOLOGIES = {
+  'hub-and-spoke': { label: 'Hub-and-spoke', rule: 'One coordinator (the lead/PM) holds the most context and routes work to specialists; specialists report back to the coordinator rather than to each other.' },
+  'feature-teams': { label: 'Feature teams', rule: 'Work splits into parallel pods that each own a workstream end-to-end. Pods run independently and coordinate only at integration points.' },
+  'mesh-mob':      { label: 'Mesh / mob', rule: 'Everyone works on everything together with no fixed ownership; the whole team swarms the current problem.' },
+  'rotating-lead': { label: 'Rotating lead', rule: 'Leadership rotates each sprint. The current lead coordinates and sets direction, then hands off to build team-wide ownership.' },
+  'async-pull':    { label: 'Async pull / queue', rule: 'Work flows from a shared backlog. Members self-assign the next item asynchronously, with no synchronous coordination required.' },
+};
+
 let cache = null;
 
 function load() {
@@ -103,10 +114,11 @@ export function getProject(id) {
   return load().projects.find(p => p.id === id) || null;
 }
 
-export async function createProject({ name, goal, roleIds }) {
+export async function createProject({ name, goal, roleIds, topology }) {
   if (!name) throw new Error('name required');
   if (!goal) throw new Error('goal required');
   if (!Array.isArray(roleIds) || roleIds.length === 0) throw new Error('at least one role required');
+  const topo = TOPOLOGIES[topology] || null;
 
   // Dedup, validate
   const seen = new Set();
@@ -137,15 +149,16 @@ export async function createProject({ name, goal, roleIds }) {
 
   const leadAgentId = agents.find(a => a.role === 'pm').id;
 
-  const project = { id, name, goal, createdAt: Date.now(), leadAgentId, agents };
+  const project = { id, name, goal, topology: topo ? topology : null, createdAt: Date.now(), leadAgentId, agents };
 
   // Scaffold folder
   const projDir = resolve(STATE_DIR, id);
   mkdirSync(resolve(projDir, 'roles'), { recursive: true });
   mkdirSync(resolve(projDir, 'notes'), { recursive: true });
+  const topoSection = topo ? `\n\n## Work topology\n**${topo.label}** — ${topo.rule}` : '';
   writeFileSync(
     resolve(projDir, 'project.md'),
-    `# ${name}\n\n## Goal\n${goal}\n\n## Team\n${agents.map(a => `- ${a.name} — ${getRole(a.role).label}`).join('\n')}\n\n## Created\n${new Date(project.createdAt).toISOString()}\n`,
+    `# ${name}\n\n## Goal\n${goal}\n\n## Team\n${agents.map(a => `- ${a.name} — ${getRole(a.role).label}`).join('\n')}${topoSection}\n\n## Created\n${new Date(project.createdAt).toISOString()}\n`,
     'utf8'
   );
 

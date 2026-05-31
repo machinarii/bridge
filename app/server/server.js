@@ -291,8 +291,8 @@ app.post('/projects/shorten-name', async (req, res) => {
 
 app.post('/projects', async (req, res) => {
   try {
-    const { name, goal, roleIds } = req.body || {};
-    const p = await createProject({ name, goal, roleIds });
+    const { name, goal, roleIds, topology } = req.body || {};
+    const p = await createProject({ name, goal, roleIds, topology });
     initProjectRepo(p.id).then(() => notifyStateChange(p.id, 'Project created'));
     publishEvent({
       type: 'notification',
