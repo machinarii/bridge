@@ -1879,14 +1879,14 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 /* ===== Role picker (create-flow step 1) — same tile style as L0/L1 ===== */
 /* ===== Work topology picker (new project step 2) ===== */
 .topology-picker { padding: 0.5rem 0.5rem 1rem; display: flex; flex-direction: column; gap: 0.9rem; flex: 1; min-height: 0; }
-.topology-list { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; align-content: start; }
+.topology-list { display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: minmax(0, 1fr); gap: 0.6rem; flex: 1; min-height: 0; }
 /* Match the role-tile look on the previous screen: 1px border, the same
  * layered gradient background, and the same focus treatment. */
 .topology-card {
-  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.4rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 0.55rem;
   min-width: 0;
   position: relative;
-  padding: 1rem 0.8rem 1.1rem;
+  padding: 1rem 0.8rem;
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.06);
   background:
@@ -1911,10 +1911,10 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .topo-svg .link { stroke: currentColor; stroke-width: 2; fill: none; opacity: 0.42; stroke-linecap: round; }
 .topo-svg .ring { stroke: currentColor; stroke-width: 2.5; fill: none; opacity: 0.5; stroke-linecap: round; }
 .topo-svg .arrow { stroke: currentColor; stroke-width: 2; fill: none; opacity: 0.6; stroke-linecap: round; stroke-linejoin: round; }
-.topo-svg .mini { stroke: currentColor; stroke-width: 2; fill: none; opacity: 0.5; }
+.topo-svg .mini { fill: var(--bg-elev, #0b0d12); stroke: currentColor; stroke-width: 2.2; }
 .topo-svg .node { fill: var(--bg-elev, #0b0d12); stroke: currentColor; stroke-width: 2.2; }
 .topo-svg .node.lead { fill: #ffffff; stroke: #ffffff; }
-.topo-desc { font-size: 0.82rem; opacity: 0.7; line-height: 1.35; margin-top: auto; }
+.topo-desc { font-size: 0.82rem; opacity: 0.7; line-height: 1.35; }
 
 .role-picker {
   /* Mirror the L0 / L1 grids: 1rem top/bottom, 0.5rem left/right. */
