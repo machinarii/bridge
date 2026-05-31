@@ -757,6 +757,15 @@ projectEditModalEl?.addEventListener('pointerdown', (e) => { if (e.target === pr
 projectEditModalEl?.addEventListener('keydown', (e) => {
   if (!projectEditOpen) return;
   if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeProjectEditModal(); return; }
+  // Arrow / Tab navigation across the controls. Left/Right edit text when the
+  // name field is focused; Up/Down (and Tab) always move between controls.
+  const onInput = document.activeElement === projectEditNameEl;
+  if (e.key === 'ArrowDown' || (e.key === 'Tab' && !e.shiftKey) || (e.key === 'ArrowRight' && !onInput)) {
+    e.preventDefault(); e.stopPropagation(); moveProjectEditFocus(+1); return;
+  }
+  if (e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey) || (e.key === 'ArrowLeft' && !onInput)) {
+    e.preventDefault(); e.stopPropagation(); moveProjectEditFocus(-1); return;
+  }
   // !e.repeat so the still-held Enter that *opened* the modal (auto-repeating)
   // doesn't immediately fire Rename and close it.
   if (e.key === 'Enter' && !e.repeat && document.activeElement === projectEditNameEl) { e.preventDefault(); e.stopPropagation(); renameProjectFromModal(); }
