@@ -1606,12 +1606,14 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
     0 0 0 2px var(--focus, #ffffff),
     0 0 16px 2px rgba(255,255,255,0.25);
 }
-/* When the chip is focused, keep the keycap's own outline visible against
- * the lit chip background — brighter/whiter, same thickness. */
+/* When the chip is focused, lift the keycap with a slightly lighter fill
+ * (like the hold state) rather than a brighter border — keeps the border
+ * thickness unchanged and the keycap readable against the lit chip. */
 #shortcuts-rail .sc.focused .glyph.for-keyboard,
 #back-shortcut .sc.focused .glyph.for-keyboard,
 #primary-shortcut .sc.focused .glyph.for-keyboard {
-  border-color: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.30);
+  border-color: rgba(255,255,255,0.45);
 }
 
 /* Brief pulse on just the small key/glyph element when its shortcut
