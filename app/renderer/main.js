@@ -429,7 +429,7 @@ function flashChip(el) {
   setTimeout(() => el.classList.remove('pressed'), 320);
 }
 function flashShortcutByKey(key) {
-  const map = { ' ': 'Space', 'Escape': 'Esc', 'Enter': 'Enter', 'Tab': 'Tab', 'Backspace': 'Del', 'Delete': 'Del' };
+  const map = { ' ': 'Space', 'Escape': 'Esc', 'Enter': 'Enter', 'Tab': 'Tab', 'Backspace': 'Delete', 'Delete': 'Delete' };
   let label = map[key];
   if (!label) label = key.length === 1 ? key.toUpperCase() : key;
   for (const kbd of document.querySelectorAll('.glyph.for-keyboard')) {
@@ -687,6 +687,7 @@ function openProjectEditModal(project, idx) {
   projectEditNameEl.value = project.name;
   projectEditOpen = true;
   projectEditModalEl.hidden = false;
+  setRemoveLabel('Delete project');
   projectEditFocusEls = [projectEditNameEl, projectEditCancelEl, projectEditRemoveEl, projectEditRenameEl];
   projectEditFocusIdx = 0;
   paintProjectEditFocus();
@@ -705,6 +706,7 @@ function moveProjectEditFocus(d) {
   projectEditFocusIdx = (projectEditFocusIdx + d + projectEditFocusEls.length) % projectEditFocusEls.length;
   paintProjectEditFocus();
   projectEditFocusEls[projectEditFocusIdx]?.focus();
+  if (!_removeHold) setRemoveLabel(removeLabelForState()); // hint when highlighted, default otherwise
 }
 
 async function renameProjectFromModal() {
@@ -723,14 +725,27 @@ async function renameProjectFromModal() {
   renderProjects();
 }
 
+function setRemoveLabel(text) {
+  const el = projectEditRemoveEl?.querySelector('.remove-label');
+  if (el) el.textContent = text;
+}
+// Default label, or the hold hint when the button is highlighted/focused.
+function removeLabelForState() {
+  return document.activeElement === projectEditRemoveEl ? 'Hold for 3 sec to delete' : 'Delete project';
+}
 function startRemoveHold() {
   if (!projectEditTarget || _removeHold) return;
   projectEditRemoveEl.classList.add('holding');
-  _removeHold = { timer: setTimeout(() => removeProjectFromModal(), PROJECT_REMOVE_HOLD_MS) };
+  let secs = Math.round(PROJECT_REMOVE_HOLD_MS / 1000);
+  setRemoveLabel(String(secs));                 // counts down 3 → 2 → 1
+  const interval = setInterval(() => { secs -= 1; if (secs > 0) setRemoveLabel(String(secs)); }, 1000);
+  const timer = setTimeout(() => removeProjectFromModal(), PROJECT_REMOVE_HOLD_MS);
+  _removeHold = { timer, interval };
 }
 function resetRemoveHold() {
-  if (_removeHold) { clearTimeout(_removeHold.timer); _removeHold = null; }
+  if (_removeHold) { clearTimeout(_removeHold.timer); clearInterval(_removeHold.interval); _removeHold = null; }
   projectEditRemoveEl?.classList.remove('holding');
+  setRemoveLabel(removeLabelForState());
 }
 async function removeProjectFromModal() {
   const t = projectEditTarget; if (!t) return;
@@ -746,12 +761,16 @@ async function removeProjectFromModal() {
 }
 
 // Modal controls — pointer.
+document.getElementById('project-edit-close')?.addEventListener('click', () => closeProjectEditModal());
 projectEditCancelEl?.addEventListener('click', () => closeProjectEditModal());
 projectEditRenameEl?.addEventListener('click', () => renameProjectFromModal());
 projectEditRemoveEl?.addEventListener('pointerdown', (e) => { e.preventDefault(); startRemoveHold(); });
 projectEditRemoveEl?.addEventListener('pointerup', () => resetRemoveHold());
 projectEditRemoveEl?.addEventListener('pointerleave', () => resetRemoveHold());
 projectEditRemoveEl?.addEventListener('pointercancel', () => resetRemoveHold());
+// Highlighted/focused → show the hold hint; blur → restore default (and cancel any hold).
+projectEditRemoveEl?.addEventListener('focus', () => { if (!_removeHold) setRemoveLabel('Hold for 3 sec to delete'); });
+projectEditRemoveEl?.addEventListener('blur', () => resetRemoveHold());
 projectEditModalEl?.addEventListener('pointerdown', (e) => { if (e.target === projectEditModalEl) closeProjectEditModal(); });
 // Modal keyboard.
 projectEditModalEl?.addEventListener('keydown', (e) => {
@@ -1085,7 +1104,7 @@ async function renderNewProjectRoles() {
   ]);
   setShortcuts([
     { gamepad: 'cross',  keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedRole() },
-    { gamepad: 'circle', keyboard: 'Del',   label: 'Back',   action: () => renderProjects() },
+    { gamepad: 'circle', keyboard: 'Delete',   label: 'Back',   action: () => renderProjects() },
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Select',
                        action: () => advanceFromRolePicker() });
@@ -1343,7 +1362,7 @@ function renderNewProjectName() {
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'circle', keyboard: 'Del', label: 'Back', action: () => goBackInCreateFlow() },
+    { gamepad: 'circle', keyboard: 'Delete', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => confirmCapture() });
@@ -1390,7 +1409,7 @@ function renderNewProjectGoal() {
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'circle', keyboard: 'Del', label: 'Back', action: () => goBackInCreateFlow() },
+    { gamepad: 'circle', keyboard: 'Delete', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => confirmCapture() });
@@ -1612,7 +1631,7 @@ async function openAddAgentPicker() {
     { gamepad: 'cross',   keyboard: 'Space', label: 'Toggle',   action: () => toggleFocusedAddAgentRole() },
     { gamepad: 'options', keyboard: 'E',     label: 'Explorer', action: () => toggleFileExplorer() },
     { gamepad: 'triangle', keyboard: 'A',     label: 'Activity', action: () => toggleActivityDrawer() },
-    { gamepad: 'circle',  keyboard: 'Del',   label: 'Back',     action: () => renderGrid() },
+    { gamepad: 'circle',  keyboard: 'Delete',   label: 'Back',     action: () => renderGrid() },
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Done',
                        action: () => commitAddAgentSelections() });

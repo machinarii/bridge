@@ -356,7 +356,7 @@ kbd {
   display: flex; align-items: center; justify-content: center;
   z-index: 110;
 }
-.project-edit-card { width: min(440px, 92vw); display: flex; flex-direction: column; gap: 1rem; }
+.project-edit-card { position: relative; width: min(440px, 92vw); display: flex; flex-direction: column; gap: 1rem; }
 .project-edit-input {
   width: 100%;
   background: var(--bg-elev-2, #1c2632);
