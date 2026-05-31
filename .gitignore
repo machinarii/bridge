@@ -24,6 +24,9 @@ build/site-packages-arm64/
 build/site-packages-x64/
 build/hf-cache/
 
+# Internal design/planning docs — not published
+docs/
+
 # Editor / IDE
 .vscode/
 .idea/
