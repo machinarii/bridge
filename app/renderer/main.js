@@ -532,10 +532,10 @@ function topoDiagramSVG(id) {
       <circle class="node" cx="16" cy="48" r="6"/><circle class="node" cx="80" cy="48" r="6"/>
       <circle class="node lead" cx="48" cy="30" r="8"/>`,
     'feature-teams': `
-      <line class="link" x1="20" y1="16" x2="20" y2="44"/><line class="link" x1="48" y1="16" x2="48" y2="44"/><line class="link" x1="76" y1="16" x2="76" y2="44"/>
-      <circle class="node" cx="20" cy="14" r="6"/><circle class="node" cx="20" cy="46" r="6"/>
-      <circle class="node" cx="48" cy="14" r="6"/><circle class="node" cx="48" cy="46" r="6"/>
-      <circle class="node" cx="76" cy="14" r="6"/><circle class="node" cx="76" cy="46" r="6"/>`,
+      <line class="link" x1="20" y1="16" x2="41" y2="16"/><line class="link" x1="55" y1="16" x2="76" y2="16"/>
+      <line class="link" x1="20" y1="44" x2="41" y2="44"/>
+      <circle class="node" cx="13" cy="16" r="6"/><circle class="node" cx="48" cy="16" r="6"/><circle class="node" cx="83" cy="16" r="6"/>
+      <circle class="node" cx="13" cy="44" r="6"/><circle class="node" cx="48" cy="44" r="6"/>`,
     'mesh-mob': `
       <line class="link" x1="48" y1="9" x2="15" y2="30"/><line class="link" x1="48" y1="9" x2="81" y2="30"/>
       <line class="link" x1="48" y1="9" x2="48" y2="51"/><line class="link" x1="15" y1="30" x2="81" y2="30"/>
