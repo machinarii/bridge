@@ -345,7 +345,11 @@ kbd {
   display: flex; align-items: center; justify-content: center;
   z-index: 110;
 }
-.confirm-cancel-card { width: min(480px, 92vw); }
+.settings-card.confirm-cancel-card { width: min(360px, 92vw); }
+/* Two equal-width buttons that fill the row (No left, Yes right). */
+.confirm-cancel-card .settings-row { gap: 0.6rem; justify-content: stretch; }
+.confirm-cancel-card .settings-row button { flex: 1 1 0; min-width: 0; }
+.confirm-cancel-card .settings-row #confirm-cancel-no { margin-right: 0; }
 
 /* ===== Project edit modal (long-press a project tile) ===== */
 #project-edit-modal[hidden] { display: none !important; }

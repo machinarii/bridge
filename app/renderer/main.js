@@ -1110,9 +1110,14 @@ async function renderNewProjectRoles() {
   const grid = document.createElement('div');
   grid.className = 'role-grid';
 
+  // Names already taken by agents on existing projects — the preview name
+  // should be one that isn't in use, matching what the server will assign.
+  const usedNames = new Set();
+  for (const p of projects) for (const a of (p.agents || [])) if (a?.name) usedNames.add(a.name);
+
   const tileEls = [];
   for (const role of roles) {
-    const sample = role.namePool[0];
+    const sample = role.namePool.find(n => !usedNames.has(n)) || role.namePool[0];
     const t = document.createElement('div');
     t.className = 'role-tile';
     t.dataset.roleId = role.id;
@@ -3925,6 +3930,16 @@ gp.addEventListener('press', (e) => {
     return;
   }
 
+  // While the × close button holds focus (reached via Up/Right), Cross
+  // activates it; any other button hands focus back to the surface ring.
+  {
+    const closeBtn = surfaceEl.querySelector('.surface-close');
+    if (closeBtn && document.activeElement === closeBtn) {
+      if (b === 'cross') { closeBtn.click(); return; }
+      closeBtn.blur(); ring.paint(); return;
+    }
+  }
+
   if (mode === MODE_PROJECTS) {
     if (b === 'left' || b === 'right' || b === 'up' || b === 'down') {
       pickerMove(b);
@@ -3975,12 +3990,17 @@ gp.addEventListener('press', (e) => {
     if (b === 'left')        topoMoveCard(-1);
     else if (b === 'right')  topoMoveCard(+1);
     else if (b === 'down')   topoFocusBack();
-    else if (b === 'up')     topoFocusCards();
+    else if (b === 'up')   { if (ring.index >= TOPOLOGIES.length) topoFocusCards(); else focusSurfaceClose(); }
     else if (b === 'cross') { const c = ring.current(); if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId); else c?.click?.(); }
     else if (b === 'circle') renderNewProjectRoles();
     return;
   }
   if (mode === MODE_NEW_PROJ_ROLES) {
+    if (b === 'up') {
+      const grid = surfaceEl.querySelector('.role-grid');
+      const cols = grid?._cols || 4;
+      if (Math.floor(ring.index / cols) === 0 && focusSurfaceClose()) return;
+    }
     if (b === 'up' || b === 'down' || b === 'left' || b === 'right') {
       roleGridMove(b);
     } else if (b === 'cross')    toggleFocusedRole();
@@ -4022,6 +4042,7 @@ gp.addEventListener('press', (e) => {
   if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
     if (b === 'left')        ring.move(-1);
     else if (b === 'right')  ring.move(+1);
+    else if (b === 'up')     focusSurfaceClose();
     else if (b === 'cross') {
       const cur = ring.current();
       if (cur && typeof cur.click === 'function') cur.click();
@@ -4608,7 +4629,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft')       { e.preventDefault(); topoMoveCard(-1); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); topoMoveCard(+1); }
     else if (e.key === 'ArrowDown')  { e.preventDefault(); topoFocusBack(); }
-    else if (e.key === 'ArrowUp')    { e.preventDefault(); topoFocusCards(); }
+    else if (e.key === 'ArrowUp')    { e.preventDefault(); if (ring.index >= TOPOLOGIES.length) topoFocusCards(); else focusSurfaceClose(); }
     else if (e.key === 'Enter') {
       e.preventDefault();
       const c = ring.current();
@@ -4617,6 +4638,11 @@ window.addEventListener('keydown', (e) => {
     }
     else if (e.key === 'Backspace' || e.key === 'Delete')    { e.preventDefault(); renderNewProjectRoles(); }
   } else if (mode === MODE_NEW_PROJ_ROLES) {
+    if (e.key === 'ArrowUp') {
+      const grid = surfaceEl.querySelector('.role-grid');
+      const cols = grid?._cols || 4;
+      if (Math.floor(ring.index / cols) === 0 && focusSurfaceClose()) { e.preventDefault(); return; }
+    }
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (advanceDownFromRolePicker()) return;
@@ -4667,6 +4693,7 @@ window.addEventListener('keydown', (e) => {
     // ring. Left/Right walks them; Enter activates the focused one.
     if (e.key === 'ArrowLeft')  { e.preventDefault(); ring.move(-1); return; }
     if (e.key === 'ArrowRight') { e.preventDefault(); ring.move(+1); return; }
+    if (e.key === 'ArrowUp')    { e.preventDefault(); focusSurfaceClose(); return; }
     if (e.key === 'ArrowDown')  { e.preventDefault(); enterShortcuts(); return; }
     if (e.key === 'Enter') {
       e.preventDefault();
