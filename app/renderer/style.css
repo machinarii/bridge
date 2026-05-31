@@ -479,6 +479,9 @@ kbd {
   padding-right: 4px;
 }
 .settings-pane .settings-field { width: 100%; }
+/* Keep content top-aligned identically on every tab: no first-child top margin,
+ * so the gap under the tab bar is consistent and the content doesn't jump. */
+.settings-pane > *:first-child { margin-top: 0; }
 /* Git tab — force every direct + descendant element to align to the
  * left of the pane regardless of any inherited centering. */
 .settings-pane[data-tab="git"] {
@@ -605,14 +608,29 @@ kbd {
   min-height: var(--steam-button-h);
   transition: color 120ms, border-color 120ms, background 120ms;
 }
-.settings-link:hover,
-.settings-link:focus,
-.settings-link:focus-visible {
+.settings-link:not(:disabled):hover,
+.settings-link:not(:disabled):focus,
+.settings-link:not(:disabled):focus-visible {
   color: var(--fg);
   border-color: rgba(255,255,255,0.5);
   background: rgba(255,255,255,0.05);
   outline: 2px solid var(--focus);
   outline-offset: 3px;
+}
+.settings-link:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+#settings-mcp-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.settings-coming-soon {
+  font-size: 0.72rem;
+  color: var(--fg-dim);
+  font-style: italic;
 }
 
 .role-model-row,
@@ -673,6 +691,16 @@ kbd {
 .settings-field input:focus,
 .settings-field select:focus { border-color: var(--focus); }
 .settings-meta { color: var(--fg-dim); opacity: 0.7; font-size: 0.9rem; }
+/* Inline code in settings copy — match the agent-bubble treatment so it isn't
+ * rendered in the oversized browser-default monospace. */
+.settings-meta code,
+.settings-field code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: rgba(255,255,255,0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
 .settings-row {
   /* Modal action rows: Cancel hugs the LEFT edge; everything else
    * groups on the right via auto-margin on the first non-cancel
