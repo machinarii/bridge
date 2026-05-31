@@ -175,6 +175,21 @@
     </div>
   </div>
 
+  <div id="project-edit-modal" hidden role="dialog" aria-labelledby="project-edit-title">
+    <div class="settings-card project-edit-card">
+      <h3 id="project-edit-title">Edit project</h3>
+      <input type="text" id="project-edit-name" class="project-edit-input" autocomplete="off" aria-label="Project name" />
+      <div class="project-edit-actions">
+        <button type="button" id="project-edit-cancel" class="role-cancel">Cancel</button>
+        <button type="button" id="project-edit-remove" class="project-edit-remove">
+          <span class="remove-fill" aria-hidden="true"></span>
+          <span class="remove-label">Hold to remove</span>
+        </button>
+        <button type="button" id="project-edit-rename" class="role-confirm">Rename</button>
+      </div>
+    </div>
+  </div>
+
   <div id="edit-bubble-modal" hidden role="dialog" aria-labelledby="edit-bubble-title">
     <div class="settings-card">
       <h3 id="edit-bubble-title">Edit prompt</h3>

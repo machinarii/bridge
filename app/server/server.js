@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { listRoles } from './roles.js';
-import { listProjects, getProject, createProject, setAgentEnabled, addAgent } from './projects.js';
+import { listProjects, getProject, createProject, setAgentEnabled, addAgent, renameProject, deleteProject } from './projects.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, getContext, lastActivityAt } from './scratchpad.js';
@@ -310,6 +310,26 @@ app.post('/projects', async (req, res) => {
 app.get('/projects/:pid/autosave', async (req, res) => {
   if (!getProject(req.params.pid)) return res.status(404).json({ error: 'unknown project' });
   res.json(await autosaveStatus(req.params.pid));
+});
+
+// Rename a project (display name only; the id stays stable).
+app.patch('/projects/:pid', (req, res) => {
+  try {
+    res.json(renameProject(req.params.pid, String(req.body?.name || '')));
+  } catch (err) {
+    res.status(400).json({ error: String(err?.message || err) });
+  }
+});
+
+// Permanently remove a project and its on-disk state.
+app.delete('/projects/:pid', (req, res) => {
+  try {
+    const r = deleteProject(req.params.pid);
+    publishEvent({ type: 'notification', kind: 'info', title: 'Project removed', body: `${r.name} was deleted.` });
+    res.json(r);
+  } catch (err) {
+    res.status(400).json({ error: String(err?.message || err) });
+  }
 });
 
 app.post('/projects/:pid/agents', async (req, res) => {

@@ -77,6 +77,7 @@ export class GamepadInput extends EventTarget {
         if (REPEATABLE.has(name)) this.repeat[name] = { firstAt: now, lastAt: now };
       } else if (!pressed && was) {
         delete this.repeat[name];
+        this.dispatchEvent(new CustomEvent('release', { detail: { button: name } }));
       }
       this.prev[idx] = pressed;
     }
