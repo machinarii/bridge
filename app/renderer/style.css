@@ -1720,10 +1720,10 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .sc.ptt-chip .sc-talk { position: relative; display: inline-flex; align-items: center; }
 .sc.ptt-chip .sc-mic {
   position: absolute; inset: 0;
-  display: none; align-items: center; justify-content: center; gap: 2.5px;
+  display: none; align-items: center; justify-content: center; gap: 3px;
   color: var(--fg, #e7ecf3);
 }
-.sc.ptt-chip .sc-mic .bar { width: 2.5px; height: 6px; border-radius: 2px; background: currentColor; }
+.sc.ptt-chip .sc-mic .bar { width: 3px; height: 6px; border-radius: 2px; background: currentColor; }
 .sc.ptt-chip.talking .label { visibility: hidden; }
 .sc.ptt-chip.talking .sc-mic { display: flex; }
 /* Press pulse for the borderless SVG icon — scale only, no background flash. */
