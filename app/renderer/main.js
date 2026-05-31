@@ -506,7 +506,7 @@ let pttActive = false;
 
 // Create-project flow state
 let newProjRoleIds  = [];                // toggled during step 1
-let newProjTopology = 'hub-and-spoke';   // chosen during step 2 (default)
+let newProjTopology = null;   // chosen during step 2 (no default selection)
 let newProjName     = '';                // captured during step 3
 let newProjGoal     = '';                // captured during step 4
 
@@ -544,14 +544,15 @@ function topoDiagramSVG(id) {
       <circle class="node" cx="81" cy="30" r="6"/><circle class="node" cx="48" cy="51" r="6"/>`,
     'rotating-lead': `
       <circle class="ring" cx="48" cy="30" r="20"/>
-      <polyline class="arrow" points="62,15 70,18 68,26"/>
+      <path class="arrow" d="M57 12 A20 20 0 0 1 66 22"/>
+      <polyline class="arrow" points="61,17 66,23 71,18"/>
       <circle class="node lead" cx="48" cy="10" r="6.5"/><circle class="node" cx="68" cy="30" r="6"/>
       <circle class="node" cx="48" cy="50" r="6"/><circle class="node" cx="28" cy="30" r="6"/>`,
     'async-pull': `
-      <rect class="mini" x="8" y="9" width="26" height="11" rx="3"/><rect class="mini" x="8" y="24" width="26" height="11" rx="3"/><rect class="mini" x="8" y="39" width="26" height="11" rx="3"/>
-      <path class="arrow" d="M36 18 H66"/><polyline class="arrow" points="61,14 67,18 61,22"/>
-      <path class="arrow" d="M36 30 q18 0 24 12"/><polyline class="arrow" points="55,38 61,43 54,46"/>
-      <circle class="node" cx="78" cy="18" r="6"/><circle class="node" cx="78" cy="43" r="6"/>`,
+      <rect class="mini" x="7" y="9" width="26" height="11" rx="3"/><rect class="mini" x="7" y="24" width="26" height="11" rx="3"/><rect class="mini" x="7" y="39" width="26" height="11" rx="3"/>
+      <path class="arrow" d="M36 21 L67 18"/><polyline class="arrow" points="62,14 68,18 63,23"/>
+      <path class="arrow" d="M36 38 L67 41"/><polyline class="arrow" points="63,36 68,41 62,45"/>
+      <circle class="node" cx="78" cy="18" r="6"/><circle class="node" cx="78" cy="41" r="6"/>`,
   }[id] || '';
   return open + body + '</svg>';
 }
@@ -927,7 +928,7 @@ function dispatchHomeUtterance(text) {
   if (!text) return;
   if (isCreateProjectCommand(text)) {
     newProjRoleIds = [];
-    newProjTopology = 'hub-and-spoke';
+    newProjTopology = null;
     newProjName = '';
     newProjGoal = '';
     renderNewProjectRoles();
@@ -1038,7 +1039,7 @@ async function openFocused() {
   if (idx === tileCount() - 1) {
     // "+ New" — enter create flow with the same morph as a project tile.
     newProjRoleIds = [];
-    newProjTopology = 'hub-and-spoke';
+    newProjTopology = null;
     newProjName = '';
     newProjGoal = '';
     zoomStack.push(sourceRect);
@@ -1318,6 +1319,18 @@ function selectTopology(id) {
   document.querySelectorAll('.topology-card').forEach(c => { c.dataset.selected = String(c.dataset.topoId === id); });
 }
 function chooseTopology(id) { selectTopology(id); renderNewProjectName(); }
+
+/* Topology nav: the row of cards occupies ring indices 0..N-1, the Back
+ * button is the last index. Left/right move between cards; down jumps to
+ * Back; up returns from Back into the cards. */
+function topoMoveCard(dir) {
+  const n = TOPOLOGIES.length;
+  if (ring.index >= n) { ring.index = dir < 0 ? n - 1 : 0; }   // from Back → into cards
+  else ring.index = (ring.index + dir + n) % n;
+  ring.paint();
+}
+function topoFocusBack() { ring.index = TOPOLOGIES.length; ring.paint(); }
+function topoFocusCards() { if (ring.index >= TOPOLOGIES.length) { ring.index = 0; ring.paint(); } }
 
 function goBackInCreateFlow() {
   if (mode === MODE_NEW_PROJ_GOAL) renderNewProjectName();
@@ -3961,8 +3974,10 @@ gp.addEventListener('press', (e) => {
   }
 
   if (mode === MODE_NEW_PROJ_TOPOLOGY) {
-    if (b === 'up' || b === 'left')        ring.move(-1);
-    else if (b === 'down' || b === 'right') ring.move(+1);
+    if (b === 'left')        topoMoveCard(-1);
+    else if (b === 'right')  topoMoveCard(+1);
+    else if (b === 'down')   topoFocusBack();
+    else if (b === 'up')     topoFocusCards();
     else if (b === 'cross') { const c = ring.current(); if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId); else c?.click?.(); }
     else if (b === 'circle') renderNewProjectRoles();
     return;
@@ -4592,8 +4607,10 @@ window.addEventListener('keydown', (e) => {
       else openFocused();                                             // "+ New" → open now
     }
   } else if (mode === MODE_NEW_PROJ_TOPOLOGY) {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')        { e.preventDefault(); ring.move(-1); }
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowRight'){ e.preventDefault(); ring.move(+1); }
+    if (e.key === 'ArrowLeft')       { e.preventDefault(); topoMoveCard(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); topoMoveCard(+1); }
+    else if (e.key === 'ArrowDown')  { e.preventDefault(); topoFocusBack(); }
+    else if (e.key === 'ArrowUp')    { e.preventDefault(); topoFocusCards(); }
     else if (e.key === 'Enter') {
       e.preventDefault();
       const c = ring.current();
