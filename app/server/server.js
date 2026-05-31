@@ -24,6 +24,14 @@ if (existsSync(envPath)) {
   }
 }
 
+// Default to the bundled local Parakeet STT so voice works out of the box on
+// first launch. The renderer health-gates this (GET /stt-health) and silently
+// falls back to the browser speech engine when the sidecar isn't reachable, so
+// defaulting it on never breaks voice if Parakeet is absent.
+if (!process.env.LOCAL_STT_URL) {
+  process.env.LOCAL_STT_URL = `http://127.0.0.1:${process.env.PARAKEET_PORT || 8123}/transcribe`;
+}
+
 const PORT = Number(process.env.PORT || 4317);
 const RENDERER_DIR = resolve(__dirname, '..', 'renderer');
 const ASSETS_DIR   = resolve(__dirname, '..', 'assets');
@@ -144,6 +152,20 @@ app.post('/transcribe', express.raw({ type: '*/*', limit: '25mb' }), async (req,
     res.json({ ...payload, latencyMs: Date.now() - t0 });
   } catch (err) {
     res.status(502).json({ error: String(err?.message || err) });
+  }
+});
+
+/* Quick reachability check for the local STT sidecar, so the renderer can
+ * decide whether to use local Parakeet or fall back to the browser engine. */
+app.get('/stt-health', async (_req, res) => {
+  const target = process.env.LOCAL_STT_URL;
+  if (!target) return res.json({ available: false });
+  const healthUrl = target.replace(/\/transcribe\/?$/, '/health');
+  try {
+    const r = await fetch(healthUrl, { signal: AbortSignal.timeout(800) });
+    res.json({ available: r.ok });
+  } catch {
+    res.json({ available: false });
   }
 });
 

@@ -2254,6 +2254,17 @@ let localRecChunks = [];
     const r = await fetch('/settings');
     if (r.ok) { const s = await r.json(); localSttUrl = s.LOCAL_STT_URL || ''; }
   } catch {}
+  // Local Parakeet is the default engine, but only use it if the sidecar is
+  // actually reachable — poll briefly (it may still be loading its model on
+  // first launch), and fall back to the browser engine if it never comes up.
+  if (localSttUrl) {
+    let ready = false;
+    for (let i = 0; i < 10 && !ready; i++) {
+      try { ready = (await (await fetch('/stt-health')).json()).available; } catch {}
+      if (!ready) await new Promise(res => setTimeout(res, 1200));
+    }
+    if (!ready) localSttUrl = '';
+  }
 })();
 
 function startPTT() {
@@ -2343,6 +2354,9 @@ async function postLocalTranscript(blob) {
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
+      // Local STT failed mid-session (sidecar died/unreachable) — fall back to
+      // the browser engine for subsequent presses so voice keeps working.
+      if (r.status === 502 || r.status === 400) localSttUrl = '';
       setIndicator('error', data?.error || `Transcribe ${r.status}`);
       setTimeout(() => setIndicator('idle', 'Connected'), 2000);
       return;
@@ -2354,6 +2368,7 @@ async function postLocalTranscript(blob) {
     // the app behaves identically to the browser-STT flow.
     dispatchTranscript(text);
   } catch (err) {
+    localSttUrl = ''; // network error reaching local STT — use the browser engine next time
     setIndicator('error', `Transcribe failed: ${err.message}`);
     setTimeout(() => setIndicator('idle', 'Connected'), 2000);
   }
