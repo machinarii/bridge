@@ -1909,7 +1909,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .topo-subtitle { font-size: 0.85rem; opacity: 0.7; line-height: 1.25; min-height: 2.1em; }
 .topo-svg { width: 100%; max-width: 108px; height: auto; margin: 0.35rem 0; }
 .topo-svg .link { stroke: currentColor; stroke-width: 2; fill: none; opacity: 0.42; stroke-linecap: round; }
-.topo-svg .ring { stroke: currentColor; stroke-width: 2; fill: none; opacity: 0.32; }
+.topo-svg .ring { stroke: currentColor; stroke-width: 2.5; fill: none; opacity: 0.5; stroke-linecap: round; }
 .topo-svg .arrow { stroke: currentColor; stroke-width: 2; fill: none; opacity: 0.6; stroke-linecap: round; stroke-linejoin: round; }
 .topo-svg .mini { stroke: currentColor; stroke-width: 2; fill: none; opacity: 0.5; }
 .topo-svg .node { fill: var(--bg-elev, #0b0d12); stroke: currentColor; stroke-width: 2.2; }
