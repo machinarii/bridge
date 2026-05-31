@@ -468,9 +468,10 @@ window.addEventListener('mousemove', () => setInputMode('keyboard'), true);
 
 /* ---------- App state ---------- */
 const MODE_PROJECTS         = 'projects';          // L0
-const MODE_NEW_PROJ_ROLES   = 'new_project_roles'; // create-flow step 1
-const MODE_NEW_PROJ_NAME    = 'new_project_name';  // create-flow step 2
-const MODE_NEW_PROJ_GOAL    = 'new_project_goal';  // create-flow step 3
+const MODE_NEW_PROJ_ROLES    = 'new_project_roles';    // create-flow step 1
+const MODE_NEW_PROJ_TOPOLOGY = 'new_project_topology'; // create-flow step 2
+const MODE_NEW_PROJ_NAME     = 'new_project_name';     // create-flow step 3
+const MODE_NEW_PROJ_GOAL     = 'new_project_goal';     // create-flow step 4
 const MODE_GRID             = 'grid';              // L1 (project grid)
 const MODE_ZOOM             = 'zoom';              // L2 (agent zoom)
 const MODE_ADD_AGENT        = 'add_agent';         // L1 → add-agent role picker
@@ -504,9 +505,20 @@ let inflightController = null;
 let pttActive = false;
 
 // Create-project flow state
-let newProjRoleIds = [];          // toggled during step 1
-let newProjName    = '';          // captured during step 2
-let newProjGoal    = '';          // captured during step 3
+let newProjRoleIds  = [];                // toggled during step 1
+let newProjTopology = 'hub-and-spoke';   // chosen during step 2 (default)
+let newProjName     = '';                // captured during step 3
+let newProjGoal     = '';                // captured during step 4
+
+// Work topologies offered after role selection. Display copy lives here; the
+// operating rule written into project.md lives server-side (projects.js).
+const TOPOLOGIES = [
+  { id: 'hub-and-spoke', heading: 'Hub-and-spoke', subtitle: 'One coordinator, four specialists', best: 'Best when someone has the most context' },
+  { id: 'feature-teams', heading: 'Feature teams', subtitle: 'Parallel pods, end-to-end ownership', best: "Best when workstreams don't touch" },
+  { id: 'mesh-mob',      heading: 'Mesh / mob', subtitle: 'Everyone on everything', best: 'Best for hard, ambiguous problems' },
+  { id: 'rotating-lead', heading: 'Rotating lead', subtitle: 'Leadership passes each sprint', best: 'Best for building team-wide ownership' },
+  { id: 'async-pull',    heading: 'Async pull / queue', subtitle: 'Self-assign from a shared backlog', best: 'Best for distributed or async teams' },
+];
 
 /* ---------- Explorer height sync ----------
  * The explorer panels are position:fixed cards; their top/bottom track
@@ -879,6 +891,7 @@ function dispatchHomeUtterance(text) {
   if (!text) return;
   if (isCreateProjectCommand(text)) {
     newProjRoleIds = [];
+    newProjTopology = 'hub-and-spoke';
     newProjName = '';
     newProjGoal = '';
     renderNewProjectRoles();
@@ -989,6 +1002,7 @@ async function openFocused() {
   if (idx === tileCount() - 1) {
     // "+ New" — enter create flow with the same morph as a project tile.
     newProjRoleIds = [];
+    newProjTopology = 'hub-and-spoke';
     newProjName = '';
     newProjGoal = '';
     zoomStack.push(sourceRect);
@@ -1199,12 +1213,82 @@ function advanceFromRolePicker() {
     setTimeout(() => setIndicator('idle', 'Connected'), 1500);
     return;
   }
-  renderNewProjectName();
+  renderNewProjectTopology();
 }
+
+/* Step 2 — choose a work topology (how the team operates). Single-select:
+ * picking a card sets it and advances to the name step. */
+function renderNewProjectTopology() {
+  mode = MODE_NEW_PROJ_TOPOLOGY;
+  document.body.dataset.mode = mode;
+  setBreadcrumbs([{ label: 'Projects' }, { label: 'New project' }, { label: 'Topology' }]);
+  surfaceEl.innerHTML = '';
+
+  const heading = document.createElement('header');
+  heading.className = 'project-heading';
+  heading.innerHTML = `
+    <h2 class="project-title">New project</h2>
+    <p class="project-goal">Choose how your team works.</p>`;
+  surfaceEl.appendChild(heading);
+
+  const wrap = document.createElement('section');
+  wrap.className = 'topology-picker';
+  const list = document.createElement('div');
+  list.className = 'topology-list';
+
+  const cardEls = [];
+  for (const topo of TOPOLOGIES) {
+    const card = document.createElement('div');
+    card.className = 'topology-card';
+    card.dataset.topoId = topo.id;
+    card.dataset.selected = String(newProjTopology === topo.id);
+    card.innerHTML = `
+      <span class="topo-radio" aria-hidden="true"></span>
+      <span class="topo-text">
+        <span class="topo-heading">${escapeHtml(topo.heading)}</span>
+        <span class="topo-subtitle">${escapeHtml(topo.subtitle)}</span>
+      </span>
+      <span class="topo-best">${escapeHtml(topo.best)}</span>`;
+    card.addEventListener('click', () => { ring.moveTo(el => el === card); chooseTopology(topo.id); });
+    list.appendChild(card);
+    cardEls.push(card);
+  }
+  wrap.appendChild(list);
+
+  surfaceEl.appendChild(createSurfaceCloseButton(() => maybeConfirmCancel(true, () => renderProjects())));
+
+  const row = document.createElement('div');
+  row.className = 'role-confirm-row';
+  const backBtn = document.createElement('button');
+  backBtn.type = 'button'; backBtn.className = 'role-cancel'; backBtn.textContent = 'Back';
+  backBtn.addEventListener('click', () => renderNewProjectRoles());
+  row.appendChild(backBtn);
+  wrap.appendChild(row);
+
+  surfaceEl.appendChild(wrap);
+
+  ring.set([...cardEls, backBtn]);
+  ring.index = Math.max(0, TOPOLOGIES.findIndex(t => t.id === newProjTopology));
+  ring.paint();
+
+  renderActionBar([{ verb: 'Back', glyph: 'circle', action: { type: '_topo_back' } }]);
+  setShortcuts([
+    { gamepad: 'circle', keyboard: 'Delete', label: 'Back', action: () => renderNewProjectRoles() },
+  ]);
+  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Choose',
+                       action: () => { const c = ring.current(); if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId); else c?.click?.(); } });
+}
+
+function selectTopology(id) {
+  newProjTopology = id;
+  document.querySelectorAll('.topology-card').forEach(c => { c.dataset.selected = String(c.dataset.topoId === id); });
+}
+function chooseTopology(id) { selectTopology(id); renderNewProjectName(); }
 
 function goBackInCreateFlow() {
   if (mode === MODE_NEW_PROJ_GOAL) renderNewProjectName();
-  else if (mode === MODE_NEW_PROJ_NAME) { stopMicVisualizer(); renderNewProjectRoles(); }
+  else if (mode === MODE_NEW_PROJ_NAME) { stopMicVisualizer(); renderNewProjectTopology(); }
+  else if (mode === MODE_NEW_PROJ_TOPOLOGY) renderNewProjectRoles();
   else { stopMicVisualizer(); renderProjects(); }
 }
 
@@ -3842,6 +3926,13 @@ gp.addEventListener('press', (e) => {
     return;
   }
 
+  if (mode === MODE_NEW_PROJ_TOPOLOGY) {
+    if (b === 'up' || b === 'left')        ring.move(-1);
+    else if (b === 'down' || b === 'right') ring.move(+1);
+    else if (b === 'cross') { const c = ring.current(); if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId); else c?.click?.(); }
+    else if (b === 'circle') renderNewProjectRoles();
+    return;
+  }
   if (mode === MODE_NEW_PROJ_ROLES) {
     if (b === 'up' || b === 'down' || b === 'left' || b === 'right') {
       roleGridMove(b);
@@ -4466,6 +4557,16 @@ window.addEventListener('keydown', (e) => {
       if (ring.index < projects.length) startProjectHold(ring.index); // hold a project → edit modal
       else openFocused();                                             // "+ New" → open now
     }
+  } else if (mode === MODE_NEW_PROJ_TOPOLOGY) {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')        { e.preventDefault(); ring.move(-1); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowRight'){ e.preventDefault(); ring.move(+1); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const c = ring.current();
+      if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId);
+      else c?.click?.();
+    }
+    else if (e.key === 'Backspace' || e.key === 'Delete')    { e.preventDefault(); renderNewProjectRoles(); }
   } else if (mode === MODE_NEW_PROJ_ROLES) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -4762,7 +4863,7 @@ async function finalizeNewProject() {
     const r = await fetch('/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newProjName.trim(), goal: newProjGoal.trim(), roleIds: newProjRoleIds }),
+      body: JSON.stringify({ name: newProjName.trim(), goal: newProjGoal.trim(), roleIds: newProjRoleIds, topology: newProjTopology }),
     });
     if (!r.ok) throw new Error(`server ${r.status}: ${await r.text()}`);
     const project = await r.json();
