@@ -1220,7 +1220,10 @@ function advanceDownFromRolePicker() {
     return false; // there's another tile row below — fall through
   }
   if (firstNonTileIdx >= 0) {
-    ring.index = firstNonTileIdx;
+    // Prefer the primary action (Continue/Create) over Cancel when
+    // dropping out of the tile grid.
+    const confirmIdx = items.findIndex(el => el.classList?.contains('role-confirm'));
+    ring.index = confirmIdx >= 0 ? confirmIdx : firstNonTileIdx;
     ring.paint();
     return true;
   }
@@ -4001,7 +4004,8 @@ gp.addEventListener('press', (e) => {
       const cols = grid?._cols || 4;
       if (Math.floor(ring.index / cols) === 0 && focusSurfaceClose()) return;
     }
-    if (b === 'up' || b === 'down' || b === 'left' || b === 'right') {
+    if (b === 'down') { if (advanceDownFromRolePicker()) return; roleGridMove('down'); return; }
+    if (b === 'up' || b === 'left' || b === 'right') {
       roleGridMove(b);
     } else if (b === 'cross')    toggleFocusedRole();
     else if (b === 'triangle')   advanceFromRolePicker();
@@ -4023,14 +4027,7 @@ gp.addEventListener('press', (e) => {
       }
     }
     if (b === 'down') {
-      const grid = surfaceEl.querySelector('.role-grid');
-      if (grid) {
-        const cols = grid._cols || 4;
-        const n = ring.elements.length;
-        const lastRow = Math.max(0, Math.ceil(n / cols) - 1);
-        const r = Math.floor(ring.index / cols);
-        if (r >= lastRow && enterShortcuts()) return;
-      }
+      if (advanceDownFromRolePicker()) return;
       roleGridMove('down');
     } else if (b === 'up' || b === 'left' || b === 'right') {
       roleGridMove(b);

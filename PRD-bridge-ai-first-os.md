@@ -138,6 +138,17 @@ Integration uses three tiers, chosen by how much access a given app permits — 
 
 > **Risk flag:** T1 forking is real engineering and creates a maintenance burden (tracking upstream). T2 accessibility coverage is uneven. T3 vision is fragile. The perception-and-action capability across all three tiers is the spine of the system and **must be prototyped first** (see §10), starting with one T1 app end to end.
 
+### 4.4 Agent identity & naming *(decided)*
+
+**Every agent has a globally unique name** — no two agents, on the same project or across different projects, ever share a name. The role picker previews each role with the first name from its pool that isn't already taken, so the preview matches what the agent will actually be called.
+
+Two reasons this is a hard rule, not a nicety:
+
+- **Agents are added infinitely.** Because spinning up another agent is a digital act with no headcount cost, a project (or the whole system) can accumulate many agents over time. A name has to disambiguate one agent from every other unambiguously — a role label alone ("Engineer") stops being a unique handle the moment there are two.
+- **Each agent accrues its own memory and experience.** An agent is a persistent identity, not a disposable role slot: over its lifetime it builds up its own context, history, and working memory. The unique name is the stable handle the user (and the orchestrator) use to refer to *that specific* identity and its accumulated experience — so the name must belong to exactly one agent, permanently.
+
+Implementation: name pools live per role in `app/server/roles.js`; `createProject`/`addAgent` allocate the next unused name, checking both names already on the project and names in use on every other project, so uniqueness holds system-wide.
+
 ---
 
 ## 5. AI / model architecture
