@@ -8,10 +8,11 @@ It runs as a macOS desktop app (Electron) and is designed so that voice + a sing
 
 ## Core ideas
 
-- **Projects → agents → conversation.** Work is organized into *projects*, each staffed by a small team of *role-typed agents* (PM, engineer, designer, …). You navigate three levels:
+- **Projects → agents → conversation.** Work is organized into *projects*, each staffed by a small team of *role-typed agents* (Product Manager, Software & Hardware Engineer, Designer, QA, Data Scientist, Security, Researcher, Copywriter, Marketing, Legal). Each agent has a globally unique name and a persistent identity. You navigate three levels:
   - **L0 — Projects:** pick a project (or create one) and talk to its lead.
   - **L1 — Team grid:** the project's agents as tiles.
   - **L2 — Agent view:** zoom into one agent and converse.
+- **Topology-shaped teams.** Creating a project walks you through *roles → topology → name → goal*. The **work topology** — Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, or Async pull / queue — defines how the team coordinates, and is written into the project's `project.md` as its operating rule.
 - **Voice-first, controller-navigable.** Hold to talk; every on-screen action shows its controller glyph (✕ select, ○ back, L1/R1 switch, R2 push-to-talk). Keyboard mirrors all of it.
 - **The model assembles, it doesn't author.** Agents return a small structured spec; a deterministic renderer turns it into a consistent surface — fast, cheap, and visually stable (which matters for spatial memory and accessibility).
 - **Spoken results.** Answers and confirmations are read aloud via text-to-speech.
@@ -100,6 +101,21 @@ Set `LOCAL_STT_URL=http://127.0.0.1:8123/transcribe` (Settings → General) to r
 | Memory | **M** | — |
 | Files | **E** | — |
 | Type instead of speak | **/** | — |
+| Full screen | **⌘F** | — |
+
+---
+
+## Settings
+
+Open Settings from the footer (⚙). Tabs:
+
+- **General** — OpenRouter API key, default model, local STT URL.
+- **Models** — per-role model overrides (route each role to a different model).
+- **Skills** — activate/deactivate the agent **playbook skills** (model-agnostic
+  how-to-do-the-work guides, e.g. discovery, TDD, code review, positioning) the
+  team can draw on.
+- **MCP** — register MCP plugins *(coming soon)*.
+- **Git** — auto-save each project's state to its git repo on an interval.
 
 ---
 
