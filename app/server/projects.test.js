@@ -20,12 +20,12 @@ test('listProjects starts empty', () => {
 });
 
 test('createProject builds a project with auto-named agents', async () => {
-  const p = await createProject({ name: 'Test Alpha', goal: 'Ship a test', roleIds: ['pm','engineer','qa'] });
+  const p = await createProject({ name: 'Test Alpha', goal: 'Ship a test', roleIds: ['pm','sw_engineer','qa'] });
   assert.match(p.id, /^p_/);
   assert.equal(p.name, 'Test Alpha');
   assert.equal(p.goal, 'Ship a test');
   assert.equal(p.agents.length, 3);
-  assert.deepEqual(p.agents.map(a => a.role).sort(), ['engineer','pm','qa']);
+  assert.deepEqual(p.agents.map(a => a.role).sort(), ['pm','qa','sw_engineer']);
   // Lead is PM if present
   assert.equal(p.leadAgentId, p.agents.find(a => a.role === 'pm').id);
   // All enabled by default
@@ -36,13 +36,13 @@ test('createProject builds a project with auto-named agents', async () => {
 });
 
 test('createProject without pm auto-adds PM as lead', async () => {
-  const p = await createProject({ name: 'Test Beta', goal: 'No leads picked', roleIds: ['engineer','qa'] });
+  const p = await createProject({ name: 'Test Beta', goal: 'No leads picked', roleIds: ['sw_engineer','qa'] });
   assert.equal(p.agents.length, 3, 'PM auto-added');
   assert.equal(p.agents.find(a => a.id === p.leadAgentId).role, 'pm');
 });
 
 test('createProject writes charter markdown for each role', async () => {
-  const p = await createProject({ name: 'Test Charters', goal: 'verify charter pipeline', roleIds: ['pm','engineer'] });
+  const p = await createProject({ name: 'Test Charters', goal: 'verify charter pipeline', roleIds: ['pm','sw_engineer'] });
   const projDir = resolve(STATE_DIR, p.id);
   for (const a of p.agents) {
     const charterPath = resolve(projDir, 'roles', `${a.role}.md`);
