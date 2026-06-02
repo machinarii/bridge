@@ -4621,7 +4621,15 @@ window.addEventListener('keydown', (e) => {
   if (isShortcutsFocused()) {
     if (e.key === 'ArrowLeft')  { e.preventDefault(); moveShortcutFocus(-1); return; }
     if (e.key === 'ArrowRight') { e.preventDefault(); moveShortcutFocus(+1); return; }
-    if (e.key === 'ArrowUp')    { e.preventDefault(); leaveShortcuts(); ring.paint(); return; }
+    if (e.key === 'ArrowUp')    {
+      e.preventDefault();
+      leaveShortcuts();
+      // Agent view with no tile-surface ring: jump straight to the newest
+      // bubble instead of landing in an empty middle row.
+      if (mode === MODE_ZOOM && ring.elements.length === 0 && chatBubbles.length > 0) focusLastBubble();
+      else ring.paint();
+      return;
+    }
     if (e.key === 'Enter')      { e.preventDefault(); activateFocusedShortcut(); return; }
     if (e.key === 'Escape')     { e.preventDefault(); leaveShortcuts(); ring.paint(); return; }
   }
@@ -4794,7 +4802,13 @@ window.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowUp')   { e.preventDefault(); moveBubbleFocus(-1); return; }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        if (chatBubbleIdx >= chatBubbles.length - 1) { leaveBubbleFocus(); ring.paint(); return; }
+        if (chatBubbleIdx >= chatBubbles.length - 1) {
+          leaveBubbleFocus();
+          // No tile-surface ring → drop straight to the footer rail rather
+          // than an empty middle row.
+          if (ring.elements.length === 0) enterShortcuts(); else ring.paint();
+          return;
+        }
         moveBubbleFocus(+1); return;
       }
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
