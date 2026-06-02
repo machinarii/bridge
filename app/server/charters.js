@@ -25,7 +25,7 @@ export const FALLBACK_REASON = {
 };
 
 /* Base charter files are named role-<label-in-kebab-case>.md
- * (e.g. the 'tech_writer' role, label "Copywriter" → role-copywriter.md). */
+ * (e.g. the 'sw_engineer' role, label "Software Engineer" → role-software-engineer.md). */
 function charterFileName(role) {
   const slug = String(role.label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   return `role-${slug}.md`;
