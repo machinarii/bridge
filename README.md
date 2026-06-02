@@ -143,24 +143,6 @@ Open Settings from the footer (⚙). Tabs:
 
 ---
 
-## Building the macOS app
-
-```bash
-npm run build:mac          # fetches Python, prepares STT, runs electron-builder (arm64 DMG + zip)
-```
-
-The build is configured for **hardened-runtime signing + notarization** (`build/entitlements.mac.plist`, `package.json → build.mac`). To produce a signed, notarized, distributable build you need a **Developer ID Application** certificate (paid Apple Developer Program) in your keychain, then:
-
-```bash
-export APPLE_ID="you@example.com"
-export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"
-npm run build:mac
-```
-
-electron-builder signs (including the bundled Node/Python binaries), notarizes via notarytool, and staples the ticket. Output lands in `dist/`.
-
----
-
 ## Project layout
 
 ```
