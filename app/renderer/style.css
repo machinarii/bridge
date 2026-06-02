@@ -1258,7 +1258,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 /* ===== v2 markdown rendering in agent bubbles ===== */
 .agent-view .bubble.agent .bubble-content > *:first-child { margin-top: 0; }
 .agent-view .bubble.agent .bubble-content > *:last-child  { margin-bottom: 0; }
-.agent-view .bubble.agent .bubble-content p { margin: 0 0 0.6em; line-height: 1.5; }
+.agent-view .bubble.agent .bubble-content p { margin: 0 0 1.4em; line-height: 1.5; }
 .agent-view .bubble.agent .bubble-content h1,
 .agent-view .bubble.agent .bubble-content h2,
 .agent-view .bubble.agent .bubble-content h3,
@@ -1269,8 +1269,8 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .agent-view .bubble.agent .bubble-content h3 { font-size: 1.05em; }
 .agent-view .bubble.agent .bubble-content ul,
 .agent-view .bubble.agent .bubble-content ol {
-  margin: 0.3em 0 0.6em;
-  padding-left: 1.4em;
+  margin: 0.3em 0 1.4em;
+  padding-left: 1.4em;   /* ul and ol share this so numbered + bulleted lists align */
   line-height: 1.5;
 }
 .agent-view .bubble.agent .bubble-content li { margin: 0.15em 0; }
