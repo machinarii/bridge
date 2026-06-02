@@ -1270,9 +1270,10 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .agent-view .bubble.agent .bubble-content ul,
 .agent-view .bubble.agent .bubble-content ol {
   margin: 0.3em 0 1.4em;
-  padding-left: 1.4em;   /* ul and ol share this so numbered + bulleted lists align */
+  padding-left: 1.4em;
   line-height: 1.5;
 }
+.agent-view .bubble.agent .bubble-content ol { margin: 0.3em 0 1.4em 1em; }
 .agent-view .bubble.agent .bubble-content li { margin: 0.15em 0; }
 .agent-view .bubble.agent .bubble-content blockquote {
   margin: 0.4em 0;
