@@ -84,7 +84,7 @@ kbd {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  padding: 24px 32px;
+  padding: 24px 24px;
   gap: 20px;
 }
 #baseplate > #footer-rail { margin-top: auto; flex: 0 0 auto; }
