@@ -134,6 +134,59 @@ build/             # app icon, entitlements, Python/STT packaging scripts
 docs/              # internal design + planning notes (git-ignored, not published)
 ```
 
+### Key modules
+
+```
+app/server/
+├── server.js        # Express: REST + SSE (projects, agents, notes, settings, skills, …)
+├── orchestrator.js  # per-agent intent → tile spec, using the role charter
+├── team.js          # team voice: router → fan-out → synthesizer
+├── projects.js      # projects store + per-project folder scaffold
+├── roles.js         # role catalog (PM, Software/Hardware Engineer, Designer, …)
+├── charters.js      # per-project role charters (role-<label>.md base templates)
+├── skills.js        # agent skill (playbook) registry — toggled in Settings → Skills
+├── scratchpad.js    # per-agent conversation context
+├── events.js        # SSE event bus (status / activity / delegate / notification)
+└── backends/notes.js# project-scoped markdown notes
+
+app/renderer/
+├── index.html · style.css
+├── main.js          # nav modes (L0/L1/L2 + create flow), dispatch, action exec
+├── gamepad.js       # Gamepad API → semantic events
+├── speech.js        # Web Speech STT + TTS
+├── tiles.js         # deterministic tile/surface renderer
+└── gamepad-icons.js # PlayStation glyph set
+```
+
+---
+
+## Tile spec — the model's only output
+
+Agents don't author UI. They return a small structured spec; the renderer turns
+it into a consistent, controller-navigable surface.
+
+```jsonc
+{
+  "intent":   "take_note" | "list_notes" | "answer",
+  "template": "compose" | "list" | "reader" | "confirm",
+  "context":  "string shown at top",
+  "title":    "string",
+  "body":     "string (compose/reader)",
+  "items":    [{ "id": "...", "label": "..." }],
+  "actions":  [{ "verb": "Save", "glyph": "cross", "action": { "type": "save_note" } }]
+}
+```
+
+Adding a new action = add a case in `app/renderer/main.js → executeAction`.
+
+---
+
+## Tests
+
+```bash
+cd app/server && npm test     # node:test runners (projects, charters, …)
+```
+
 ---
 
 ## License
