@@ -2201,8 +2201,13 @@ async function renderChatHistory(container, agent) {
         bubble.appendChild(actions);
       }
 
+      // chatBubbleIdx tracks the position in chatBubbles (the nav array), NOT
+      // the message index `i` — they diverge when system/handoff messages are
+      // skipped, which otherwise mis-highlights (e.g. the last bubble looks
+      // unselected). Capture the array index this bubble will occupy.
+      const arrIdx = chatBubbles.length;
       bubble.addEventListener('focus', () => {
-        chatBubbleIdx = i;
+        chatBubbleIdx = arrIdx;
         paintBubbleFocus();
       });
       bubble.addEventListener('click', () => bubble.focus());
@@ -3952,7 +3957,10 @@ gp.addEventListener('press', (e) => {
         primary?.click();
         return;
       }
-      if (active && typeof active.click === 'function') { active.click(); return; }
+      // Cross while not on an entry (e.g. on the bell) dismisses the menu.
+      closeNotificationMenu();
+      document.getElementById('notification-btn')?.focus();
+      return;
     }
     if (b === 'circle') { closeNotificationMenu();
                           document.getElementById('notification-btn')?.focus();
