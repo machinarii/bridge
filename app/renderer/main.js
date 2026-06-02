@@ -2229,9 +2229,28 @@ function focusBubble(i) {
   const n = chatBubbles.length;
   const next = Math.max(0, Math.min(n - 1, i));
   chatBubbleIdx = next;
-  chatBubbles[next].focus();
-  chatBubbles[next].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const el = chatBubbles[next];
+  el.focus({ preventScroll: true });   // we manage the scroll ourselves
+  scrollBubbleIntoView(el);
   return true;
+}
+
+/* Scroll a bubble into view while guaranteeing its TOP is never cut off.
+ * For a bubble taller than the viewport we align its top (top wins over
+ * showing the bottom); otherwise we do the minimal scroll to reveal it. */
+function scrollBubbleIntoView(el) {
+  const container = el.closest('.chat-scroll');
+  if (!container) return;
+  const pad = 8;
+  const cr = container.getBoundingClientRect();
+  const er = el.getBoundingClientRect();
+  if (er.top < cr.top + pad) {
+    container.scrollBy({ top: er.top - cr.top - pad, behavior: 'smooth' });
+  } else if (er.bottom > cr.bottom) {
+    const overflow = er.bottom - cr.bottom;      // to bring the bottom in
+    const topRoom = er.top - cr.top - pad;       // moving more cuts the top
+    container.scrollBy({ top: Math.min(overflow, Math.max(0, topRoom)), behavior: 'smooth' });
+  }
 }
 
 function focusFirstBubble()    { return focusBubble(0); }
