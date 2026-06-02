@@ -10,7 +10,7 @@ import { getProject } from './projects.js';
 import { getRole } from './roles.js';
 import { interpretIntent } from './orchestrator.js';
 import { appendTurn, getContext } from './scratchpad.js';
-import { getModelForRole, getDefaultModel } from './models.js';
+import { getModelForRole, getDefaultModel, getRouterModel } from './models.js';
 import { emitStatus, emitActivity, emitDelegate, emitNotification } from './events.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -115,7 +115,7 @@ export async function runTeamVoice({ projectId, text }) {
   appendTurn(lead.id, 'user', `[team-voice] ${text}`);
   emitStatus(projectId, lead.id, 'analyzing');
   emitActivity(projectId, `${lead.name}: routing "${text.slice(0, 60)}"`, lead.id);
-  const routingRaw = await callOpenRouterJSON({ apiKey, model: leadModel, prompt: routingPrompt, timeoutMs: ROUTING_TIMEOUT_MS });
+  const routingRaw = await callOpenRouterJSON({ apiKey, model: getRouterModel(), prompt: routingPrompt, timeoutMs: ROUTING_TIMEOUT_MS });
   const routing = parseRoutingOutput(routingRaw);
   const { kept, dropped } = applyCostCap(routing.assignments, FANOUT_CAP);
   if (dropped.length) console.log(`[team] cost cap dropped ${dropped.length} assignments`);

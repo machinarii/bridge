@@ -83,6 +83,7 @@ const SETTINGS_KEYS = [
   'OPENROUTER_API_KEY',
   'OPENROUTER_MODEL',
   'OPENROUTER_MODEL_BY_ROLE',  // JSON: { roleId: modelId }
+  'OPENROUTER_ROUTER_MODEL',   // fast/cheap model for team-voice routing
   'MCP_PLUGINS',                // JSON: [{ id, name, enabled }]
   'SKILLS_DISABLED',            // JSON: [skillId, ...] (deactivated skills)
   'GIT_AUTOSAVE',               // "on" | "off"
@@ -126,6 +127,7 @@ app.get('/settings', (_req, res) => {
     OPENROUTER_API_KEY_SET: !!process.env.OPENROUTER_API_KEY,
     OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.7',
     OPENROUTER_MODEL_BY_ROLE: parseJsonEnv('OPENROUTER_MODEL_BY_ROLE', {}),
+    OPENROUTER_ROUTER_MODEL: process.env.OPENROUTER_ROUTER_MODEL || '',
     MCP_PLUGINS: parseJsonEnv('MCP_PLUGINS', []),
     GIT_AUTOSAVE: (process.env.GIT_AUTOSAVE || 'off') === 'on',
     GIT_AUTOSAVE_INTERVAL_MIN: Number(process.env.GIT_AUTOSAVE_INTERVAL_MIN || 5),
