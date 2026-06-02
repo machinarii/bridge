@@ -1171,7 +1171,7 @@ async function renderNewProjectRoles() {
   ]);
   setShortcuts([
     { gamepad: 'cross',  keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedRole() },
-    { gamepad: 'circle', keyboard: 'Delete',   label: 'Back',   action: () => renderProjects() },
+    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',   action: () => renderProjects() },
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Select',
                        action: () => advanceFromRolePicker() });
@@ -1314,7 +1314,7 @@ function renderNewProjectTopology() {
 
   renderActionBar([{ verb: 'Back', glyph: 'circle', action: { type: '_topo_back' } }]);
   setShortcuts([
-    { gamepad: 'circle', keyboard: 'Delete', label: 'Back', action: () => renderNewProjectRoles() },
+    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderNewProjectRoles() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Choose',
                        action: () => { const c = ring.current(); if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId); else c?.click?.(); } });
@@ -1512,7 +1512,7 @@ function renderNewProjectName() {
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'circle', keyboard: 'Delete', label: 'Back', action: () => goBackInCreateFlow() },
+    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => confirmCapture() });
@@ -1559,7 +1559,7 @@ function renderNewProjectGoal() {
     { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
   ]);
   setShortcuts([
-    { gamepad: 'circle', keyboard: 'Delete', label: 'Back', action: () => goBackInCreateFlow() },
+    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => confirmCapture() });
@@ -1781,7 +1781,7 @@ async function openAddAgentPicker() {
     { gamepad: 'cross',   keyboard: 'Space', label: 'Toggle',   action: () => toggleFocusedAddAgentRole() },
     { gamepad: 'options', keyboard: 'E',     label: 'Explorer', action: () => toggleFileExplorer() },
     { gamepad: 'triangle', keyboard: 'A',     label: 'Activity', action: () => toggleActivityDrawer() },
-    { gamepad: 'circle',  keyboard: 'Delete',   label: 'Back',     action: () => renderGrid() },
+    { gamepad: 'circle',  keyboard: 'Esc',   label: 'Back',     action: () => renderGrid() },
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Done',
                        action: () => commitAddAgentSelections() });
@@ -4510,8 +4510,9 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keydown', (e) => {
   // Settings modal owns the keyboard while it's open — let its own
-  // handler take care of Esc / Tab / arrows / Enter.
-  if (settingsOpen || editBubbleOpen || confirmCancelOpen || projectEditOpen) return;
+  // handler take care of Esc / Tab / arrows / Enter. Notifications too, so
+  // Esc only closes the menu rather than also triggering Back.
+  if (settingsOpen || editBubbleOpen || confirmCancelOpen || projectEditOpen || notificationsOpen) return;
 
   if (document.activeElement === typedInput) {
     if (e.key === 'Enter') {
@@ -4633,7 +4634,7 @@ window.addEventListener('keydown', (e) => {
       if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId);
       else c?.click?.();
     }
-    else if (e.key === 'Backspace' || e.key === 'Delete')    { e.preventDefault(); renderNewProjectRoles(); }
+    else if (e.key === 'Escape')    { e.preventDefault(); renderNewProjectRoles(); }
   } else if (mode === MODE_NEW_PROJ_ROLES) {
     if (e.key === 'ArrowUp') {
       const grid = surfaceEl.querySelector('.role-grid');
@@ -4655,7 +4656,7 @@ window.addEventListener('keydown', (e) => {
         advanceFromRolePicker();
       }
     }
-    else if (e.key === 'Backspace' || e.key === 'Delete')  { e.preventDefault(); renderProjects(); }
+    else if (e.key === 'Escape')  { e.preventDefault(); renderProjects(); }
   } else if (mode === MODE_ADD_AGENT) {
     // Up / Right from the top-right of the grid hops to the × close button.
     if ((e.key === 'ArrowUp' || e.key === 'ArrowRight') && document.activeElement !== surfaceEl.querySelector('.surface-close')) {
@@ -4684,7 +4685,7 @@ window.addEventListener('keydown', (e) => {
         commitAddAgentSelections();
       }
     }
-    else if (e.key === 'Backspace' || e.key === 'Delete')  { e.preventDefault(); renderGrid(); }
+    else if (e.key === 'Escape')  { e.preventDefault(); renderGrid(); }
   } else if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
     // Action-row buttons (Cancel · Back · Continue/Create) form the
     // ring. Left/Right walks them; Enter activates the focused one.
@@ -4699,7 +4700,7 @@ window.addEventListener('keydown', (e) => {
       else confirmCapture();
       return;
     }
-    if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); goBackInCreateFlow(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); goBackInCreateFlow(); return; }
   }
 
   // Surface holds "close viewer" focus — Enter closes; Left returns to ×.
@@ -4755,7 +4756,7 @@ window.addEventListener('keydown', (e) => {
       e.preventDefault(); gridMove('down');
     } else if (dir) { e.preventDefault(); gridMove(dir); }
     else if (e.key === 'Enter') { e.preventDefault(); enterZoom(); }
-    else if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); exitToProjects(); }
+    else if (e.key === 'Escape') { e.preventDefault(); exitToProjects(); }
     else if (e.code === 'Space') { e.preventDefault(); toggleFocusedAgentEnabled(); }
     else if (e.key === '[')      { e.preventDefault(); cycleProject(-1); }
     else if (e.key === ']')      { e.preventDefault(); cycleProject(+1); }
@@ -4815,7 +4816,7 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')      { e.preventDefault(); ring.move(-1); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); ring.move(+1); }
     else if (e.key === 'Enter')      { e.preventDefault(); pressCross(); }
-    else if (e.key === 'Backspace' || e.key === 'Delete')     { e.preventDefault(); pressCircle(); }
+    else if (e.key === 'Escape')     { e.preventDefault(); pressCircle(); }
     else if (e.key === '[')          { e.preventDefault(); cycleAgent(-1); }
     else if (e.key === ']')          { e.preventDefault(); cycleAgent(+1); }
   }
