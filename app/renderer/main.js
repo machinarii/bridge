@@ -4230,8 +4230,9 @@ function populateModelSelect(currentId) {
 function populateRouterModelSelect(currentId) {
   if (!settingsRouterModelEl) return;
   settingsRouterModelEl.innerHTML = '';
-  // includeUseDefault: empty value = fall back to the default model.
-  settingsRouterModelEl.appendChild(buildModelOptions(currentId, true));
+  // Server resolves this (defaults to the fast router model), so it's always a
+  // concrete model — no "use default" entry needed.
+  settingsRouterModelEl.appendChild(buildModelOptions(currentId, false));
 }
 
 function populateRoleModels(byRole) {
