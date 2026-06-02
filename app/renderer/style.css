@@ -548,9 +548,11 @@ kbd {
   /* Lock pane height so the modal doesn't jump between tabs. */
   height: 50vh; min-height: 360px; max-height: 60vh;
   overflow-y: auto;
-  /* Gutter so the scrollbar sits to the right of the content (fields/text)
-   * instead of touching it. */
-  padding-right: 16px;
+  /* Keep the content's right padding (the card's) but let the scrollbar render
+   * over that padding instead of on the fields: extend the pane out to the
+   * card's edge, then pad the content back to its normal inset. */
+  margin-right: -1.75rem;
+  padding-right: 1.75rem;
 }
 .settings-pane .settings-field { width: 100%; }
 /* Keep content top-aligned identically on every tab: no first-child top margin,
