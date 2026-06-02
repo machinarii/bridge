@@ -4143,6 +4143,17 @@ const settingsModelEl     = document.getElementById('settings-model');
 const settingsRouterModelEl = document.getElementById('settings-router-model');
 const settingsRoleModelsEl= document.getElementById('settings-role-models');
 const settingsSkillsListEl= document.getElementById('settings-skills-list');
+const ghStatusEl       = document.getElementById('settings-github-status');
+const ghConnectEl      = document.getElementById('settings-github-connect');
+const ghDisconnectEl   = document.getElementById('settings-github-disconnect');
+const ghClientIdEl     = document.getElementById('settings-github-client-id');
+const ghClientIdField  = document.getElementById('settings-github-clientid-field');
+const ghDeviceEl       = document.getElementById('settings-github-device');
+const ghQrEl           = document.getElementById('settings-github-qr');
+const ghLinkEl         = document.getElementById('settings-github-link');
+const ghCodeEl         = document.getElementById('settings-github-code');
+const ghDeviceStateEl  = document.getElementById('settings-github-device-state');
+let ghPollTimer = null;
 const settingsMcpListEl   = document.getElementById('settings-mcp-list');
 const settingsMcpAddEl    = document.getElementById('settings-mcp-add');
 const settingsGitEnabledEl= document.getElementById('settings-git-enabled');
@@ -4336,6 +4347,73 @@ async function populateSkills() {
   }
 }
 
+/* ---------- GitHub pairing (device flow) ---------- */
+function renderGithubStatus(st) {
+  if (!ghStatusEl) return;
+  const configured = !!st?.configured;
+  const connected = !!st?.connected;
+  ghStatusEl.textContent = connected
+    ? `Connected${st.login ? ` as ${st.login}` : ''}`
+    : (configured ? 'Not connected' : 'Set a client ID to connect');
+  ghStatusEl.dataset.connected = String(connected);
+  if (ghConnectEl)    ghConnectEl.hidden = connected || !configured;
+  if (ghDisconnectEl) ghDisconnectEl.hidden = !connected;
+  if (ghClientIdField) ghClientIdField.hidden = connected;   // hide the id field once paired
+  if (connected && ghDeviceEl) ghDeviceEl.hidden = true;
+}
+
+async function refreshGithubStatus() {
+  try {
+    const r = await fetch('/github');
+    if (r.ok) renderGithubStatus(await r.json());
+  } catch {}
+}
+
+function stopGithubPoll() { if (ghPollTimer) { clearInterval(ghPollTimer); ghPollTimer = null; } }
+
+async function githubConnect() {
+  stopGithubPoll();
+  ghDeviceStateEl && (ghDeviceStateEl.textContent = 'Starting…');
+  ghDeviceEl && (ghDeviceEl.hidden = false);
+  let info;
+  try {
+    const r = await fetch('/github/device', { method: 'POST' });
+    info = await r.json();
+    if (!r.ok) throw new Error(info?.error || `server ${r.status}`);
+  } catch (err) {
+    if (ghDeviceStateEl) ghDeviceStateEl.textContent = `Couldn't start: ${err.message}`;
+    return;
+  }
+  const url = info.verification_uri_complete;
+  if (ghCodeEl) ghCodeEl.textContent = info.user_code || '????-????';
+  if (ghLinkEl) { ghLinkEl.href = url; }
+  // QR of the verification URL for the phone path. The encoded value is a
+  // single-use device code that's useless without the user's own GitHub
+  // approval, so a public QR-image renderer is acceptably low-risk here.
+  if (ghQrEl) ghQrEl.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=${encodeURIComponent(url)}`;
+  if (ghDeviceStateEl) ghDeviceStateEl.textContent = 'Waiting for authorization…';
+  ghPollTimer = setInterval(async () => {
+    try {
+      const s = await (await fetch('/github')).json();
+      if (s.connected) {
+        stopGithubPoll();
+        renderGithubStatus(s);
+      } else if (s.pending?.status === 'error') {
+        stopGithubPoll();
+        if (ghDeviceStateEl) ghDeviceStateEl.textContent = `Authorization ${s.pending.error || 'failed'}.`;
+      }
+    } catch {}
+  }, 3000);
+}
+
+async function githubDisconnect() {
+  stopGithubPoll();
+  try { renderGithubStatus(await (await fetch('/github/disconnect', { method: 'POST' })).json()); }
+  catch {}
+}
+ghConnectEl?.addEventListener('click', githubConnect);
+ghDisconnectEl?.addEventListener('click', githubDisconnect);
+
 async function ensureModelsList() {
   if (settingsModelsList.length) return;
   try {
@@ -4371,6 +4449,9 @@ async function openSettings() {
   populateRoleModels(s.OPENROUTER_MODEL_BY_ROLE || {});
   populateMcpList(s.MCP_PLUGINS || []);
   populateSkills();
+  if (ghClientIdEl) ghClientIdEl.value = s.GITHUB_OAUTH_CLIENT_ID || '';
+  if (ghDeviceEl) ghDeviceEl.hidden = true;
+  refreshGithubStatus();
   settingsGitEnabledEl.checked = !!s.GIT_AUTOSAVE;
   settingsGitIntervalEl.value = Number(s.GIT_AUTOSAVE_INTERVAL_MIN || 5);
   if (settingsSttUrlEl) settingsSttUrlEl.value = s.LOCAL_STT_URL || '';
@@ -4385,6 +4466,7 @@ async function openSettings() {
 function closeSettings() {
   settingsModalEl.hidden = true;
   settingsOpen = false;
+  stopGithubPoll();
 }
 
 /** Every focusable in the modal, in visual order: tabs → active-pane
@@ -4539,6 +4621,8 @@ async function saveSettings() {
   if (model) updates.OPENROUTER_MODEL = model;
   const routerModel = (settingsRouterModelEl?.value || '').trim();
   if (routerModel) updates.OPENROUTER_ROUTER_MODEL = routerModel;
+  const ghClientId = (ghClientIdEl?.value || '').trim();
+  if (ghClientId) updates.GITHUB_OAUTH_CLIENT_ID = ghClientId;
 
   const byRole = {};
   for (const sel of settingsRoleModelsEl.querySelectorAll('select')) {

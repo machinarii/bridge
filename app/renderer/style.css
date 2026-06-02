@@ -671,6 +671,52 @@ kbd {
 }
 .settings-git-state[data-on="true"] { color: var(--fg); }
 
+/* GitHub pairing (Settings → Git) */
+.github-pair {
+  margin-top: 0.5rem; padding-top: 1rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  display: flex; flex-direction: column; gap: 1rem;
+}
+.github-row { display: flex; align-items: center; gap: 0.75rem; }
+.github-info { display: flex; flex-direction: column; gap: 0.15rem; flex: 1 1 auto; min-width: 0; }
+.github-label { color: var(--fg); font-weight: 400; }
+.github-status { color: var(--fg-dim); font-size: 0.9rem; }
+.github-status[data-connected="true"] { color: var(--accent-2, #9cf2c1); }
+.github-btn {
+  flex: 0 0 auto;
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.22);
+  color: var(--fg);
+  border-radius: var(--steam-radius, 10px);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-family: inherit; font-size: var(--steam-body-fs, 0.95rem);
+  transition: border-color 120ms, background 120ms;
+}
+.github-btn:hover { border-color: rgba(255,255,255,0.45); background: rgba(255,255,255,0.04); }
+.github-btn:focus, .github-btn:focus-visible { outline: 2px solid var(--focus, #ffffff); outline-offset: 2px; }
+/* `display:flex`/grid below would otherwise defeat the [hidden] attribute. */
+.github-device[hidden],
+#settings-github-clientid-field[hidden] { display: none !important; }
+.github-device {
+  display: flex; gap: 1.5rem; align-items: flex-start;
+  padding: 1rem; border: 1px solid rgba(255,255,255,0.12); border-radius: var(--steam-radius, 10px);
+  background: rgba(255,255,255,0.02);
+}
+.github-device-left, .github-device-right { display: flex; flex-direction: column; gap: 0.5rem; }
+.github-device-right { flex: 1 1 auto; }
+.github-device-step { color: var(--fg-dim); font-size: 0.8rem; letter-spacing: 0.02em; }
+.github-qr { display: block; border-radius: 6px; background: #fff; padding: 6px; }
+.github-verify-link { color: var(--accent, #6ea8ff); text-decoration: underline; font-size: 0.85rem; }
+.github-code {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.8rem; letter-spacing: 0.12em; color: var(--fg);
+  background: rgba(255,255,255,0.06); border-radius: 8px; padding: 0.5rem 0.9rem;
+  align-self: flex-start;
+}
+.github-device-state { color: var(--fg-dim); font-size: 0.85rem; }
+
 .settings-link {
   appearance: none;
   background: transparent;

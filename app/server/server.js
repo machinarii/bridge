@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from '
 import { listRoles } from './roles.js';
 import { getRouterModel } from './models.js';
 import { listSkills, getSkill, withSkillEnabled } from './skills.js';
+import { githubStatus, startDeviceFlow, disconnectGithub, setGithubPersist } from './github.js';
 import { listProjects, getProject, createProject, setAgentEnabled, addAgent, renameProject, deleteProject } from './projects.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
@@ -87,6 +88,7 @@ const SETTINGS_KEYS = [
   'OPENROUTER_ROUTER_MODEL',   // fast/cheap model for team-voice routing
   'MCP_PLUGINS',                // JSON: [{ id, name, enabled }]
   'SKILLS_DISABLED',            // JSON: [skillId, ...] (deactivated skills)
+  'GITHUB_OAUTH_CLIENT_ID',     // GitHub OAuth App client id (device flow)
   'GIT_AUTOSAVE',               // "on" | "off"
   'GIT_AUTOSAVE_INTERVAL_MIN',  // integer
   'LOCAL_STT_URL',              // e.g. http://localhost:8123/transcribe
@@ -133,6 +135,7 @@ app.get('/settings', (_req, res) => {
     GIT_AUTOSAVE: (process.env.GIT_AUTOSAVE || 'off') === 'on',
     GIT_AUTOSAVE_INTERVAL_MIN: Number(process.env.GIT_AUTOSAVE_INTERVAL_MIN || 5),
     LOCAL_STT_URL: process.env.LOCAL_STT_URL || '',
+    GITHUB_OAUTH_CLIENT_ID: process.env.GITHUB_OAUTH_CLIENT_ID || '',
   });
 });
 
@@ -241,6 +244,23 @@ app.patch('/skills/:id', (req, res) => {
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
+
+// GitHub pairing (OAuth device flow). Token + login persist to .env.
+setGithubPersist(({ token, login }) =>
+  writeEnvFile({ GITHUB_TOKEN: token || '', GITHUB_LOGIN: login || '' }));
+
+app.get('/github', (_req, res) => res.json(githubStatus()));
+
+app.post('/github/device', async (_req, res) => {
+  try {
+    const info = await startDeviceFlow();
+    res.json(info);
+  } catch (err) {
+    res.status(400).json({ error: String(err?.message || err) });
+  }
+});
+
+app.post('/github/disconnect', (_req, res) => res.json(disconnectGithub()));
 
 app.get('/projects', (_req, res) => {
   // Enrich each project with the most-recent scratchpad activity
