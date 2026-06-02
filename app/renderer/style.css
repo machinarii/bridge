@@ -2349,7 +2349,7 @@ body[data-file-viewer="open"] #surface {
 }
 .memory-empty {
   padding: 1rem; font-size: 0.9rem; font-weight: 300;
-  color: var(--fg-dim); font-style: italic; text-align: center;
+  color: var(--fg-dim); font-style: italic; text-align: left;
 }
 body[data-memory-drawer="open"] #surface { margin-left: calc(320px + 1rem); }
 
@@ -2405,7 +2405,7 @@ body[data-memory-drawer="open"] #surface { margin-left: calc(320px + 1rem); }
 }
 .activity-empty {
   padding: 1rem; font-size: 0.9rem; font-weight: 300;
-  color: var(--fg-dim); font-style: italic; text-align: center;
+  color: var(--fg-dim); font-style: italic; text-align: left;
 }
 body[data-activity-drawer="open"] #surface { margin-left: calc(320px + 1rem); }
 

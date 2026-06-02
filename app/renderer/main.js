@@ -2995,7 +2995,8 @@ function openActivityDrawer() {
   if (memoryDrawerOpen) closeMemoryDrawer();
   // Update the header to reflect the scope (project vs cross-project).
   const headerEl = el.querySelector('header span');
-  if (headerEl) headerEl.textContent = activeProject ? 'Activity' : 'Activity · all projects';
+  const crossProject = mode === MODE_PROJECTS || !activeProject;
+  if (headerEl) headerEl.textContent = crossProject ? 'Activity · All projects' : 'Activity';
   repaintActivityList();
 }
 function closeActivityDrawer() {
@@ -3009,17 +3010,19 @@ function repaintActivityList() {
   const list = document.querySelector('#activity-drawer .activity-list');
   if (!list) return;
   list.innerHTML = '';
-  // On L0 (cross-project), show entries from every project with a
-  // project-name crumb prefix; otherwise filter to the active project.
-  const entries = activeProject
-    ? projectActivityForId(activeProject.id)
-    : allActivity.slice();
+  // On L0 (the projects landing) show the cross-project feed with a
+  // project-name crumb; inside a project filter to it. Keyed on mode, not
+  // just activeProject — that record lingers after backing out to L0.
+  const crossProject = mode === MODE_PROJECTS || !activeProject;
+  const entries = crossProject
+    ? allActivity.slice()
+    : projectActivityForId(activeProject.id);
   if (entries.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'activity-empty';
-    empty.textContent = activeProject
-      ? 'No team activity yet.'
-      : 'No activity across any project yet.';
+    empty.textContent = crossProject
+      ? 'No activity across any project yet.'
+      : 'No team activity yet.';
     list.appendChild(empty);
     return;
   }
@@ -3028,7 +3031,7 @@ function repaintActivityList() {
     row.className = `activity-entry activity-${entry.kind}`;
     row.tabIndex = 0;
     row.dataset.projectId = entry.projectId || '';
-    if (!activeProject) {
+    if (crossProject) {
       // Open the project (and the agent, if known) on click / Enter
       // when this entry is selected from the cross-project feed.
       const open = () => openProjectFromActivityEntry(entry);
@@ -3039,7 +3042,7 @@ function repaintActivityList() {
     }
     const line = document.createElement('div');
     line.className = 'activity-line';
-    if (!activeProject) {
+    if (crossProject) {
       const projName = projects.find(p => p.id === entry.projectId)?.name || '';
       if (projName) {
         const crumb = document.createElement('span');
