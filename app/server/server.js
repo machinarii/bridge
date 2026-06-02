@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { listRoles } from './roles.js';
+import { listSkills, getSkill, withSkillEnabled } from './skills.js';
 import { listProjects, getProject, createProject, setAgentEnabled, addAgent, renameProject, deleteProject } from './projects.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
@@ -83,6 +84,7 @@ const SETTINGS_KEYS = [
   'OPENROUTER_MODEL',
   'OPENROUTER_MODEL_BY_ROLE',  // JSON: { roleId: modelId }
   'MCP_PLUGINS',                // JSON: [{ id, name, enabled }]
+  'SKILLS_DISABLED',            // JSON: [skillId, ...] (deactivated skills)
   'GIT_AUTOSAVE',               // "on" | "off"
   'GIT_AUTOSAVE_INTERVAL_MIN',  // integer
   'LOCAL_STT_URL',              // e.g. http://localhost:8123/transcribe
@@ -218,6 +220,23 @@ app.put('/settings', (req, res) => {
 
 app.get('/roles', (_req, res) => {
   res.json({ roles: listRoles() });
+});
+
+// Agent skill registry — the Settings → Skills tab lists these and toggles them.
+app.get('/skills', (_req, res) => {
+  res.json({ skills: listSkills() });
+});
+
+app.patch('/skills/:id', (req, res) => {
+  const skill = getSkill(req.params.id);
+  if (!skill) return res.status(404).json({ error: 'unknown skill' });
+  const enabled = !!req.body?.enabled;
+  try {
+    writeEnvFile({ SKILLS_DISABLED: JSON.stringify(withSkillEnabled(skill.id, enabled)) });
+    res.json({ ok: true, id: skill.id, enabled });
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
 });
 
 app.get('/projects', (_req, res) => {
