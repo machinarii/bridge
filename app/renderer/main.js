@@ -2234,6 +2234,10 @@ function focusBubble(i) {
   const n = chatBubbles.length;
   const next = Math.max(0, Math.min(n - 1, i));
   chatBubbleIdx = next;
+  // Paint directly rather than waiting on the focus event: re-focusing a
+  // bubble that already holds DOM focus (common after a footer round-trip)
+  // fires no focus event, which would otherwise leave the highlight stale.
+  paintBubbleFocus();
   const el = chatBubbles[next];
   el.focus({ preventScroll: true });   // we manage the scroll ourselves
   scrollBubbleIntoView(el);
