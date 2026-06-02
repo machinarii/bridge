@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { listRoles } from './roles.js';
+import { getRouterModel } from './models.js';
 import { listSkills, getSkill, withSkillEnabled } from './skills.js';
 import { listProjects, getProject, createProject, setAgentEnabled, addAgent, renameProject, deleteProject } from './projects.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
@@ -127,7 +128,7 @@ app.get('/settings', (_req, res) => {
     OPENROUTER_API_KEY_SET: !!process.env.OPENROUTER_API_KEY,
     OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.7',
     OPENROUTER_MODEL_BY_ROLE: parseJsonEnv('OPENROUTER_MODEL_BY_ROLE', {}),
-    OPENROUTER_ROUTER_MODEL: process.env.OPENROUTER_ROUTER_MODEL || '',
+    OPENROUTER_ROUTER_MODEL: getRouterModel(),  // resolved (defaults to the fast router model)
     MCP_PLUGINS: parseJsonEnv('MCP_PLUGINS', []),
     GIT_AUTOSAVE: (process.env.GIT_AUTOSAVE || 'off') === 'on',
     GIT_AUTOSAVE_INTERVAL_MIN: Number(process.env.GIT_AUTOSAVE_INTERVAL_MIN || 5),

@@ -16,9 +16,14 @@ export function getModelForRole(roleId) {
   return getDefaultModel();
 }
 
-/* Model for cheap classification work (team-voice routing). Set
- * OPENROUTER_ROUTER_MODEL to a fast/cheap model to cut latency + cost;
- * defaults to the normal model so behavior is unchanged until configured. */
+/* Default model for team-voice routing (cheap classification). Chosen for
+ * privacy (Anthropic doesn't train on API data; same provider as the app's
+ * default model — one trust boundary), price (cheapest Anthropic tier; routing
+ * calls are tiny), and adequacy (more than enough for picking agents/tasks). */
+export const ROUTER_DEFAULT_MODEL = 'anthropic/claude-haiku-4.5';
+
+/* Model for cheap classification work (team-voice routing). Override with
+ * OPENROUTER_ROUTER_MODEL; otherwise the fast default above. */
 export function getRouterModel() {
-  return process.env.OPENROUTER_ROUTER_MODEL || getDefaultModel();
+  return process.env.OPENROUTER_ROUTER_MODEL || ROUTER_DEFAULT_MODEL;
 }
