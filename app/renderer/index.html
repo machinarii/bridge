@@ -164,6 +164,33 @@
           </div>
         </label>
         <small class="settings-meta">A per-project git repo is created under <code>app/state/&lt;projectId&gt;</code>. Major state changes commit immediately; the interval commits anything missed.</small>
+
+        <div class="github-pair">
+          <div class="github-row">
+            <div class="github-info">
+              <span class="github-label">GitHub account</span>
+              <span class="github-status" id="settings-github-status">Not connected</span>
+            </div>
+            <button type="button" class="github-btn" id="settings-github-connect">Connect GitHub</button>
+            <button type="button" class="github-btn" id="settings-github-disconnect" hidden>Disconnect</button>
+          </div>
+          <label class="settings-field" id="settings-github-clientid-field">
+            <span>GitHub OAuth client ID <small style="opacity:0.6">(OAuth App with Device Flow enabled)</small></span>
+            <input type="text" id="settings-github-client-id" placeholder="Iv1.xxxxxxxxxxxx" autocomplete="off" />
+          </label>
+          <div class="github-device" id="settings-github-device" hidden>
+            <div class="github-device-left">
+              <div class="github-device-step">1 · Scan or open on your phone</div>
+              <img class="github-qr" id="settings-github-qr" alt="GitHub authorization QR code" width="180" height="180" />
+              <a class="github-verify-link" id="settings-github-link" target="_blank" rel="noopener">Open GitHub to authorize ↗</a>
+            </div>
+            <div class="github-device-right">
+              <div class="github-device-step">2 · Enter this code</div>
+              <div class="github-code" id="settings-github-code">····-····</div>
+              <div class="github-device-state" id="settings-github-device-state">Waiting for authorization…</div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <div class="settings-row">
