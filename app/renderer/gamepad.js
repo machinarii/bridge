@@ -36,21 +36,34 @@ export class GamepadInput extends EventTarget {
     window.addEventListener('gamepadconnected', (e) => {
       console.log('[gamepad] connected:', e.gamepad.id);
       this.dispatchEvent(new CustomEvent('connected', { detail: e.gamepad.id }));
-      if (!this.raf) this.loop();
+      this.start();
     });
     window.addEventListener('gamepaddisconnected', () => {
       this.dispatchEvent(new CustomEvent('disconnected'));
+      if (!this.anyConnected()) this.stop();
     });
-    this.loop();
+    // Only poll while a controller is actually connected — keyboard/voice-only
+    // sessions never spin the 60fps rAF loop. Start now only if one's present.
+    if (this.anyConnected()) this.start();
   }
+
+  anyConnected() {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    return Array.from(pads).some(p => p);
+  }
+  start() { if (!this.raf) this.loop(); }
+  stop()  { if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; } }
 
   loop = () => {
     this.raf = requestAnimationFrame(this.loop);
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    let any = false;
     for (const pad of pads) {
       if (!pad) continue;
+      any = true;
       this.scan(pad);
     }
+    if (!any) this.stop();   // last pad gone → idle until the next connect
   };
 
   scan(pad) {

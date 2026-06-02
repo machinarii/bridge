@@ -4140,6 +4140,7 @@ const settingsModalEl     = document.getElementById('settings-modal');
 const settingsApiKeyEl    = document.getElementById('settings-api-key');
 const settingsApiMetaEl   = document.getElementById('settings-api-key-current'); // removed from DOM; keep null-safe
 const settingsModelEl     = document.getElementById('settings-model');
+const settingsRouterModelEl = document.getElementById('settings-router-model');
 const settingsRoleModelsEl= document.getElementById('settings-role-models');
 const settingsSkillsListEl= document.getElementById('settings-skills-list');
 const settingsMcpListEl   = document.getElementById('settings-mcp-list');
@@ -4224,6 +4225,13 @@ function buildModelOptions(currentId, includeUseDefault = false) {
 function populateModelSelect(currentId) {
   settingsModelEl.innerHTML = '';
   settingsModelEl.appendChild(buildModelOptions(currentId, false));
+}
+
+function populateRouterModelSelect(currentId) {
+  if (!settingsRouterModelEl) return;
+  settingsRouterModelEl.innerHTML = '';
+  // includeUseDefault: empty value = fall back to the default model.
+  settingsRouterModelEl.appendChild(buildModelOptions(currentId, true));
 }
 
 function populateRoleModels(byRole) {
@@ -4358,6 +4366,7 @@ async function openSettings() {
   if (apiKeyIsSet) settingsApiKeyEl.value = API_KEY_PLACEHOLDER;
   await Promise.all([ensureModelsList(), ensureRolesList()]);
   populateModelSelect(s.OPENROUTER_MODEL || '');
+  populateRouterModelSelect(s.OPENROUTER_ROUTER_MODEL || '');
   populateRoleModels(s.OPENROUTER_MODEL_BY_ROLE || {});
   populateMcpList(s.MCP_PLUGINS || []);
   populateSkills();
@@ -4527,6 +4536,8 @@ async function saveSettings() {
   if (apiKey && apiKey !== API_KEY_PLACEHOLDER) updates.OPENROUTER_API_KEY = apiKey;
   const model = (settingsModelEl.value || '').trim();
   if (model) updates.OPENROUTER_MODEL = model;
+  const routerModel = (settingsRouterModelEl?.value || '').trim();
+  if (routerModel) updates.OPENROUTER_ROUTER_MODEL = routerModel;
 
   const byRole = {};
   for (const sel of settingsRoleModelsEl.querySelectorAll('select')) {

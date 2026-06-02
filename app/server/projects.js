@@ -197,8 +197,9 @@ export async function addAgent(projectId, roleId) {
   };
   p.agents.push(agent);
   save();
-  // Best-effort: regenerate charters (idempotent — overwrites existing).
-  try { await generateProjectCharters(p); }
+  // Only generate the new agent's charter — the rest are unchanged, so
+  // regenerating the whole team was N redundant OpenRouter calls per add.
+  try { await generateProjectCharters(p, { agents: [agent] }); }
   catch (err) { console.warn(`[addAgent] charter generation failed: ${err.message}`); }
   return p;
 }

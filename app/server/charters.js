@@ -100,10 +100,12 @@ export async function customizeCharter({ projectName, goal, agentName, roleId })
   return { markdown: r.content, customized: true };
 }
 
-/** Customize every role for a project in parallel, with a hard cap on
- *  concurrent in-flight requests. Writes results to disk. */
-export async function generateProjectCharters(project, { concurrency = 5 } = {}) {
-  const tasks = project.agents.map(a => async () => {
+/** Customize roles for a project in parallel, with a hard cap on concurrent
+ *  in-flight requests. Writes results to disk. Pass `agents` to regenerate only
+ *  a subset (e.g. just the newly-added agent) instead of the whole team. */
+export async function generateProjectCharters(project, { concurrency = 5, agents } = {}) {
+  const targets = agents || project.agents;
+  const tasks = targets.map(a => async () => {
     const r = await customizeCharter({
       projectName: project.name,
       goal: project.goal,
