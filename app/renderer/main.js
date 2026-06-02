@@ -891,6 +891,8 @@ function updatePickerShortcuts() {
   setShortcuts([
     { gamepad: 'r2', keyboard: 'V', label: `Hold to talk`,
       action: () => talkToFocusedLead() },
+    {                keyboard: '/', label: 'Type prompt',
+      action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     {                gamepad: 'triangle', keyboard: 'A', label: 'Activity',
       action: () => toggleActivityDrawer() },
     {                gamepad: 'square', keyboard: 'M', label: 'Memory',
@@ -4841,6 +4843,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 function submitTypedText(text) {
+  if (mode === MODE_PROJECTS) { dispatchHomeUtterance(text); return; }
   if (mode === MODE_NEW_PROJ_NAME) { newProjName = text; renderNewProjectGoal(); return; }
   if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = text; finalizeNewProject(); return; }
   if (mode === MODE_ZOOM) { submitIntent(text); return; }
