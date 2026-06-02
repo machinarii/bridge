@@ -2205,10 +2205,8 @@ async function renderChatHistory(container, agent) {
       container.appendChild(bubble);
       chatBubbles.push(bubble);
     });
-    // Initial render: jump to the latest bubble with no animation —
-    // the .chat-scroll has `scroll-behavior: smooth` which would
-    // otherwise animate this. scrollTo({ behavior: 'auto' }) overrides.
-    container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+    // Don't auto-scroll on load — selecting an agent leaves the chat where
+    // it renders (top) rather than jumping to the latest bubble.
   } catch (err) {
     console.warn('[chat] history failed:', err);
   }
