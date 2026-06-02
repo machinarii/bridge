@@ -4481,6 +4481,11 @@ function toggleFullscreen() {
   if (isFullscreen()) document.exitFullscreen?.();
   else document.documentElement.requestFullscreen?.().catch(() => {});
 }
+/* Keyboard Lock (Chrome) — while in full screen, capture Esc so a normal tap
+ * is delivered to the page (and acts as Back) instead of the browser using it
+ * to leave full screen. A long-press of Esc still exits, by browser design. */
+function lockEscapeKey() { try { navigator.keyboard?.lock?.(['Escape']); } catch {} }
+function unlockKeyboard() { try { navigator.keyboard?.unlock?.(); } catch {} }
 function paintFullscreenIcon() {
   if (!fullscreenBtnEl) return;
   const fs = isFullscreen();
@@ -4497,7 +4502,10 @@ fullscreenBtnEl?.addEventListener('keydown', (e) => {
     toggleFullscreen();
   }
 });
-document.addEventListener('fullscreenchange', paintFullscreenIcon);
+document.addEventListener('fullscreenchange', () => {
+  paintFullscreenIcon();
+  if (isFullscreen()) lockEscapeKey(); else unlockKeyboard();
+});
 
 // Cmd/Ctrl+F toggles full screen in and out. Capture phase + preventDefault so
 // it works regardless of focus or open modals and overrides the browser's Find.
