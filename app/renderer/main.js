@@ -4476,14 +4476,19 @@ document.getElementById('settings-close')?.addEventListener('click', () => close
 
 /* ---------- Full-screen toggle ---------- */
 const fullscreenBtnEl = document.getElementById('fullscreen-btn');
-function isFullscreen() { return !!document.fullscreenElement; }
+/* In the Electron host we drive native window full screen over IPC — it shows
+ * no "press and hold Esc" notice and leaves Esc free to act as Back. In a plain
+ * browser we fall back to HTML element full screen + Keyboard Lock. */
+const fsBridge = window.bridge;          // present only under Electron
+let electronFs = false;                   // tracks native window full-screen state
+function isFullscreen() { return fsBridge ? electronFs : !!document.fullscreenElement; }
 function toggleFullscreen() {
+  if (fsBridge) { fsBridge.toggleFullscreen(); return; }
   if (isFullscreen()) document.exitFullscreen?.();
-  else document.documentElement.requestFullscreen?.().catch(() => {});
+  else document.documentElement.requestFullscreen?.().then(lockEscapeKey).catch(() => {});
 }
-/* Keyboard Lock (Chrome) — while in full screen, capture Esc so a normal tap
- * is delivered to the page (and acts as Back) instead of the browser using it
- * to leave full screen. A long-press of Esc still exits, by browser design. */
+/* Keyboard Lock (browser fallback only) — capture Esc in HTML full screen so a
+ * tap reaches the page (Back) instead of leaving full screen. */
 function lockEscapeKey() { try { navigator.keyboard?.lock?.(['Escape']); } catch {} }
 function unlockKeyboard() { try { navigator.keyboard?.unlock?.(); } catch {} }
 function paintFullscreenIcon() {
@@ -4502,10 +4507,15 @@ fullscreenBtnEl?.addEventListener('keydown', (e) => {
     toggleFullscreen();
   }
 });
-document.addEventListener('fullscreenchange', () => {
-  paintFullscreenIcon();
-  if (isFullscreen()) lockEscapeKey(); else unlockKeyboard();
-});
+if (fsBridge) {
+  fsBridge.onFullscreenChange((v) => { electronFs = v; paintFullscreenIcon(); });
+  fsBridge.isFullscreen?.().then((v) => { electronFs = !!v; paintFullscreenIcon(); }).catch(() => {});
+} else {
+  document.addEventListener('fullscreenchange', () => {
+    paintFullscreenIcon();
+    if (isFullscreen()) lockEscapeKey(); else unlockKeyboard();
+  });
+}
 
 // Cmd/Ctrl+F toggles full screen in and out. Capture phase + preventDefault so
 // it works regardless of focus or open modals and overrides the browser's Find.

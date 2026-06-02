@@ -11,7 +11,7 @@
  * Quitting the app cleans up the spawned child processes.
  */
 
-const { app, BrowserWindow, shell, Menu, Notification, session, systemPreferences } = require('electron');
+const { app, BrowserWindow, shell, Menu, Notification, session, systemPreferences, ipcMain } = require('electron');
 const path = require('node:path');
 const fs   = require('node:fs');
 const { spawn } = require('node:child_process');
@@ -165,8 +165,14 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
+  // Tell the renderer when native full screen toggles, so it can paint the
+  // button and run its own logic without HTML element full screen (which
+  // would show Chromium's "press and hold Esc" notice).
+  mainWin.on('enter-full-screen', () => mainWin?.webContents.send('bridge:fullscreen-changed', true));
+  mainWin.on('leave-full-screen', () => mainWin?.webContents.send('bridge:fullscreen-changed', false));
   // Open external links in the user's default browser, not inside
   // the Electron window.
   mainWin.webContents.setWindowOpenHandler(({ url }) => {
@@ -191,6 +197,15 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
 }
+
+// Window-level full screen, driven from the renderer's full-screen button /
+// Cmd+F. No HTML fullscreen → no Chromium Esc notice; Esc stays the app's Back.
+ipcMain.handle('bridge:toggle-fullscreen', () => {
+  if (!mainWin) return false;
+  mainWin.setFullScreen(!mainWin.isFullScreen());
+  return mainWin.isFullScreen();
+});
+ipcMain.handle('bridge:is-fullscreen', () => !!mainWin?.isFullScreen());
 
 app.whenReady().then(async () => {
   // Minimal app menu (Quit / DevTools).
