@@ -1,8 +1,15 @@
 # Bridge
 
-Bridge is an **AI-first, accessibility-first command center for multi-agent work**. Instead of windows and a pointer, you talk to a team of AI agents and navigate everything with a game controller (or keyboard). You express intent by voice; the orchestrator interprets it, drives local capabilities, and composes a controller-navigable surface that's read back to you.
+Bridge is an **AI-first command center for managing multi-agent work** — a productivity surface for running teams of role-typed AI agents across multiple projects. You describe intent; the orchestrator routes it to the right agents, drives local capabilities, and composes a consistent, navigable surface that's read back to you. The goal is to make *coordinating a team of agents* — assigning, steering, and tracking their work — fast and low-friction.
 
-It runs as a macOS desktop app (Electron) and is designed so that voice + a single joystick are enough to operate it end to end.
+It's built around **diverse input modalities**, so you can drive it however suits you (and however you're able to):
+
+- **Voice** — hold to talk; results are spoken back.
+- **Game controller** — every on-screen action maps to a controller glyph; a single joystick is enough end to end.
+- **Keyboard** — full parity with the controller.
+- **Remote** *(planned)* — drive a Bridge session from a phone or second device.
+
+It runs as a macOS desktop app (Electron).
 
 ---
 
@@ -18,6 +25,21 @@ It runs as a macOS desktop app (Electron) and is designed so that voice + a sing
 - **Spoken results.** Answers and confirmations are read aloud via text-to-speech.
 
 For the full vision and design rationale see the (local, unpublished) `docs/` folder.
+
+---
+
+## Features
+
+- **Multi-project command center** — run many projects, each with its own agent team and state.
+- **Role-typed agent teams** — PM lead + specialists (Software/Hardware Engineer, Designer, QA, Data Scientist, Security, Researcher, Copywriter, Marketing, Legal); every agent has a globally unique name and a persistent identity.
+- **Work topologies** — pick how a team coordinates (Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, Async pull / queue); the rule is written into the project's `project.md`.
+- **Three-level navigation** — projects → team grid → agent view, consistent for spatial/motor memory.
+- **Voice in, voice out** — push-to-talk capture (local **Parakeet** STT or the browser's Web Speech) with spoken results (TTS).
+- **Controller + keyboard parity** — every action shows its PlayStation glyph; full keyboard mirror; type-prompt fallback (`/`).
+- **Deterministic surfaces** — agents emit a small structured spec; a fixed renderer turns it into a stable, navigable UI (fast, cheap, accessible).
+- **Per-role model routing** — different OpenRouter model per role, plus a fast **router model** for team-voice classification.
+- **Agent skills** — toggle the playbooks (discovery, TDD, code review, positioning, …) the team can draw on (Settings → Skills).
+- **Activity feed, memory, and file explorer** drawers; per-project notes with optional **git auto-save**.
 
 ---
 
