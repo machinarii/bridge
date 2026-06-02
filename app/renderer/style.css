@@ -548,7 +548,9 @@ kbd {
   /* Lock pane height so the modal doesn't jump between tabs. */
   height: 50vh; min-height: 360px; max-height: 60vh;
   overflow-y: auto;
-  padding-right: 4px;
+  /* Gutter so the scrollbar sits to the right of the content (fields/text)
+   * instead of touching it. */
+  padding-right: 16px;
 }
 .settings-pane .settings-field { width: 100%; }
 /* Keep content top-aligned identically on every tab: no first-child top margin,
