@@ -4141,6 +4141,7 @@ const settingsApiKeyEl    = document.getElementById('settings-api-key');
 const settingsApiMetaEl   = document.getElementById('settings-api-key-current'); // removed from DOM; keep null-safe
 const settingsModelEl     = document.getElementById('settings-model');
 const settingsRoleModelsEl= document.getElementById('settings-role-models');
+const settingsSkillsListEl= document.getElementById('settings-skills-list');
 const settingsMcpListEl   = document.getElementById('settings-mcp-list');
 const settingsMcpAddEl    = document.getElementById('settings-mcp-add');
 const settingsGitEnabledEl= document.getElementById('settings-git-enabled');
@@ -4269,6 +4270,63 @@ function populateMcpList(entries) {
   }
 }
 
+async function populateSkills() {
+  if (!settingsSkillsListEl) return;
+  settingsSkillsListEl.innerHTML = '';
+  let skills = [];
+  try {
+    const r = await fetch('/skills');
+    if (r.ok) skills = (await r.json()).skills || [];
+  } catch (err) { console.warn('[settings] skills fetch failed', err); }
+  if (skills.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'settings-meta';
+    empty.textContent = 'No skills available yet.';
+    settingsSkillsListEl.appendChild(empty);
+    return;
+  }
+  for (const s of skills) {
+    const row = document.createElement('div');
+    row.className = 'skill-row';
+    row.dataset.skillId = s.id;
+    const text = document.createElement('div');
+    text.className = 'skill-text';
+    const name = document.createElement('div');
+    name.className = 'skill-name';
+    name.textContent = s.name;
+    const desc = document.createElement('div');
+    desc.className = 'skill-desc';
+    desc.textContent = s.description;
+    text.append(name, desc);
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'skill-toggle';
+    cb.checked = !!s.enabled;
+    cb.setAttribute('aria-label', `${s.enabled ? 'Deactivate' : 'Activate'} ${s.name}`);
+    cb.addEventListener('change', async () => {
+      cb.disabled = true;
+      try {
+        const r = await fetch(`/skills/${encodeURIComponent(s.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: cb.checked }),
+        });
+        if (!r.ok) throw new Error(`server ${r.status}`);
+        s.enabled = cb.checked;
+        row.dataset.enabled = String(cb.checked);
+      } catch (err) {
+        console.warn('[settings] skill toggle failed', err);
+        cb.checked = !cb.checked; // revert on failure
+      } finally {
+        cb.disabled = false;
+      }
+    });
+    row.dataset.enabled = String(s.enabled);
+    row.append(text, cb);
+    settingsSkillsListEl.appendChild(row);
+  }
+}
+
 async function ensureModelsList() {
   if (settingsModelsList.length) return;
   try {
@@ -4302,6 +4360,7 @@ async function openSettings() {
   populateModelSelect(s.OPENROUTER_MODEL || '');
   populateRoleModels(s.OPENROUTER_MODEL_BY_ROLE || {});
   populateMcpList(s.MCP_PLUGINS || []);
+  populateSkills();
   settingsGitEnabledEl.checked = !!s.GIT_AUTOSAVE;
   settingsGitIntervalEl.value = Number(s.GIT_AUTOSAVE_INTERVAL_MIN || 5);
   if (settingsSttUrlEl) settingsSttUrlEl.value = s.LOCAL_STT_URL || '';

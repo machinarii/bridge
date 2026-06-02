@@ -103,6 +103,7 @@
       <div class="settings-tabs" role="tablist">
         <button type="button" class="settings-tab" data-tab="general" role="tab" aria-selected="true">General</button>
         <button type="button" class="settings-tab" data-tab="models" role="tab" aria-selected="false">Models</button>
+        <button type="button" class="settings-tab" data-tab="skills" role="tab" aria-selected="false">Skills</button>
         <button type="button" class="settings-tab" data-tab="mcp" role="tab" aria-selected="false">MCP</button>
         <button type="button" class="settings-tab" data-tab="git" role="tab" aria-selected="false">Git</button>
       </div>
@@ -127,6 +128,11 @@
 
       <section class="settings-pane" data-tab="models" hidden>
         <div id="settings-role-models"></div>
+      </section>
+
+      <section class="settings-pane" data-tab="skills" hidden>
+        <p class="settings-meta">Playbooks the team's agents can draw on. Deactivate any you don't want them using.</p>
+        <div id="settings-skills-list"></div>
       </section>
 
       <section class="settings-pane" data-tab="mcp" hidden>
