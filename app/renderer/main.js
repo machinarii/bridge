@@ -1926,6 +1926,10 @@ async function enterZoom(specOverride) {
 function renderZoom(specOverride) {
   const agent = currentAgent();
   if (!agent) return renderGrid();
+  // Own the mode so direct callers (e.g. the boot-time restore) don't render
+  // the agent view while `mode` is still MODE_PROJECTS — which would mis-size
+  // the surface (no body[data-mode="zoom"]) and break all the zoom keybinds.
+  mode = MODE_ZOOM;
   document.body.dataset.mode = mode;
   saveNavState();
   document.documentElement.style.setProperty('--agent-color', getProjectColor(activeProject));
