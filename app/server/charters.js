@@ -24,10 +24,19 @@ export const FALLBACK_REASON = {
   EXCEPTION:'exception',
 };
 
+/* Base charter files are named role-<label-in-kebab-case>.md
+ * (e.g. the 'tech_writer' role, label "Copywriter" → role-copywriter.md). */
+function charterFileName(role) {
+  const slug = String(role.label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return `role-${slug}.md`;
+}
+
 export function loadBaseCharter(roleId) {
-  if (!getRole(roleId)) throw new Error(`unknown role: ${roleId}`);
-  const path = resolve(CHARTERS_DIR, `${roleId}.md`);
-  if (!existsSync(path)) throw new Error(`missing base charter: ${roleId}.md`);
+  const role = getRole(roleId);
+  if (!role) throw new Error(`unknown role: ${roleId}`);
+  const fname = charterFileName(role);
+  const path = resolve(CHARTERS_DIR, fname);
+  if (!existsSync(path)) throw new Error(`missing base charter: ${fname}`);
   return readFileSync(path, 'utf8');
 }
 
