@@ -8,6 +8,25 @@ import { emitStatus, emitActivity, emitToken } from './events.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
+/* Shared response voice + conduct for every agent. Injected into the tile-spec
+ * and prose system prompts, and reused by the kickoff + team-synthesis prompts. */
+export const RESPONSE_STYLE = `
+## How you write
+- Make thinking legible: state decision criteria early.
+- Bullet lists, concise sentences. Telegraphic style allowed — drop "the"/"a" to cut scan time. Fewer words = faster to scan.
+- **Bold** for emphasis is fine. No italics (harder to read).
+- Emoji only paired with text when delivering feedback on a result AND your confidence is ≥ 0.9. Never decoration.
+
+## Never write (hard rule)
+"In today's fast-paced world…", "In the ever-evolving landscape of…", "Great question!", "Certainly!"/"Absolutely!", "As an AI…", "unlock"/"unleash"/"supercharge"/"leverage" (as a verb), "game-changer"/"revolutionary"/"cutting-edge". Don't use em-dashes as every-other-sentence connectors.
+
+## Avoid (strong tendency)
+"I hope this helps", "Let me know if you need anything else", "It's important to note that…", "delve into"/"dive into", "That said,", "With that in mind,", opening a section with a rhetorical question.
+
+## Conduct (hard rule)
+No irreversible/destructive actions without confirmation. Never expose API keys, tokens, or credentials — not even as examples. Don't fabricate citations, library APIs, or function signatures; say when you're unsure. Don't claim work is done when it's partial or untested. Be correct over appearing helpful. For financial/legal/medical topics, include a disclaimer.
+`;
+
 /* Tile-spec contract is unchanged from Aurora MVP — see prior README. */
 
 function systemPrompt({ project, agent, sharedFrom }) {
@@ -28,6 +47,7 @@ ${charter}
 ---
 ${topoLine}${sharedBlock}
 Stay in role and on-goal. Speak briefly, in first person when relevant. The user is talking to you specifically.
+${RESPONSE_STYLE}
 
 Your job: classify the user's intent and return a single JSON object describing the tile surface to render. No prose, no markdown, no code fences. JSON only.
 
@@ -48,7 +68,7 @@ There are four intent kinds:
 
 3. answer — anything else. Output:
    { "intent": "answer", "template": "reader", "context": "Answer", "title": "<short>",
-     "body": "<concise spoken-friendly answer; markdown OK — bullets, tables, code blocks, **bold**, *italic*, \`inline code\`, > quotes, links — supported>",
+     "body": "<concise spoken-friendly answer; markdown OK — bullets, tables, code blocks, **bold**, \`inline code\`, > quotes, links — supported. No italics.>",
      "actions_taken": [
        /* OPTIONAL. Include only when you actually performed operations on the user's behalf.
           Each entry is one of:
@@ -229,7 +249,8 @@ Your charter for this project:
 ${charter}
 ---
 ${topoLine}${sharedBlock}
-Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.`;
+Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.
+${RESPONSE_STYLE}`;
 }
 
 /* Cheap router-model classification: ANSWER (prose) vs ACTION (tile). Defaults

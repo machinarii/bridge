@@ -9,6 +9,7 @@ import { appendTurn, getContext } from './scratchpad.js';
 import { getModelForRole, getRouterModel } from './models.js';
 import { emitNotification, emitActivity, emitDelegate, publish as publishEvent } from './events.js';
 import { appendNote } from './backends/notes.js';
+import { RESPONSE_STYLE } from './orchestrator.js';
 
 export const DOC_TITLES = {
   prd:       'PRD',
@@ -69,7 +70,8 @@ export function buildPlanPrompt(project) {
     `Write a SHORT kickoff plan (2-4 sentences, first person, speakable) telling the user how you'll start: ` +
     `you'll draft a PRD plus a roadmap, team operating notes, and an open-questions doc, then assign a starting ` +
     `task to each relevant teammate. If the goal is vague, instead ask 1-2 clarifying questions. ` +
-    `Plain prose only — no JSON, no markdown headings.`
+    `Plain prose only — no JSON, no markdown headings.` +
+    RESPONSE_STYLE
   );
 }
 
