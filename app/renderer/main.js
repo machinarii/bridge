@@ -579,7 +579,7 @@ function refreshEffortChip() {
   else if (mode === MODE_GRID) updateGridShortcuts();
 }
 function effortChipItem() {
-  return { gamepad: 'touchpad', keyboard: 'R', label: 'Effort', action: () => cycleScopeEffort() };
+  return { gamepad: 'touchpad', keyboard: 'R', label: 'Reasoning', action: () => cycleScopeEffort() };
 }
 
 /* ---------- App state ---------- */
