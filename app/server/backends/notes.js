@@ -37,8 +37,10 @@ export function readNote(projectId, id) {
   return readFileSync(path, 'utf8');
 }
 
+let _seq = 0;
 export function appendNote(projectId, body) {
-  const id = new Date().toISOString().replace(/[:.]/g, '-');
+  const seq = String(++_seq).padStart(4, '0');
+  const id = new Date().toISOString().replace(/[:.]/g, '-') + '-' + seq;
   writeFileSync(join(notesDir(projectId), `${id}.md`), body, 'utf8');
   return { id, label: deriveLabel(body) };
 }
