@@ -4,7 +4,7 @@ Bridge is an **AI-first command center for managing multi-agent work** — a pro
 
 It's built around **diverse input modalities**, so you can drive it however suits you (and however you're able to):
 
-- **Voice** — hold to talk; speech-to-text runs **locally via Parakeet** (your audio never leaves the machine for transcription), and results are spoken back.
+- **Voice** — hold to talk; speech-to-text runs **locally via Parakeet** (your audio never leaves the machine for transcription) and appears live in the chat as you speak.
 - **Gamepad** — the fastest way to switch from project to project and agent to agent. Every on-screen action maps to a controller glyph, so **switching is a single button at your fingertips** (L1/R1 to cycle, ✕ to select) — no cursor travel. A trackpad or mouse forces you to move the pointer, aim at a tab, click, and repeat that whole trip every time you want to switch; the gamepad collapses it to one press, which adds up fast when you're hopping across many projects and agents.
 - **Keyboard** — full parity with the controller.
 - **Trackpad / mouse** — click any tile, chip, or action to select; standard pointer navigation.
@@ -23,7 +23,8 @@ Agents are powered by **any model on OpenRouter** (choose a default and override
 - **Topology-shaped teams.** Creating a project walks you through *roles → topology → name → goal*. The **work topology** — Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, or Async pull / queue — defines how the team coordinates, and is written into the project's `project.md` as its operating rule.
 - **Voice-first, controller-navigable.** Hold to talk; every on-screen action shows its controller glyph (✕ select, ○ back, L1/R1 switch, R2 push-to-talk). Keyboard mirrors all of it.
 - **The model assembles, it doesn't author.** Agents return a small structured spec; a deterministic renderer turns it into a consistent surface — fast, cheap, and visually stable (which matters for spatial memory and accessibility).
-- **Spoken results.** Answers and confirmations are read aloud via text-to-speech.
+- **Live, optimistic UI.** Your prompt shows up as a bubble the instant you speak (typing animation → live transcript), an agent "…" bubble appears immediately on submit, and the reply streams in token-by-token — no dead air.
+- **Steerable reasoning.** Hold the controller touchpad (or `T`) and nudge up/down to set how hard the model thinks — Low → Max — per request; *redo* re-rolls an answer in place and escalates temperature + reasoning each time.
 
 For the full vision and design rationale see the (local, unpublished) `docs/` folder.
 
@@ -35,8 +36,10 @@ For the full vision and design rationale see the (local, unpublished) `docs/` fo
 - **Role-typed agent teams** — PM lead + specialists (Software/Hardware Engineer, Designer, QA, Data Scientist, Security, Researcher, Copywriter, Marketing, Legal); every agent has a globally unique name and a persistent identity.
 - **Work topologies** — pick how a team coordinates (Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, Async pull / queue); the rule is written into the project's `project.md`.
 - **Three-level navigation** — projects → team grid → agent view, consistent for spatial/motor memory.
-- **Voice in, voice out** — push-to-talk capture (local **Parakeet** STT or the browser's Web Speech) with spoken results (TTS).
-- **Controller + keyboard parity** — every action shows its PlayStation glyph; full keyboard mirror; type-prompt fallback (`/`).
+- **Voice input with live transcript** — push-to-talk capture (local **Parakeet** STT or the browser's Web Speech); your words stream into the chat as you speak. *(Text-to-speech is off in this build.)*
+- **Controller + keyboard parity** — every action shows its PlayStation glyph; arrows and the d-pad share one navigation model (rubberband at list edges, Down into the footer rail, Up to the × close, reading-order Left/Right); type-prompt fallback (`/`).
+- **Steerable reasoning effort** — hold the touchpad / `T` and nudge Up/Down to pick Low · Medium · High · Extra · Max; the orchestrator maps it to a per-request reasoning budget (reasoning-capable models only).
+- **Redo / regenerate** — re-roll a prompt's answer in place; each consecutive redo escalates temperature (variety) and reasoning effort (quality).
 - **Deterministic surfaces** — agents emit a small structured spec; a fixed renderer turns it into a stable, navigable UI (fast, cheap, accessible).
 - **Per-role model routing** — different OpenRouter model per role, plus a fast **router model** for team-voice classification.
 - **Agent skills** — toggle the playbooks (discovery, TDD, code review, positioning, …) the team can draw on (Settings → Skills).
@@ -66,13 +69,13 @@ For the full vision and design rationale see the (local, unpublished) `docs/` fo
 ┌───────────────▼────────────────────────────────────────────┐
 │  Renderer — vanilla-JS web app (app/renderer/)              │
 │   • Gamepad API + keyboard input, push-to-talk              │
-│   • STT (browser Web Speech *or* local Parakeet), TTS       │
+│   • STT (browser Web Speech *or* local Parakeet)            │
 │   • deterministic tile/surface renderer                     │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 - **AI** is via **OpenRouter** (one integration, many models, per-role model overrides).
-- **Speech-to-text** is either the browser's Web Speech API or a bundled local **Parakeet** (MLX) Python sidecar — set `LOCAL_STT_URL` to use the latter. **Text-to-speech** uses the OS voice (`speechSynthesis`).
+- **Speech-to-text** is either the browser's Web Speech API or a bundled local **Parakeet** (MLX) Python sidecar — set `LOCAL_STT_URL` to use the latter. **Text-to-speech** is disabled in this build (no OS voice output).
 - **State** for each project (notes, conversation, optional git auto-save) lives under `app/state/<projectId>/` (git-ignored).
 
 ---
@@ -122,10 +125,13 @@ Set `LOCAL_STT_URL=http://127.0.0.1:8123/transcribe` (Settings → General) to r
 | Navigate | arrows / **Tab** (into footer) | D-pad / left stick |
 | Select / confirm | **Enter** | **✕ / A** |
 | Back / cancel | **Esc** | **○ / B** |
-| Switch agent | **[** / **]** | **L1 / R1** |
-| Activity feed | **A** | — |
-| Memory | **M** | — |
-| Files | **E** | — |
+| Switch agent (L2) / project (L1) | **[** / **]** | **L1 / R1** |
+| Scroll chat history (L2) | arrows | **right stick** |
+| Reasoning effort | hold **T** + ↑/↓ | hold **touchpad** + stick/d-pad ↑/↓ |
+| Activity feed | **A** | **△** |
+| Explorer (files) | **E** | **□** |
+| Agent on / off (L1) | **Space** | **Menu / Options** |
+| Memory (L0) | **M** | **□** |
 | Type instead of speak | **/** | — |
 | Full screen | **⌘F** | — |
 
@@ -177,7 +183,7 @@ app/renderer/
 ├── index.html · style.css
 ├── main.js          # nav modes (L0/L1/L2 + create flow), dispatch, action exec
 ├── gamepad.js       # Gamepad API → semantic events
-├── speech.js        # Web Speech STT + TTS
+├── speech.js        # Web Speech STT (TTS disabled)
 ├── tiles.js         # deterministic tile/surface renderer
 └── gamepad-icons.js # PlayStation glyph set
 ```
