@@ -1008,6 +1008,7 @@ function handleProjectEditGamepad(b) {
 // Cross release: cancel a remove-hold in the modal, or finish a tile long-press at L0.
 gp.addEventListener('release', (e) => {
   if (e.detail.button === 'touchpad') { commitEffortPicker(); return; }
+  if (editBubbleOpen && e.detail.button === 'cross' && editDictating) { endEditDictate(); return; }  // release stops dictation
   if (e.detail.button !== 'cross') return;
   if (projectEditOpen) { resetRemoveHold(); return; }
   if (mode === MODE_PROJECTS) endProjectHold(true);
@@ -1796,14 +1797,13 @@ function renderGrid() {
   // Close × button — top-right of the surface, exits to L0.
   surfaceEl.appendChild(createSurfaceCloseButton(() => exitToProjects()));
 
-  // Fixed 4×2 layout — matches the project picker on L0.
-  const cols = 4, rows = 2;
+  // 4 columns; rows grow to fit (up to 3) and every row divides the height
+  // equally via --grid-rows (set below, once the tile count is known).
+  const cols = 4, MAX_ROWS = 3;
   const grid = document.createElement('div');
   grid.className = 'agent-grid';
   grid.style.setProperty('--grid-cols', cols);
-  grid.style.setProperty('--grid-rows', rows);
   grid._cols = cols;
-  grid._rows = rows;
 
   const projectColor = getProjectColor(activeProject);
   const tileEls = activeProject.agents.map((a, i) => {
@@ -1825,15 +1825,15 @@ function renderGrid() {
     return tile;
   });
 
-  // "+ Add agent" tile — last cell when room remains (cap at cols*rows).
-  if (tileEls.length < cols * rows) {
+  // "+ Add agent" tile — last cell when room remains (cap at cols*MAX_ROWS).
+  if (tileEls.length < cols * MAX_ROWS) {
     const addIdx = tileEls.length;
     const addTile = document.createElement('div');
     addTile.className = 'agent-tile add-agent';
     addTile.dataset.addAgent = 'true';
     addTile.innerHTML = `
       <div class="add-symbol">+</div>
-      <div class="add-label">Add agent</div>`;
+      <div class="add-label">Add / remove agent</div>`;
     addTile.addEventListener('click', () => {
       gridIndex = addIdx;
       ring.set(tileEls.concat(addTile));
@@ -1844,6 +1844,12 @@ function renderGrid() {
     grid.appendChild(addTile);
     tileEls.push(addTile);
   }
+
+  // Rows = however many it takes to fit all tiles (min 2); 1fr each → equal
+  // heights across all rows, including a third row.
+  const rows = Math.max(2, Math.ceil(tileEls.length / cols));
+  grid.style.setProperty('--grid-rows', rows);
+  grid._rows = rows;
 
   surfaceEl.appendChild(grid);
   ring.set(tileEls);
@@ -2714,6 +2720,10 @@ function commitEditBubble() {
   submitIntent(t);
 }
 
+// Releasing Enter/Space stops hold-to-dictate (keyboard hold).
+editBubbleModalEl?.addEventListener('keyup', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && editDictating) { e.preventDefault(); endEditDictate(); }
+});
 editBubbleCancelEl?.addEventListener('click', () => closeEditBubbleModal());
 editBubbleSaveEl?.addEventListener('click', () => commitEditBubble());
 // Hold-to-dictate: press-and-hold with the pointer; a synthetic click (from a
@@ -2758,10 +2768,13 @@ editBubbleModalEl?.addEventListener('keydown', (e) => {
   }
   // Enter on a button activates that button; the textarea passes
   // bare Enter through so the user can type newlines normally.
-  if (e.key === 'Enter' && !inTextarea && active && active.tagName === 'BUTTON') {
+  if ((e.key === 'Enter' || e.key === ' ') && !inTextarea && active === editBubbleDictateEl) {
     e.preventDefault(); e.stopPropagation();
-    if (active === editBubbleDictateEl) toggleEditDictate();  // Enter to start, Enter to stop
-    else active.click();
+    if (!e.repeat) startEditDictate();   // hold to dictate; keyup (below) stops it
+    return;
+  }
+  if (e.key === 'Enter' && !inTextarea && active && active.tagName === 'BUTTON') {
+    e.preventDefault(); e.stopPropagation(); active.click();
     return;
   }
   // Down / Right / Up / Left walks the focus list. Inside the
@@ -2805,7 +2818,7 @@ function handleEditBubbleGamepad(button) {
   if (button === 'cross') {
     if (active === editBubbleCancelEl) { closeEditBubbleModal(); return; }
     if (active === editBubbleSaveEl)   { commitEditBubble();    return; }
-    if (active === editBubbleDictateEl) { toggleEditDictate();  return; }  // tap to start, tap to stop
+    if (active === editBubbleDictateEl) { startEditDictate();   return; }  // hold to dictate (release stops, below)
     if (active && active.tagName === 'BUTTON') { active.click(); return; }
     // Default cross when textarea is focused: commit.
     commitEditBubble();
@@ -5302,6 +5315,10 @@ window.addEventListener('keydown', (e) => {
   // handler take care of Esc / Tab / arrows / Enter. Notifications too, so
   // Esc only closes the menu rather than also triggering Back.
   if (settingsOpen || editBubbleOpen || confirmCancelOpen || projectEditOpen || notificationsOpen) return;
+
+  // Escape is a one-shot back action — ignore auto-repeat. Otherwise a held Esc
+  // fires repeated keydowns that over-navigate (e.g. add-agent → L1 → L0).
+  if (e.key === 'Escape' && e.repeat) { e.preventDefault(); return; }
 
   // Reasoning-effort picker: hold R, nudge ↑/↓, release R to set.
   const _typing = document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
