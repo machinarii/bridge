@@ -238,10 +238,18 @@
     <div class="settings-card">
       <h3 id="edit-bubble-title">Edit prompt</h3>
       <p class="settings-meta">Rewrite the prompt and re-run it. Use the dictate button to use voice.</p>
-      <textarea id="edit-bubble-text" rows="4" placeholder="Type or dictate a new prompt"></textarea>
+      <div class="edit-bubble-textwrap">
+        <textarea id="edit-bubble-text" rows="4" placeholder="Type or dictate a new prompt"></textarea>
+        <div class="edit-bubble-dots" aria-hidden="true">
+          <span class="typing-dots"><span></span><span></span><span></span></span>
+        </div>
+      </div>
       <div class="settings-row edit-bubble-row">
         <button type="button" id="edit-bubble-cancel">Cancel</button>
-        <button type="button" id="edit-bubble-dictate">Dictate</button>
+        <button type="button" id="edit-bubble-dictate">
+          <span class="dictate-label">Hold to dictate</span>
+          <span class="dictate-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        </button>
         <button type="button" id="edit-bubble-save">Save and run</button>
       </div>
     </div>
