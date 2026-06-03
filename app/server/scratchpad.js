@@ -74,6 +74,17 @@ export function appendTurn(agentId, role, content) {
   return r;
 }
 
+/* Drop messages from `index` onward (keep messages[0..index-1]). Used by the
+ * "redo" affordance to remove a prompt + its response before regenerating. */
+export function truncateFrom(agentId, index) {
+  const r = record(agentId);
+  if (index < 0 || index >= r.messages.length) return r;
+  r.messages = r.messages.slice(0, index);
+  r.updatedAt = Date.now();
+  save();
+  return r;
+}
+
 export function setLastSpec(agentId, spec) {
   const r = record(agentId);
   r.lastSpec = spec;

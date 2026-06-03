@@ -2423,8 +2423,19 @@ async function retryBubble(i) {
   if (!m || m.role !== 'user') return;
   const text = String(m.content || '').replace(/^\[team-voice\]\s*/, '').trim();
   if (!text) return;
+  const agent = currentAgent();
+  if (!agent) return;
   leaveBubbleFocus();
-  submitIntent(text);
+  // Remove this prompt and the agent's response (and anything after) so redo
+  // regenerates a fresh answer rather than appending a duplicate exchange.
+  try {
+    await fetch(`/projects/${activeProject.id}/agents/${agent.id}/history/truncate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index: i }),
+    });
+  } catch { /* fall through — submitIntent still resubmits */ }
+  submitIntent(text);   // re-appends the prompt + a new response
 }
 
 /* ---------- Confirm-cancel modal ----------
