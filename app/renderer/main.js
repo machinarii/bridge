@@ -1871,6 +1871,11 @@ async function ensureRolesLoaded() {
 
 async function openAddAgentPicker() {
   if (!activeProject) return;
+  // Set the mode SYNCHRONOUSLY, before any await — otherwise during the
+  // /roles fetch `mode` stays MODE_GRID, and a Back/Esc in that window hits the
+  // grid's circle→exitToProjects (which goes to L0 *and* nulls activeProject).
+  mode = MODE_ADD_AGENT;
+  document.body.dataset.mode = mode;
   // Use cached roles when available so the picker renders synchronously and the
   // zoom morph hands off cleanly into it (the enterZoom add-agent branch
   // prefetches before the morph). Falls back to a fetch on a cold cache.
@@ -1880,6 +1885,8 @@ async function openAddAgentPicker() {
   // (cannot be removed from this screen).
   const available = (window._roles || []).filter(r => !usedRoles.has(r.id));
   if (available.length === 0) {
+    mode = MODE_GRID; document.body.dataset.mode = mode;   // nothing to add — stay on the grid
+    renderGrid();
     setIndicator('error', 'No roles left to add');
     setTimeout(() => setIndicator('idle', 'Connected'), 1500);
     return;
@@ -2448,7 +2455,7 @@ async function renderChatHistory(container, agent) {
 function chatScrollEl() { return surfaceEl?.querySelector?.('.chat-scroll') || null; }
 const TYPING_DOTS = '<span class="typing-dots" aria-label="listening"><span></span><span></span><span></span></span>';
 function showPendingBubble() {
-  if (mode !== MODE_ZOOM) return;
+  if (mode !== MODE_ZOOM || editBubbleOpen) return;   // not while dictating into the edit-prompt modal
   const chat = chatScrollEl();
   if (!chat) return;
   if (!pendingUserBubbleEl || !chat.contains(pendingUserBubbleEl)) {
@@ -2673,10 +2680,31 @@ function openEditBubbleModal(i) {
 }
 
 function closeEditBubbleModal() {
+  if (editDictating) endEditDictate();
   editBubbleModalEl.hidden = true;
   editBubbleOpen = false;
   editBubbleTargetIdx = -1;
 }
+
+/* "Hold to dictate": while held, the button plays a mic-wave (its label hides)
+ * and the textarea's text is hidden behind a centered "…" animation. On
+ * release we stop recording; the transcript drops into the textarea. */
+let editDictating = false;
+function startEditDictate() {
+  if (!editBubbleOpen || editDictating) return;
+  editDictating = true;
+  editBubbleDictateEl?.classList.add('dictating');
+  editBubbleTextEl?.closest('.edit-bubble-textwrap')?.classList.add('dictating');
+  startPTT();
+}
+function endEditDictate() {
+  if (!editDictating) return;
+  editDictating = false;
+  editBubbleDictateEl?.classList.remove('dictating');
+  editBubbleTextEl?.closest('.edit-bubble-textwrap')?.classList.remove('dictating');
+  endPTT();
+}
+function toggleEditDictate() { editDictating ? endEditDictate() : startEditDictate(); }
 
 function commitEditBubble() {
   const t = editBubbleTextEl.value.trim();
@@ -2688,7 +2716,13 @@ function commitEditBubble() {
 
 editBubbleCancelEl?.addEventListener('click', () => closeEditBubbleModal());
 editBubbleSaveEl?.addEventListener('click', () => commitEditBubble());
-editBubbleDictateEl?.addEventListener('click', () => startPTT());
+// Hold-to-dictate: press-and-hold with the pointer; a synthetic click (from a
+// mouse tap) is harmless since it has no handler. Keyboard/gamepad toggle it
+// via their own handlers below.
+editBubbleDictateEl?.addEventListener('pointerdown', (e) => { e.preventDefault(); startEditDictate(); });
+editBubbleDictateEl?.addEventListener('pointerup',   () => endEditDictate());
+editBubbleDictateEl?.addEventListener('pointercancel', () => endEditDictate());
+editBubbleDictateEl?.addEventListener('pointerleave', () => { if (editDictating) endEditDictate(); });
 /* Focusables inside the edit-bubble modal, in visual order. Same
  * keyboard / d-pad model as the settings modal. */
 function editBubbleFocusables() {
@@ -2725,7 +2759,9 @@ editBubbleModalEl?.addEventListener('keydown', (e) => {
   // Enter on a button activates that button; the textarea passes
   // bare Enter through so the user can type newlines normally.
   if (e.key === 'Enter' && !inTextarea && active && active.tagName === 'BUTTON') {
-    e.preventDefault(); e.stopPropagation(); active.click();
+    e.preventDefault(); e.stopPropagation();
+    if (active === editBubbleDictateEl) toggleEditDictate();  // Enter to start, Enter to stop
+    else active.click();
     return;
   }
   // Down / Right / Up / Left walks the focus list. Inside the
@@ -2769,6 +2805,7 @@ function handleEditBubbleGamepad(button) {
   if (button === 'cross') {
     if (active === editBubbleCancelEl) { closeEditBubbleModal(); return; }
     if (active === editBubbleSaveEl)   { commitEditBubble();    return; }
+    if (active === editBubbleDictateEl) { toggleEditDictate();  return; }  // tap to start, tap to stop
     if (active && active.tagName === 'BUTTON') { active.click(); return; }
     // Default cross when textarea is focused: commit.
     commitEditBubble();
