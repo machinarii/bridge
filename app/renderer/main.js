@@ -2058,6 +2058,7 @@ let chatBubbles = [];      // DOM nodes in order
 let chatBubbleIdx = -1;    // -1 = not in chat
 let chatMessages = [];     // last-fetched message records
 let pendingUserBubbleEl = null;  // optimistic "you" bubble shown while holding to talk
+let pendingAgentBubbleEl = null; // "…" agent bubble shown the instant a prompt is submitted
 
 function formatBubbleTime(at) {
   if (!at) return '';
@@ -2159,7 +2160,8 @@ async function renderChatHistory(container, agent) {
   chatBubbles = [];
   chatBubbleIdx = -1;
   chatMessages = [];
-  pendingUserBubbleEl = null;   // the optimistic bubble (if any) was just cleared by innerHTML = ''
+  pendingUserBubbleEl = null;   // the optimistic bubbles (if any) were just cleared by innerHTML = ''
+  pendingAgentBubbleEl = null;
   try {
     const r = await fetch(`/projects/${activeProject.id}/agents/${agent.id}/history`);
     if (!r.ok) return;
@@ -2312,6 +2314,26 @@ function updatePendingBubble(text) {
 function clearPendingBubble() {
   if (pendingUserBubbleEl) { try { pendingUserBubbleEl.remove(); } catch {} }
   pendingUserBubbleEl = null;
+}
+/* Drop an agent "…" bubble the instant a prompt is submitted, so the reply
+ * feels immediate. The streaming bubble reuses it (dots → tokens); on a
+ * non-streamed reply the history re-render replaces it. */
+function showPendingAgentBubble() {
+  if (mode !== MODE_ZOOM) return;
+  const chat = chatScrollEl();
+  if (!chat) return;
+  if (!pendingAgentBubbleEl || !chat.contains(pendingAgentBubbleEl)) {
+    const b = document.createElement('div');
+    b.className = 'bubble agent pending';
+    b.innerHTML = `<div class="bubble-content">${TYPING_DOTS}</div>`;
+    chat.appendChild(b);
+    pendingAgentBubbleEl = b;
+  }
+  chat.scrollTop = chat.scrollHeight;
+}
+function clearPendingAgentBubble() {
+  if (pendingAgentBubbleEl) { try { pendingAgentBubbleEl.remove(); } catch {} }
+  pendingAgentBubbleEl = null;
 }
 
 function paintBubbleFocus() {
@@ -3019,12 +3041,23 @@ function appendStreamToken(agentId, delta) {
   const chat = surfaceEl.querySelector('.chat-scroll');
   if (!chat) return;
   if (!streamingBubbleEl) {
-    const b = document.createElement('div');
-    b.className = 'bubble agent streaming';
-    const c = document.createElement('div');
-    c.className = 'bubble-content';
-    b.appendChild(c);
-    chat.appendChild(b);
+    let c;
+    if (pendingAgentBubbleEl && chat.contains(pendingAgentBubbleEl)) {
+      // Reuse the "…" bubble: swap dots for streamed text (seamless).
+      const b = pendingAgentBubbleEl;
+      pendingAgentBubbleEl = null;
+      b.classList.remove('pending');
+      b.classList.add('streaming');
+      c = b.querySelector('.bubble-content');
+      c.textContent = '';
+    } else {
+      const b = document.createElement('div');
+      b.className = 'bubble agent streaming';
+      c = document.createElement('div');
+      c.className = 'bubble-content';
+      b.appendChild(c);
+      chat.appendChild(b);
+    }
     streamingBubbleEl = c;
   }
   streamingText += delta;
@@ -5327,6 +5360,9 @@ async function submitIntent(text) {
   // Lock the optimistic bubble to the final transcript while the agent thinks
   // (it's replaced by the persisted bubble when history re-renders).
   if (pendingUserBubbleEl) { pendingUserBubbleEl.classList.remove('pending'); updatePendingBubble(text); }
+  // Immediately show an agent "…" bubble so the reply feels instant; the
+  // streaming bubble reuses it (or the history re-render replaces it).
+  showPendingAgentBubble();
   if (inflightController) inflightController.abort();
   inflightController = new AbortController();
   const myCtl = inflightController;
@@ -5354,6 +5390,7 @@ async function submitIntent(text) {
   } catch (err) {
     if (err.name === 'AbortError') return;
     console.error(err);
+    clearPendingAgentBubble();
     setIndicator('error', 'Request failed');
   } finally {
     agentBusy[targetId] = false;
