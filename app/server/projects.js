@@ -9,11 +9,11 @@
  *   app/state/<projectId>/notes/
  */
 
-import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, renameSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRole, listRoles } from './roles.js';
-import { generateProjectCharters } from './charters.js';
+import { generateProjectCharters, charterFileNameFor, legacyCharterFileNames } from './charters.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE_DIR = resolve(__dirname, '..', 'state');
@@ -215,7 +215,7 @@ export function removeAgent(projectId, agentId) {
   save();
   // Remove the agent's charter file so the explorer doesn't show a stale entry.
   try {
-    const charterPath = resolve(STATE_DIR, projectId, 'roles', `${agent.role}.md`);
+    const charterPath = resolve(STATE_DIR, projectId, 'roles', charterFileNameFor(agent.role));
     if (existsSync(charterPath)) rmSync(charterPath);
   } catch (err) { console.warn(`[removeAgent] charter cleanup failed: ${err.message}`); }
   return { project: p, removedRole: agent.role };
@@ -253,6 +253,35 @@ export function deleteProject(id) {
   // Remove the project's on-disk state (project.md, notes, charters, git repo).
   try { rmSync(resolve(STATE_DIR, id), { recursive: true, force: true }); } catch {}
   return { ok: true, id, name: removed.name };
+}
+
+/* Rename per-project charter files to the current canonical name. Charters
+ * have been stored as <roleId>.md and later role-<label>.md; this brings any
+ * such file up to whatever charterFileNameFor() now returns (e.g. the short
+ * role-sw-eng.md). Safe and idempotent: only renames when a legacy file exists
+ * and the canonical one doesn't, so re-running it is a no-op. */
+export function migrateCharterFilenames() {
+  let renamed = 0;
+  for (const p of load().projects) {
+    const dir = resolve(STATE_DIR, p.id, 'roles');
+    if (!existsSync(dir)) continue;
+    for (const a of (p.agents || [])) {
+      let canonical;
+      try { canonical = charterFileNameFor(a.role); } catch { continue; }
+      const newPath = resolve(dir, canonical);
+      if (existsSync(newPath)) continue;              // already canonical
+      for (const legacy of legacyCharterFileNames(a.role)) {
+        if (legacy === canonical) continue;
+        const oldPath = resolve(dir, legacy);
+        if (!existsSync(oldPath)) continue;
+        try { renameSync(oldPath, newPath); renamed++; }
+        catch (err) { console.warn(`[migrateCharterFilenames] ${oldPath}: ${err.message}`); }
+        break;
+      }
+    }
+  }
+  if (renamed) console.log(`[migrateCharterFilenames] renamed ${renamed} charter file(s) to canonical names`);
+  return renamed;
 }
 
 // For tests — clear in-memory cache so tests re-reading disk see fresh state

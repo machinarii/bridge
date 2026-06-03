@@ -3059,8 +3059,20 @@ let localRecChunks = [];
   }
 })();
 
+// On release we keep capturing for a short tail so the last word isn't clipped.
+const VOICE_TAIL_MS = 200;
+let _pttTailTimer = null;
+
 function startPTT() {
   if (pttActive) return;
+  // Re-pressed within the release tail — cancel the pending stop and keep the
+  // same capture running rather than starting a fresh one.
+  if (_pttTailTimer) {
+    clearTimeout(_pttTailTimer); _pttTailTimer = null;
+    pttActive = true;
+    setPttHeld(true);
+    return;
+  }
   if (!editBubbleOpen && !PTT_MODES.has(mode)) return;
   pttActive = true;
   // Drop any footer-rail selection while holding to talk. Otherwise the
@@ -3093,8 +3105,14 @@ function endPTT() {
   if (!pttActive) return;
   pttActive = false;
   setPttHeld(false);
-  if (localRecorder) { stopLocalRecording(); return; }
-  if (speech.supported) speech.stop();
+  // Defer the actual stop by a short tail so trailing speech still lands. A
+  // re-press within the window cancels this (see startPTT) and keeps recording.
+  if (_pttTailTimer) clearTimeout(_pttTailTimer);
+  _pttTailTimer = setTimeout(() => {
+    _pttTailTimer = null;
+    if (localRecorder) { stopLocalRecording(); return; }
+    if (speech.supported) speech.stop();
+  }, VOICE_TAIL_MS);
 }
 
 /* Toggle the "held" highlight on the push-to-talk control so it stays lit for
@@ -4280,6 +4298,13 @@ fileViewerCloseEl?.addEventListener('keydown', (e) => {
     closeFileViewer();
     return;
   }
+  if (e.key === 'ArrowDown') {
+    // Down from the × returns focus to the text container.
+    e.preventDefault(); e.stopPropagation();
+    fileViewerCloseEl.blur();
+    setViewerBodyFocus(true);
+    return;
+  }
   if (e.key === 'ArrowRight') {
     e.preventDefault(); e.stopPropagation();
     fileViewerCloseEl.blur();
@@ -4305,7 +4330,8 @@ function rebuildFileEntries() {
     if (folderState[key]) {
       for (const f of files) {
         const li = document.createElement('div');
-        li.className = 'file-entry';
+        // `in-folder` indents the entry so it reads as nested under its folder.
+        li.className = 'file-entry in-folder';
         fileRender(li, f);
         fileTreeEl.appendChild(li);
         fileEntries.push(li);
@@ -4314,7 +4340,9 @@ function rebuildFileEntries() {
   };
 
   addFolder('charters', 'Charters', fileTree.charters, (li, c) => {
-    li.innerHTML = `<span>${escapeHtml(c.roleId)}.md</span><span class="who">${escapeHtml(c.agentName)}</span>`;
+    // Show the actual on-disk filename (role-<label>.md, no underscores).
+    const fname = c.path.replace(/^roles\//, '');
+    li.innerHTML = `<span>${escapeHtml(fname)}</span><span class="who">${escapeHtml(c.agentName)}</span>`;
     li.dataset.path = c.path;
   });
   addFolder('notes', 'Notes', fileTree.notes, (li, n) => {
@@ -4331,7 +4359,7 @@ function rebuildFileEntries() {
     fileEntries.push(head);
     if (folderState[uf.key]) {
       const empty = document.createElement('div');
-      empty.className = 'file-entry';
+      empty.className = 'file-entry in-folder';
       empty.style.opacity = '0.5';
       empty.style.fontStyle = 'italic';
       empty.textContent = '(empty)';
@@ -4377,9 +4405,16 @@ async function openFocusedFile() {
 function showFileViewer(path, body) {
   fileViewerPathEl.textContent = path;
   fileViewerBodyEl.textContent = body;
+  fileViewerBodyEl.scrollTop = 0;
   fileViewerEl.hidden = false;
   fileViewerOpen = true;
   document.body.dataset.fileViewer = 'open';
+  // Opening a file highlights the text container: the right stick now scrolls
+  // it, and Up jumps to the × button. Hand focus over from the explorer.
+  explorerFocused = false;
+  fileEntries.forEach(el => el.classList.remove('focused'));
+  setSurfaceCloseFocus(false);
+  setViewerBodyFocus(true);
 }
 
 function closeFileViewer() {
@@ -4387,6 +4422,7 @@ function closeFileViewer() {
   fileViewerOpen = false;
   document.body.dataset.fileViewer = 'closed';
   setSurfaceCloseFocus(false);
+  setViewerBodyFocus(false);
 }
 
 /** When the user arrows right off the viewer × button, the surface
@@ -4395,6 +4431,15 @@ let surfaceCloseFocused = false;
 function setSurfaceCloseFocus(on) {
   surfaceCloseFocused = !!on;
   document.body.dataset.surfaceCloseFocus = on ? 'true' : 'false';
+}
+
+// True while the file viewer's text container holds focus. In this state the
+// right stick scrolls the body and Up moves focus to the viewer's × button.
+let viewerBodyFocused = false;
+function setViewerBodyFocus(on) {
+  viewerBodyFocused = !!on;
+  if (fileViewerBodyEl) fileViewerBodyEl.classList.toggle('focused', viewerBodyFocused);
+  document.body.dataset.viewerBody = viewerBodyFocused ? 'true' : 'false';
 }
 function currentAgent() { return activeProject?.agents?.[zoomedIndex] || null; }
 
@@ -4493,6 +4538,25 @@ gp.addEventListener('press', (e) => {
                           document.getElementById('notification-btn')?.focus();
                           return; }
     return;
+  }
+
+  // File viewer text container holds focus: the right stick scrolls it (see the
+  // rstick listener). The d-pad Up jumps to the × button, Down nudge-scrolls,
+  // Left returns to the explorer, Circle closes.
+  if (viewerBodyFocused) {
+    if (b === 'up')     { setViewerBodyFocus(false); fileViewerCloseEl?.focus(); return; }
+    if (b === 'down')   { fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
+    if (b === 'cross')  { fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
+    if (b === 'left')   { if (fileExplorerOpen) { setViewerBodyFocus(false); explorerFocused = true; paintFileFocus(); } return; }
+    if (b === 'right')  { return; }
+    if (b === 'circle') { closeFileViewer(); return; }
+  }
+  // The viewer × button holds DOM focus (reached via Up from the body):
+  // Cross/Circle close it, Down returns to the body.
+  if (fileViewerOpen && document.activeElement === fileViewerCloseEl) {
+    if (b === 'cross' || b === 'circle') { closeFileViewer(); return; }
+    if (b === 'down')  { fileViewerCloseEl.blur(); setViewerBodyFocus(true); return; }
+    if (b === 'up' || b === 'left' || b === 'right') return;
   }
 
   // While the × close button holds focus (reached via Up from the first row),
@@ -4690,14 +4754,19 @@ const RSCROLL_DECEL = 0.08;  // ease back to 0 after release (lower = longer gli
 let _rstickY = 0;            // latest stick deflection (-1..1)
 let _rscrollVel = 0;         // current scroll velocity (px/frame)
 let _rscrollRAF = null;
+function _rstickScroller() {
+  // The right stick scrolls the focused file-viewer body, otherwise the chat.
+  if (viewerBodyFocused && fileViewerOpen) return fileViewerBodyEl;
+  return mode === MODE_ZOOM ? surfaceEl?.querySelector?.('.chat-scroll') : null;
+}
 function _rscrollTick() {
-  const chat = mode === MODE_ZOOM ? surfaceEl?.querySelector?.('.chat-scroll') : null;
-  if (!chat) { _rscrollVel = 0; _rstickY = 0; _rscrollRAF = null; return; }
+  const scroller = _rstickScroller();
+  if (!scroller) { _rscrollVel = 0; _rstickY = 0; _rscrollRAF = null; return; }
   const target = _rstickY * RSCROLL_MAX;
   const rate = Math.abs(target) > Math.abs(_rscrollVel) ? RSCROLL_ACCEL : RSCROLL_DECEL;
   _rscrollVel += (target - _rscrollVel) * rate;
   if (target === 0 && Math.abs(_rscrollVel) < 0.3) { _rscrollVel = 0; _rscrollRAF = null; return; }
-  chat.scrollBy({ top: _rscrollVel, left: 0, behavior: 'instant' });
+  scroller.scrollBy({ top: _rscrollVel, left: 0, behavior: 'instant' });
   _rscrollRAF = requestAnimationFrame(_rscrollTick);
 }
 gp.addEventListener('rstick', (e) => {
@@ -4710,7 +4779,7 @@ gp.addEventListener('rstick', (e) => {
     else if (Math.abs(y) < 0.3) _rstickLatch = 0;
     return;
   }
-  _rstickY = mode === MODE_ZOOM ? (e.detail?.y || 0) : 0;
+  _rstickY = _rstickScroller() ? (e.detail?.y || 0) : 0;
   if (_rscrollRAF == null && (_rstickY || _rscrollVel)) _rscrollRAF = requestAnimationFrame(_rscrollTick);
 });
 
@@ -5560,6 +5629,18 @@ window.addEventListener('keydown', (e) => {
       return;
     }
     if (e.key === 'Escape') { e.preventDefault(); goBackInCreateFlow(); return; }
+  }
+
+  // Viewer text container holds focus — Up jumps to the × button, Left hops
+  // back into the explorer, Down/Up arrows nudge-scroll, Esc closes.
+  if (viewerBodyFocused) {
+    if (e.key === 'ArrowUp')    { e.preventDefault(); setViewerBodyFocus(false); fileViewerCloseEl?.focus(); return; }
+    if (e.key === 'ArrowDown')  { e.preventDefault(); fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
+    if (e.key === 'ArrowLeft' && fileExplorerOpen) {
+      e.preventDefault(); setViewerBodyFocus(false); explorerFocused = true; paintFileFocus(); return;
+    }
+    if (e.key === 'Enter')      { e.preventDefault(); fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
+    if (e.key === 'Escape')     { e.preventDefault(); closeFileViewer(); return; }
   }
 
   // Surface holds "close viewer" focus — Enter closes; Left returns to ×.

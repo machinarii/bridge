@@ -7,7 +7,8 @@ import { listRoles } from './roles.js';
 import { getRouterModel } from './models.js';
 import { listSkills, getSkill, withSkillEnabled } from './skills.js';
 import { githubStatus, startDeviceFlow, disconnectGithub, setGithubPersist, detectAndStore } from './github.js';
-import { listProjects, getProject, createProject, setAgentEnabled, addAgent, removeAgent, renameProject, deleteProject } from './projects.js';
+import { listProjects, getProject, createProject, setAgentEnabled, addAgent, removeAgent, renameProject, deleteProject, migrateCharterFilenames } from './projects.js';
+import { charterFileNameFor } from './charters.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, getContext, lastActivityAt, truncateFrom } from './scratchpad.js';
@@ -415,7 +416,7 @@ app.delete('/projects/:pid/agents/:aid', (req, res) => {
     const { project: p, removedRole } = removeAgent(req.params.pid, req.params.aid);
     notifyStateChange(p.id, 'Agent removed');
     // Tell the renderer the charter file is gone so the explorer drops it.
-    if (removedRole) publishEvent({ type: 'file_removed', projectId: p.id, kind: 'charter', file: `${removedRole}.md` });
+    if (removedRole) publishEvent({ type: 'file_removed', projectId: p.id, kind: 'charter', file: charterFileNameFor(removedRole) });
     publishEvent({ type: 'notification', kind: 'info', projectId: p.id, title: 'Agent removed', body: `An agent left ${p.name}.` });
     res.json(p);
   } catch (err) {
@@ -517,13 +518,13 @@ app.get('/projects/:pid/files', (req, res) => {
   const charters = readdirSync(resolve(projDir, 'roles'))
     .filter(f => f.endsWith('.md'))
     .map(f => {
-      const roleId = f.replace(/\.md$/, '');
-      const agent = p.agents.find(a => a.role === roleId);
-      return { ...fileEntry(resolve(projDir, 'roles', f), 'charter'), roleId, agentName: agent?.name || '' };
+      // Charter files are named role-<label>.md — match each back to its agent.
+      const agent = p.agents.find(a => charterFileNameFor(a.role) === f);
+      return { ...fileEntry(resolve(projDir, 'roles', f), 'charter'), roleId: agent?.role || null, agentName: agent?.name || '' };
     })
     // Only surface charters for agents currently on the project — drop any
     // orphaned charter left by a removed agent so the explorer matches the team.
-    .filter(c => p.agents.some(a => a.role === c.roleId));
+    .filter(c => c.roleId);
   const notes = readdirSync(resolve(projDir, 'notes'))
     .filter(f => f.endsWith('.md'))
     .sort().reverse()
@@ -556,6 +557,7 @@ app.get('/projects/:pid/file/*', (req, res) => {
 
 migrateLegacyOnce();
 rescheduleAutosave();
+migrateCharterFilenames();
 
 app.listen(PORT, () => {
   console.log(`[bridge] orchestrator listening on http://localhost:${PORT}`);
