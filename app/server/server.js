@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from '
 import { listRoles } from './roles.js';
 import { getRouterModel } from './models.js';
 import { listSkills, getSkill, withSkillEnabled } from './skills.js';
-import { githubStatus, startDeviceFlow, disconnectGithub, setGithubPersist } from './github.js';
+import { githubStatus, startDeviceFlow, disconnectGithub, setGithubPersist, detectAndStore } from './github.js';
 import { listProjects, getProject, createProject, setAgentEnabled, addAgent, renameProject, deleteProject } from './projects.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
@@ -250,6 +250,13 @@ setGithubPersist(({ token, login }) =>
   writeEnvFile({ GITHUB_TOKEN: token || '', GITHUB_LOGIN: login || '' }));
 
 app.get('/github', (_req, res) => res.json(githubStatus()));
+
+// Try to connect from an existing local token (gh CLI / git keychain). No-op
+// if already connected or nothing valid is found.
+app.post('/github/detect', async (_req, res) => {
+  try { res.json(await detectAndStore()); }
+  catch (err) { res.status(500).json({ error: String(err?.message || err) }); }
+});
 
 app.post('/github/device', async (_req, res) => {
   try {

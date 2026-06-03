@@ -4399,8 +4399,15 @@ function renderGithubStatus(st) {
 }
 
 async function refreshGithubStatus() {
+  // Show current status immediately…
   try {
     const r = await fetch('/github');
+    if (r.ok) renderGithubStatus(await r.json());
+  } catch {}
+  // …then auto-detect an existing local token (gh CLI / git keychain) in the
+  // background; flips to "Connected as …" if one is found.
+  try {
+    const r = await fetch('/github/detect', { method: 'POST' });
     if (r.ok) renderGithubStatus(await r.json());
   } catch {}
 }
