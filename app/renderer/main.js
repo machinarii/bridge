@@ -4180,7 +4180,13 @@ gp.addEventListener('press', (e) => {
     const closeBtn = surfaceEl.querySelector('.surface-close');
     if (closeBtn && document.activeElement === closeBtn) {
       if (b === 'cross')      { closeBtn.click(); return; }
-      if (b === 'down')       { closeBtn.blur(); ring.paint(); return; }
+      if (b === 'down')       {
+        closeBtn.blur();
+        // On L2, Down returns to the chat (oldest bubble) it came from.
+        if (mode === MODE_ZOOM && chatBubbles.length) focusFirstBubble();
+        else ring.paint();
+        return;
+      }
       if (b === 'up' || b === 'left' || b === 'right') { bumpEdge(closeBtn, b, 5); return; }
       closeBtn.blur(); ring.paint(); return;
     }
@@ -4241,7 +4247,11 @@ gp.addEventListener('press', (e) => {
     // focused, Up/Down walk bubbles, Left/Right cycle a bubble's action icons,
     // Cross activates, Down past the last bubble (or Circle) drops back out.
     if (isBubbleFocused()) {
-      if (b === 'up')     { moveBubbleFocus(-1); return; }
+      if (b === 'up')     {
+        if (chatBubbleIdx <= 0) { leaveBubbleFocus(); if (!focusSurfaceClose()) bumpEdge(chatScrollEl(), 'up', 6); }
+        else moveBubbleFocus(-1);
+        return;
+      }
       if (b === 'down')   {
         if (chatBubbleIdx >= chatBubbles.length - 1) {
           leaveBubbleFocus();
@@ -5238,7 +5248,12 @@ window.addEventListener('keydown', (e) => {
     // history at the last bubble; once inside, ArrowUp/Down walks
     // bubbles, Left/Right cycles their action icons, Enter activates.
     if (isBubbleFocused()) {
-      if (e.key === 'ArrowUp')   { e.preventDefault(); moveBubbleFocus(-1); return; }
+      if (e.key === 'ArrowUp')   {
+        e.preventDefault();
+        if (chatBubbleIdx <= 0) { leaveBubbleFocus(); if (!focusSurfaceClose()) bumpEdge(chatScrollEl(), 'up', 6); }
+        else moveBubbleFocus(-1);
+        return;
+      }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         if (chatBubbleIdx >= chatBubbles.length - 1) {
