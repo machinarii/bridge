@@ -2107,6 +2107,10 @@ async function enterZoom(specOverride) {
     await ensureRolesLoaded();   // prefetch so the picker renders synchronously inside the morph
     const addTile = ring.current();
     const addRect = addTile?.getBoundingClientRect();
+    // Switch mode before the morph so a Back pressed during/after the morph
+    // routes to the add-agent handler (→ L1 grid), not the grid's circle
+    // handler (→ L0). openAddAgentPicker re-sets it at the handoff.
+    mode = MODE_ADD_AGENT;
     await forwardMorph(addTile, addRect, surfaceContentRect(), () => openAddAgentPicker());
     return;
   }
@@ -3768,6 +3772,9 @@ function clearAllNotifications() {
 document.getElementById('notification-btn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   toggleNotificationMenu();
+  // Land focus on the first entry when opening (parity with the keyboard path),
+  // so the next Cross/Enter acts on a notification rather than re-closing.
+  if (notificationsOpen) setTimeout(() => focusFirstNotifEntry(), 0);
 });
 document.getElementById('notification-btn')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') {
