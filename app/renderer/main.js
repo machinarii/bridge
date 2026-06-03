@@ -2240,6 +2240,12 @@ function renderZoom(specOverride) {
     renderActionBar([]);
     ring.set([]);
     _setL2Shortcuts();
+    // The PM's kickoff plan is appended to chat history but isn't carried
+    // as a client-side lastSpec on a fresh L2 open (GET /projects/history
+    // don't ship lastSpec). When the lead is awaiting kickoff approval,
+    // surface the plan's Approve/Revise actions from the latest history
+    // turn so the user can act on it. Runs after the async history load.
+    surfaceKickoffActions(agent);
     return;
   }
 
@@ -2263,6 +2269,42 @@ function renderZoom(specOverride) {
     renderActionBar([]);
     ring.set([]);
     if (spec.body && !specOverride?._silent) speak(spec.body, { agentId: agent.id });
+  }
+  _setL2Shortcuts();
+}
+
+/* When the lead's L2 opens with no live lastSpec but the project's kickoff
+ * is awaiting approval, the PM's plan turn lives only in chat history. Pull
+ * the latest assistant turn that carries an `actions` array out of history
+ * and surface those actions (Approve / Revise) in the L2 action bar, wired
+ * to executeAction. No-op for non-lead agents or other kickoff states. */
+async function surfaceKickoffActions(agent) {
+  if (!activeProject || !agent) return;
+  if (agent.id !== activeProject.leadAgentId) return;
+  if (activeProject.kickoff?.status !== 'awaiting_approval') return;
+  let messages;
+  try {
+    const r = await fetch(`/projects/${activeProject.id}/agents/${agent.id}/history`);
+    if (!r.ok) return;
+    ({ messages } = await r.json());
+  } catch { return; }
+  // Bail if the user navigated away (or into a tile spec) while we awaited.
+  if (mode !== MODE_ZOOM || currentAgent()?.id !== agent.id) return;
+  if (currentAgent()?.lastSpec) return;
+  let planSpec = null;
+  for (let i = (messages || []).length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== 'assistant') continue;
+    try {
+      const parsed = JSON.parse(String(m.content || '').replace(/^```(?:json)?/i, '').replace(/```$/, '').trim());
+      if (Array.isArray(parsed?.actions) && parsed.actions.length) { planSpec = parsed; break; }
+    } catch { /* not a spec turn */ }
+  }
+  if (!planSpec) return;
+  const actionButtons = renderActionBar(planSpec.actions);
+  ring.set(actionButtons);
+  for (const btn of actionButtons) {
+    btn.addEventListener('click', () => executeAction(btn._action, planSpec));
   }
   _setL2Shortcuts();
 }
@@ -3042,6 +3084,29 @@ async function executeAction(action, sourceSpec) {
   const agent = currentAgent();
   if (!agent || !activeProject) return;
   if (type === 'cancel') { exitZoom(); return; }
+
+  if (type === 'approve_kickoff') {
+    setIndicator('thinking', 'Starting kickoff…');
+    try {
+      const r = await fetch(`/projects/${activeProject.id}/kickoff/approve`, { method: 'POST' });
+      if (!r.ok) throw new Error(await r.text());
+      // Reflect the new kickoff state locally so the plan's Approve action
+      // stops surfacing once we re-render the lead's L2.
+      if (activeProject.kickoff) activeProject.kickoff.status = 'running';
+      setIndicator('idle', 'Connected');
+      const chat = chatScrollEl();
+      if (chat) await renderChatHistory(chat, agent);
+      // The chat re-render replaces the action bar; clear the now-stale
+      // kickoff Approve/Revise affordances.
+      renderActionBar([]);
+      ring.set([]);
+      _setL2Shortcuts();
+    } catch (err) {
+      setIndicator('error', 'Kickoff failed');
+      console.error('[kickoff] approve failed:', err);
+    }
+    return;
+  }
 
   if (type === 'save_note') {
     const body = sourceSpec?.body || agent.lastSpec?.body;
