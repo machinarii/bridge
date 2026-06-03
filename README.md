@@ -7,6 +7,7 @@ It's built around **diverse input modalities**, so you can drive it however suit
 - **Voice** — hold to talk; speech-to-text runs **locally via Parakeet** (your audio never leaves the machine for transcription), and results are spoken back.
 - **Gamepad** — every on-screen action maps to a controller glyph to maximize input speed.
 - **Keyboard** — full parity with the controller.
+- **Trackpad / mouse** — click any tile, chip, or action to select; standard pointer navigation.
 - **Remote** *(planned)* — drive a Bridge session from a phone or second device.
 
 Agents are powered by **any model on OpenRouter** (choose a default and override per role), and **speech-to-text runs locally with the Parakeet model**. It runs as a macOS desktop app (Electron).
