@@ -1535,7 +1535,8 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   color: rgba(255,255,255,0.75);
   white-space: nowrap;
 }
-.agent-view .bubble.focused .bubble-actions {
+.agent-view .bubble.focused .bubble-actions,
+.agent-view .bubble.actions-open .bubble-actions {
   display: inline-flex;
 }
 .agent-view .bubble .bubble-action-row {
@@ -1543,7 +1544,8 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   align-items: center;
   gap: 0.5rem;
 }
-.agent-view .bubble.user.focused {
+.agent-view .bubble.user.focused,
+.agent-view .bubble.user.actions-open {
   /* Slide left just enough to clear the action row hanging off the
    * bubble's right edge (timestamp + two 38px icons + gaps). */
   transform: translateX(calc(-6.5rem + 32px));
