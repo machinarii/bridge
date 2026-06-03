@@ -1932,6 +1932,9 @@ async function openAddAgentPicker() {
   const off = allRoles.filter(r => !currentRoles.has(r.id))
     .sort((a, b) => a.label.localeCompare(b.label));
   const roles = [...onProject, ...off];
+  // The lead (PM) is locked and is the team's anchor — always pin it top-left.
+  const leadIdx = roles.findIndex(r => r.id === leadRole);
+  if (leadIdx > 0) { const [lead] = roles.splice(leadIdx, 1); roles.unshift(lead); }
 
   const wrap = document.createElement('section');
   wrap.className = 'role-picker';
@@ -4276,6 +4279,15 @@ function paintFileFocus() {
   fileEntries.forEach((el, i) => el.classList.toggle('focused', i === fileFocus));
 }
 
+/* Right off the explorer list. With the viewer open, hand focus to its text
+ * box; otherwise drop onto the main surface (first grid tile / agent view). */
+function exitExplorerRight() {
+  explorerFocused = false;
+  fileEntries.forEach(el => el.classList.remove('focused'));
+  if (fileViewerOpen) setViewerBodyFocus(true);
+  else ring.paint();
+}
+
 const fileViewerEl      = document.getElementById('file-viewer');
 const fileViewerPathEl  = fileViewerEl.querySelector('.file-viewer-path');
 const fileViewerBodyEl  = fileViewerEl.querySelector('.file-viewer-body');
@@ -4423,6 +4435,7 @@ function closeFileViewer() {
   document.body.dataset.fileViewer = 'closed';
   setSurfaceCloseFocus(false);
   setViewerBodyFocus(false);
+  setSurfaceContainerFocus(false);
 }
 
 /** When the user arrows right off the viewer × button, the surface
@@ -4440,6 +4453,16 @@ function setViewerBodyFocus(on) {
   viewerBodyFocused = !!on;
   if (fileViewerBodyEl) fileViewerBodyEl.classList.toggle('focused', viewerBodyFocused);
   document.body.dataset.viewerBody = viewerBodyFocused ? 'true' : 'false';
+}
+
+// True while the whole main surface container (agent grid / agent view) is
+// highlighted as one block — reached by arrowing right off the viewer body.
+// Enter drops into the surface; Left returns to the viewer body.
+let surfaceContainerFocused = false;
+function setSurfaceContainerFocus(on) {
+  surfaceContainerFocused = !!on;
+  surfaceEl.classList.toggle('container-focused', surfaceContainerFocused);
+  document.body.dataset.surfaceContainer = surfaceContainerFocused ? 'true' : 'false';
 }
 function currentAgent() { return activeProject?.agents?.[zoomedIndex] || null; }
 
@@ -4554,14 +4577,23 @@ gp.addEventListener('press', (e) => {
 
   // File viewer text container holds focus: the right stick scrolls it (see the
   // rstick listener). The d-pad Up jumps to the × button, Down nudge-scrolls,
-  // Left returns to the explorer, Circle closes.
+  // Left returns to the explorer, Right highlights the surface container,
+  // Circle closes.
   if (viewerBodyFocused) {
     if (b === 'up')     { setViewerBodyFocus(false); fileViewerCloseEl?.focus(); return; }
     if (b === 'down')   { fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
     if (b === 'cross')  { fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
     if (b === 'left')   { if (fileExplorerOpen) { setViewerBodyFocus(false); explorerFocused = true; paintFileFocus(); } return; }
-    if (b === 'right')  { return; }
+    if (b === 'right')  { setViewerBodyFocus(false); setSurfaceContainerFocus(true); return; }
     if (b === 'circle') { closeFileViewer(); return; }
+  }
+  // Whole surface container highlighted (right off the viewer body): Left
+  // returns to the body, Cross drops into the grid, Circle steps back.
+  if (surfaceContainerFocused) {
+    if (b === 'left')   { setSurfaceContainerFocus(false); if (fileViewerOpen) setViewerBodyFocus(true); else if (fileExplorerOpen) { explorerFocused = true; paintFileFocus(); } return; }
+    if (b === 'cross')  { setSurfaceContainerFocus(false); ring.paint(); return; }
+    if (b === 'circle') { setSurfaceContainerFocus(false); if (fileViewerOpen) setViewerBodyFocus(true); return; }
+    if (b === 'up' || b === 'down' || b === 'right') return;   // whole-container highlight — stays put
   }
   // The viewer × button holds DOM focus (reached via Up from the body):
   // Cross/Circle close it, Down returns to the body.
@@ -4621,10 +4653,12 @@ gp.addEventListener('press', (e) => {
 
   if (mode === MODE_GRID) {
     if (fileExplorerOpen) {
-      // Explorer is a vertical list — only Up/Down walk it; Left/Right no-op.
+      // Explorer is a vertical list — Up/Down walk it; Left no-op. Right exits
+      // to the right (open viewer's text box, or the first grid tile).
       if (b === 'up')                   { fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
       if (b === 'down')                 { fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
-      if (b === 'left' || b === 'right'){ return; }
+      if (b === 'left')                 { return; }
+      if (b === 'right')                { exitExplorerRight(); return; }
       if (b === 'cross')                { openFocusedFile(); return; }
       if (b === 'circle')               { closeFileExplorer(); return; }
     }
@@ -4641,10 +4675,12 @@ gp.addEventListener('press', (e) => {
 
   if (mode === MODE_ZOOM) {
     if (fileExplorerOpen) {
-      // Explorer is a vertical list — only Up/Down walk it; Left/Right no-op.
+      // Explorer is a vertical list — Up/Down walk it; Left no-op. Right exits
+      // to the right (open viewer's text box, or the first grid tile).
       if (b === 'up')                   { fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
       if (b === 'down')                 { fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
-      if (b === 'left' || b === 'right'){ return; }
+      if (b === 'left')                 { return; }
+      if (b === 'right')                { exitExplorerRight(); return; }
       if (b === 'cross')                { openFocusedFile(); return; }
       if (b === 'circle')               { closeFileExplorer(); return; }
     }
@@ -5529,11 +5565,13 @@ window.addEventListener('keydown', (e) => {
   // File explorer (overlay at L1/L2) intercepts navigation while the
   // explorer holds focus. Right-arrow exits the explorer to the right.
   if (fileExplorerOpen && explorerFocused) {
-    // Explorer is a vertical list — only Up/Down walk it. Left/Right are
-    // swallowed so they do nothing (Enter opens, Esc closes).
+    // Explorer is a vertical list — Up/Down walk it; Left is swallowed.
     if (e.key === 'ArrowUp')    { e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
     if (e.key === 'ArrowDown')  { e.preventDefault(); fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); return; }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); return; }
+    // Right exits the list to the right: into the open viewer's text box, or
+    // (no viewer) onto the first grid tile.
+    if (e.key === 'ArrowRight') { e.preventDefault(); exitExplorerRight(); return; }
     if (e.key === 'Enter')      { e.preventDefault(); openFocusedFile(); return; }
     if (e.key === 'Escape')     { e.preventDefault(); closeFileExplorer(); return; }
   }
@@ -5641,15 +5679,26 @@ window.addEventListener('keydown', (e) => {
   }
 
   // Viewer text container holds focus — Up jumps to the × button, Left hops
-  // back into the explorer, Down/Up arrows nudge-scroll, Esc closes.
+  // back into the explorer, Right highlights the surface container to the
+  // right, Down nudge-scrolls, Esc closes.
   if (viewerBodyFocused) {
     if (e.key === 'ArrowUp')    { e.preventDefault(); setViewerBodyFocus(false); fileViewerCloseEl?.focus(); return; }
     if (e.key === 'ArrowDown')  { e.preventDefault(); fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
     if (e.key === 'ArrowLeft' && fileExplorerOpen) {
       e.preventDefault(); setViewerBodyFocus(false); explorerFocused = true; paintFileFocus(); return;
     }
+    if (e.key === 'ArrowRight') { e.preventDefault(); setViewerBodyFocus(false); setSurfaceContainerFocus(true); return; }
     if (e.key === 'Enter')      { e.preventDefault(); fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
     if (e.key === 'Escape')     { e.preventDefault(); closeFileViewer(); return; }
+  }
+
+  // Whole surface container highlighted (arrowed right off the viewer body):
+  // Left returns to the body, Enter drops into the grid, Esc steps back.
+  if (surfaceContainerFocused) {
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); setSurfaceContainerFocus(false); if (fileViewerOpen) setViewerBodyFocus(true); else if (fileExplorerOpen) { explorerFocused = true; paintFileFocus(); } return; }
+    if (e.key === 'Enter')      { e.preventDefault(); setSurfaceContainerFocus(false); ring.paint(); return; }
+    if (e.key === 'Escape')     { e.preventDefault(); setSurfaceContainerFocus(false); if (fileViewerOpen) setViewerBodyFocus(true); return; }
+    if (e.key.startsWith('Arrow')) { e.preventDefault(); return; }   // whole-container highlight — other arrows stay put
   }
 
   // Surface holds "close viewer" focus — Enter closes; Left returns to ×.
