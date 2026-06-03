@@ -248,3 +248,17 @@ export async function executeKickoff(projectId, opts = {}) {
   }
   return { ran: true, assigned };
 }
+
+export async function handleLeadMessageDuringKickoff(projectId, text, opts = {}) {
+  if (getKickoff(projectId).status !== 'awaiting_approval') return { handled: false };
+  const intent = classifyApproval(text);
+  const project = getProject(projectId);
+  if (intent === 'approve') {
+    appendTurn(project.leadAgentId, 'user', text);
+    await executeKickoff(projectId, opts);
+    return { handled: true, intent };
+  }
+  // revise / unsure: record the message and let the PM keep waiting. The
+  // normal /interpret path will produce the PM's conversational reply.
+  return { handled: true, intent, awaiting: true };
+}
