@@ -411,14 +411,19 @@ function backZoomWithSnapshot(resolveToRect, renderNewView) {
   // surface's own backdrop. No children — so no text to animate.
   const overlay = document.createElement('div');
   const cs = getComputedStyle(surfaceEl);
+  // L2's #surface is transparent (the .agent-view is the visible container), so
+  // a snapshot of it would be invisible — the back-zoom would show nothing.
+  // Fall back to the standard surface-card look so the shrink is always visible.
+  const bgTransparent = cs.backgroundImage === 'none' &&
+    (cs.backgroundColor === 'rgba(0, 0, 0, 0)' || cs.backgroundColor === 'transparent');
   Object.assign(overlay.style, {
     position: 'fixed',
     left: `${sRect.left}px`, top: `${sRect.top}px`,
     width: `${sRect.width}px`, height: `${sRect.height}px`,
     margin: '0', pointerEvents: 'none', zIndex: '50',
-    background: cs.background,
-    border: cs.border,
-    borderRadius: cs.borderRadius,
+    background: bgTransparent ? 'var(--bg-elev, #131a23)' : cs.background,
+    border: bgTransparent || cs.borderStyle === 'none' ? '1px solid #1d2734' : cs.border,
+    borderRadius: bgTransparent ? 'var(--radius, 14px)' : cs.borderRadius,
     boxShadow: 'none',
   });
   document.body.appendChild(overlay);
