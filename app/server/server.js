@@ -43,7 +43,13 @@ const STATE_DIR = resolve(__dirname, '..', 'state');
 const app = express();
 app.use(express.json({ limit: '64kb' }));
 app.use('/assets', express.static(ASSETS_DIR, { maxAge: '1d', immutable: true }));
-app.use(express.static(RENDERER_DIR));
+// Renderer HTML/JS/CSS: never cache, so a reload always picks up the latest
+// build (the browser was serving stale index.html / main.js otherwise).
+app.use(express.static(RENDERER_DIR, {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
+}));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 

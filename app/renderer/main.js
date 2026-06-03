@@ -2742,11 +2742,18 @@ editBubbleModalEl?.addEventListener('keydown', (e) => {
     stepEditBubbleFocus(+1);
     return;
   }
-  if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+  if (e.key === 'ArrowUp') {
+    // Up from any button jumps straight to the text box above. In the
+    // textarea it's a normal cursor move (the textarea is the topmost element).
+    if (inTextarea) return;
+    e.preventDefault(); e.stopPropagation();
+    editBubbleTextEl?.focus();
+    return;
+  }
+  if (e.key === 'ArrowLeft') {
     if (inTextarea) {
       const atStart = editBubbleTextEl.selectionStart === 0;
-      if (e.key === 'ArrowUp' && !atStart) return;
-      if (e.key === 'ArrowLeft' && !atStart) return;
+      if (!atStart) return;
     }
     e.preventDefault(); e.stopPropagation();
     stepEditBubbleFocus(-1);
@@ -2767,7 +2774,11 @@ function handleEditBubbleGamepad(button) {
     commitEditBubble();
     return;
   }
-  if (button === 'up' || button === 'left')   { stepEditBubbleFocus(-1); return; }
+  if (button === 'up') {
+    if (active !== editBubbleTextEl) editBubbleTextEl?.focus();  // any button → text box above
+    return;
+  }
+  if (button === 'left')   { stepEditBubbleFocus(-1); return; }
   if (button === 'down' || button === 'right') { stepEditBubbleFocus(+1); return; }
 }
 
