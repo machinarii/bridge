@@ -482,6 +482,63 @@ window.addEventListener('keydown', (e) => {
 }, true);
 window.addEventListener('mousemove', () => setInputMode('keyboard'), true);
 
+/* ---------- Reasoning-effort quick picker ----------
+ * Hold the DualSense touchpad (or the 'T' key) and nudge Up/Down with the
+ * d-pad or either analog stick to pick a reasoning effort; release to commit.
+ * The chosen effort rides every prompt — the orchestrator maps it to a
+ * reasoning budget (non-reasoning models ignore it). Up = more effort. */
+const EFFORT_LEVELS = ['low', 'medium', 'high', 'extra', 'max'];
+const EFFORT_LABELS = { low: 'Low', medium: 'Medium', high: 'High', extra: 'Extra', max: 'Max' };
+let reasoningEffort = (() => {
+  try { const v = localStorage.getItem('bridge.effort'); return EFFORT_LEVELS.includes(v) ? v : 'medium'; }
+  catch { return 'medium'; }
+})();
+let effortPickerOpen = false;
+let effortPickerIdx = EFFORT_LEVELS.indexOf(reasoningEffort);
+let _effortEl = null;
+let _rstickLatch = 0;   // one step per analog-stick push while picking
+
+function effortPickerEl() {
+  if (_effortEl) return _effortEl;
+  const el = document.createElement('div');
+  el.id = 'effort-picker';
+  el.hidden = true;
+  el.innerHTML = `<div class="effort-title">Reasoning effort</div><div class="effort-list"></div><div class="effort-hint"></div>`;
+  document.body.appendChild(el);
+  _effortEl = el;
+  return el;
+}
+function renderEffortPicker() {
+  const el = effortPickerEl();
+  // Max at top → Low at bottom so Up = more effort.
+  el.querySelector('.effort-list').innerHTML = EFFORT_LEVELS.slice().reverse().map(lvl => {
+    const sel = EFFORT_LEVELS.indexOf(lvl) === effortPickerIdx ? ' selected' : '';
+    return `<div class="effort-opt${sel}">${EFFORT_LABELS[lvl]}</div>`;
+  }).join('');
+  el.querySelector('.effort-hint').textContent = document.body.dataset.inputMode === 'gamepad'
+    ? 'Hold touchpad · stick / d-pad Up·Down · release to set'
+    : 'Hold T · ↑ ↓ · release to set';
+}
+function openEffortPicker() {
+  if (effortPickerOpen) return;
+  effortPickerOpen = true;
+  effortPickerIdx = Math.max(0, EFFORT_LEVELS.indexOf(reasoningEffort));
+  renderEffortPicker();
+  effortPickerEl().hidden = false;
+}
+function moveEffortPicker(delta) {
+  if (!effortPickerOpen) return;
+  effortPickerIdx = Math.max(0, Math.min(EFFORT_LEVELS.length - 1, effortPickerIdx + delta));
+  renderEffortPicker();
+}
+function closeEffortPicker() { effortPickerOpen = false; effortPickerEl().hidden = true; }
+function commitEffortPicker() {
+  if (!effortPickerOpen) return;
+  reasoningEffort = EFFORT_LEVELS[effortPickerIdx];
+  try { localStorage.setItem('bridge.effort', reasoningEffort); } catch {}
+  closeEffortPicker();
+}
+
 /* ---------- App state ---------- */
 const MODE_PROJECTS         = 'projects';          // L0
 const MODE_NEW_PROJ_ROLES    = 'new_project_roles';    // create-flow step 1
@@ -887,6 +944,7 @@ function handleProjectEditGamepad(b) {
 }
 // Cross release: cancel a remove-hold in the modal, or finish a tile long-press at L0.
 gp.addEventListener('release', (e) => {
+  if (e.detail.button === 'touchpad') { commitEffortPicker(); return; }
   if (e.detail.button !== 'cross') return;
   if (projectEditOpen) { resetRemoveHold(); return; }
   if (mode === MODE_PROJECTS) endProjectHold(true);
@@ -894,6 +952,7 @@ gp.addEventListener('release', (e) => {
 // Releasing Enter at L0 (no modal) finishes a tile long-press.
 window.addEventListener('keyup', (e) => {
   if (e.key === 'Enter' && mode === MODE_PROJECTS && !projectEditOpen) endProjectHold(true);
+  if (e.key === 't' || e.key === 'T') commitEffortPicker();  // release T → set reasoning effort
 });
 
 /** On L0, the shortcuts rail reflects the focused project's lead so
@@ -4186,6 +4245,13 @@ gp.addEventListener('press', (e) => {
   setInputMode('gamepad');
   flashShortcutByGamepad(e.detail.button);
   const b = e.detail.button;
+  // Reasoning-effort picker: hold the touchpad, nudge Up/Down (d-pad or sticks).
+  if (b === 'touchpad') { openEffortPicker(); return; }
+  if (effortPickerOpen) {
+    if (b === 'up')   { moveEffortPicker(+1); return; }
+    if (b === 'down') { moveEffortPicker(-1); return; }
+    return;  // swallow everything else while picking
+  }
   if (b === 'l2') { speakFocusedAgentName(); return; }
 
   // Settings modal takes over gamepad while open.
@@ -4429,6 +4495,15 @@ function _rscrollTick() {
   _rscrollRAF = requestAnimationFrame(_rscrollTick);
 }
 gp.addEventListener('rstick', (e) => {
+  // While the effort picker is open, the right stick steps it (one step per
+  // push past the threshold) instead of scrolling the chat. Up = more effort.
+  if (effortPickerOpen) {
+    const y = e.detail?.y || 0;
+    if (y < -0.5 && _rstickLatch <= 0) { _rstickLatch = 1; moveEffortPicker(+1); }
+    else if (y > 0.5 && _rstickLatch >= 0) { _rstickLatch = -1; moveEffortPicker(-1); }
+    else if (Math.abs(y) < 0.3) _rstickLatch = 0;
+    return;
+  }
   _rstickY = mode === MODE_ZOOM ? (e.detail?.y || 0) : 0;
   if (_rscrollRAF == null && (_rstickY || _rscrollVel)) _rscrollRAF = requestAnimationFrame(_rscrollTick);
 });
@@ -5070,6 +5145,18 @@ window.addEventListener('keydown', (e) => {
   // Esc only closes the menu rather than also triggering Back.
   if (settingsOpen || editBubbleOpen || confirmCancelOpen || projectEditOpen || notificationsOpen) return;
 
+  // Reasoning-effort picker: hold T, nudge ↑/↓, release T to set.
+  const _typing = document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if (!_typing) {
+    if ((e.key === 't' || e.key === 'T') && !e.repeat) { e.preventDefault(); openEffortPicker(); return; }
+    if (effortPickerOpen) {
+      if (e.key === 'ArrowUp')   { e.preventDefault(); moveEffortPicker(+1); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); moveEffortPicker(-1); return; }
+      if (e.key === 'Escape')    { e.preventDefault(); closeEffortPicker(); return; }
+      return;  // swallow other keys while picking
+    }
+  }
+
   if (document.activeElement === typedInput) {
     if (e.key === 'Enter') {
       const t = typedInput.value.trim();
@@ -5393,7 +5480,7 @@ async function submitIntent(text, regenerate = 0) {
     const r = await fetch(`/projects/${activeProject.id}/agents/${targetId}/interpret`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, regenerate }),
+      body: JSON.stringify({ text, regenerate, effort: reasoningEffort }),
       signal: myCtl.signal,
     });
     if (!r.ok) throw new Error(`server ${r.status}`);

@@ -69,21 +69,30 @@ There are four intent kinds:
 Rules: single JSON object. No markdown, no commentary. "body" is read aloud — keep speakable. Allowed glyphs: cross | circle | square | triangle.`;
 }
 
-/* Redo escalation: each redo of a prompt nudges the sampling toward a better,
- * more divergent answer. Temperature climbs for variety; reasoning effort climbs
- * for quality (honored only by reasoning-capable models, ignored otherwise).
- * top_p and max_tokens are intentionally left at their defaults. Returns null
- * for a first-time ask (regenerate = 0) so the body is unchanged. */
-function regenSampling(regenerate) {
+/* Reasoning-effort tiers → OpenRouter `reasoning` budgets. Using max_tokens (vs
+ * `effort`) lets us offer 5 granular tiers; OpenRouter normalizes the budget to
+ * each provider's mechanism, and non-reasoning models simply ignore it. */
+const EFFORT_LEVELS = ['low', 'medium', 'high', 'extra', 'max'];
+const EFFORT_BUDGET = { low: 1024, medium: 4096, high: 8192, extra: 16384, max: 32768 };
+
+/* Build the per-request sampling overrides from the user's chosen reasoning
+ * effort plus the redo count. The manual effort sets the reasoning budget; each
+ * consecutive redo raises temperature (variety) AND bumps the effort a tier
+ * (quality). top_p / max_tokens stay at their defaults. */
+function samplingFor({ effort, regenerate }) {
+  let lvl = EFFORT_LEVELS.indexOf(effort);
+  if (lvl < 0) lvl = 1;                       // default: medium
+  const out = {};
   const n = Math.max(0, Number(regenerate) || 0);
-  if (n === 0) return null;
-  return {
-    temperature: Math.min(1.1, 0.7 + 0.2 * n),   // 0.9, 1.1, 1.1 …
-    reasoning: { effort: n >= 2 ? 'high' : 'medium' },
-  };
+  if (n > 0) {
+    out.temperature = Math.min(1.1, 0.7 + 0.2 * n);   // 0.9, 1.1, 1.1 …
+    lvl = Math.min(EFFORT_LEVELS.length - 1, lvl + n); // each redo → one tier up
+  }
+  out.reasoning = { max_tokens: EFFORT_BUDGET[EFFORT_LEVELS[lvl]] };
+  return out;
 }
 
-export async function interpretIntent({ projectId, agentId, text, sharedFrom, regenerate = 0 }) {
+export async function interpretIntent({ projectId, agentId, text, sharedFrom, regenerate = 0, effort = 'medium' }) {
   const project = getProject(projectId);
   if (!project) throw new Error(`unknown project: ${projectId}`);
   const agent = project.agents.find(a => a.id === agentId);
@@ -104,7 +113,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
   // Anything unexpected falls through to the structured JSON tile path below,
   // so the worst case is exactly today's behavior.
   try {
-    const streamed = await tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate });
+    const streamed = await tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate, effort });
     if (streamed) { emitStatus(projectId, agentId, 'idle'); return streamed; }
   } catch (err) {
     console.warn('[stream] falling back to JSON tile path:', err?.message);
@@ -130,7 +139,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
         'HTTP-Referer': 'http://localhost/aurora-bridge',
         'X-Title': `Bridge - ${agent.name}`,
       },
-      body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages, ...(regenSampling(regenerate) || {}) }),
+      body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages, ...samplingFor({ effort, regenerate }) }),
     });
 
     if (!resp.ok) {
@@ -243,7 +252,7 @@ async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
 
 /* Returns a hydrated 'reader' spec on success, or null to defer to the JSON
  * tile path (action intents, empty output, or classify failure). */
-async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate = 0 }) {
+async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate = 0, effort = 'medium' }) {
   if (await classifyIntent({ apiKey, text }) !== 'answer') return null;
   emitStatus(projectId, agentId, 'drafting');
   const history = getContext(agentId).messages.slice(0, -1);
@@ -256,7 +265,7 @@ async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey
     apiKey,
     model: getModelForRole(agent.role),
     messages,
-    extra: regenSampling(regenerate),
+    extra: samplingFor({ effort, regenerate }),
     onDelta: (d) => emitToken(projectId, agentId, d),
   });
   if (!full || !full.trim()) return null;
