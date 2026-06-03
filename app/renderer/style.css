@@ -2829,6 +2829,12 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   padding: 0.42rem 0.98rem;   /* ~30% smaller than the standard 0.6rem 1.4rem */
   font-size: 14px;            /* ~30% smaller than the standard 20px */
 }
+/* Highlight the focused Approve/Reject button during keyboard/gamepad nav. */
+.agent-view .bubble.agent .bubble-kickoff-actions button:focus,
+.agent-view .bubble.agent .bubble-kickoff-actions button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus, #ffffff), 0 0 12px 2px rgba(255,255,255,0.25);
+}
 
 /* Unseen agent message: the L1 tile glows with a smooth sine pulse until the
    user opens that agent. */

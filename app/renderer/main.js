@@ -2319,18 +2319,10 @@ function buildKickoffApproval(agent, bubble) {
   approve.textContent = 'Approve';
   approve.addEventListener('click', (e) => { e.stopPropagation(); kickoffDecide('approve', agent); });
   row.append(reject, approve);
-  // Make them reachable by keyboard / gamepad: put them in the L2 focus ring
-  // (default-focus Approve). Deferred so the bubble is in the DOM first and we
-  // run after renderZoom's own ring.set([]).
-  setTimeout(() => {
-    if (mode !== MODE_ZOOM || currentAgent()?.id !== agent.id) return;
-    // Ring: the plan bubble + the two buttons, so Left/Right (or d-pad) cycles
-    // bubble → Reject → Approve. The bubble is highlighted first.
-    ring.set([bubble, reject, approve].filter(Boolean));
-    ring.index = 0;
-    ring.paint();
-    _setL2Shortcuts();
-  }, 0);
+  // The buttons are reached via the bubble's own keyboard/gamepad model: when
+  // the plan bubble is focused, Left/Right cycle into them (cycleBubbleAction
+  // recognizes .bubble-kickoff-actions), Cross/Enter activates, and Up still
+  // walks up the bubbles to the × close. No separate ring.
   return row;
 }
 
@@ -2705,7 +2697,8 @@ function paintBubbleFocus() {
   // When focus is on one of its action icons (retry / edit), drop the ring but
   // keep the action row visible via .actions-open (the icons live in a panel
   // that only renders for .focused / .actions-open).
-  const onAction = document.activeElement?.classList?.contains('bubble-action');
+  const onAction = !!(document.activeElement?.classList?.contains('bubble-action')
+    || document.activeElement?.closest?.('.bubble-kickoff-actions'));
   chatBubbles.forEach((b, i) => {
     const cur = i === chatBubbleIdx;
     b.classList.toggle('focused', cur && !onAction);
@@ -2759,7 +2752,8 @@ function isBubbleFocused() {
   if (chatBubbleIdx < 0) return false;
   const a = document.activeElement;
   if (!a) return false;
-  return a.classList?.contains('bubble') || a.classList?.contains('bubble-action');
+  return a.classList?.contains('bubble') || a.classList?.contains('bubble-action')
+    || !!a.closest?.('.bubble-kickoff-actions');
 }
 function leaveBubbleFocus()    { chatBubbleIdx = -1; paintBubbleFocus(); }
 /* Move focus across the action icons (retry / edit / copy …) inside the
@@ -2767,7 +2761,8 @@ function leaveBubbleFocus()    { chatBubbleIdx = -1; paintBubbleFocus(); }
 function cycleBubbleAction(dir) {
   const bubble = chatBubbles[chatBubbleIdx];
   if (!bubble) return;
-  const arr = [...bubble.querySelectorAll('.bubble-action')];
+  // Retry/edit icons on user bubbles, plus the kickoff Approve/Reject buttons.
+  const arr = [...bubble.querySelectorAll('.bubble-action, .bubble-kickoff-actions button')];
   if (arr.length === 0) return;
   const idx = arr.indexOf(document.activeElement);
   if (idx === -1) {                       // on the bubble itself → step into the actions
@@ -4959,7 +4954,7 @@ gp.addEventListener('press', (e) => {
       }
       if (b === 'left')   { cycleBubbleAction(-1); return; }
       if (b === 'right')  { cycleBubbleAction(+1); return; }
-      if (b === 'cross')  { const a = document.activeElement; if (a?.classList?.contains('bubble-action')) a.click(); return; }
+      if (b === 'cross')  { const a = document.activeElement; if (a?.classList?.contains('bubble-action') || a?.closest?.('.bubble-kickoff-actions')) a.click(); return; }
       if (b === 'circle') { leaveBubbleFocus(); ring.paint(); return; }
       if (b === 'l1')     { cycleAgent(-1); return; }
       if (b === 'r1')     { cycleAgent(+1); return; }
@@ -6028,8 +6023,9 @@ window.addEventListener('keydown', (e) => {
         cycleBubbleAction(e.key === 'ArrowRight' ? +1 : -1);
         return;
       }
-      if (e.key === 'Enter' && document.activeElement?.classList?.contains('bubble-action')) {
-        // Activate the focused action icon.
+      if (e.key === 'Enter' && (document.activeElement?.classList?.contains('bubble-action')
+          || document.activeElement?.closest?.('.bubble-kickoff-actions'))) {
+        // Activate the focused action icon or kickoff Approve/Reject button.
         e.preventDefault(); document.activeElement.click(); return;
       }
       if (e.key === 'Escape') { e.preventDefault(); leaveBubbleFocus(); ring.paint(); return; }
