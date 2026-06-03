@@ -2336,21 +2336,24 @@ function focusBubble(i) {
   return true;
 }
 
-/* Scroll a bubble into view while guaranteeing its TOP is never cut off.
- * For a bubble taller than the viewport we align its top (top wins over
- * showing the bottom); otherwise we do the minimal scroll to reveal it. */
+/* Scroll a bubble into view. A bubble that fits within the viewport is always
+ * revealed in full — neither top nor bottom clipped. A bubble taller than the
+ * viewport aligns its top (top wins; you read top-to-bottom). */
 function scrollBubbleIntoView(el) {
   const container = el.closest('.chat-scroll');
   if (!container) return;
   const pad = 8;
   const cr = container.getBoundingClientRect();
   const er = el.getBoundingClientRect();
+  const fits = er.height <= cr.height - pad * 2;
   if (er.top < cr.top + pad) {
+    // Top is cut → reveal the top.
     container.scrollBy({ top: er.top - cr.top - pad, behavior: 'smooth' });
-  } else if (er.bottom > cr.bottom) {
-    const overflow = er.bottom - cr.bottom;      // to bring the bottom in
-    const topRoom = er.top - cr.top - pad;       // moving more cuts the top
-    container.scrollBy({ top: Math.min(overflow, Math.max(0, topRoom)), behavior: 'smooth' });
+  } else if (er.bottom > cr.bottom - pad) {
+    // Bottom is cut. If the whole bubble fits, bring the bottom fully in (the
+    // top stays visible because it fits); otherwise align the top instead.
+    const delta = fits ? (er.bottom - cr.bottom + pad) : (er.top - cr.top - pad);
+    container.scrollBy({ top: delta, behavior: 'smooth' });
   }
 }
 
