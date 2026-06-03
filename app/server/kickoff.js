@@ -97,9 +97,12 @@ function planSpec(body) {
   return JSON.stringify({
     intent: 'answer', template: 'reader', context: 'Kickoff', title: 'Kickoff plan',
     body,
+    // Approve only. There's no "Revise" button: a Revise→cancel action just
+    // exited the agent view (a dead no-op for the label). To revise, the user
+    // simply types/speaks their change — the server's /interpret interception
+    // already routes 'revise'/'unsure' replies while the PM keeps waiting.
     actions: [
-      { verb: 'Approve', glyph: 'cross',  action: { type: 'approve_kickoff' } },
-      { verb: 'Revise',  glyph: 'circle', action: { type: 'cancel' } },
+      { verb: 'Approve', glyph: 'cross', action: { type: 'approve_kickoff' } },
     ],
   });
 }
