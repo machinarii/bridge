@@ -1313,7 +1313,9 @@ async function renderNewProjectRoles() {
     { gamepad: 'cross',  keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedRole() },
     { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',   action: () => renderProjects() },
   ]);
-  setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Select',
+  // Continue is the gamepad △ quick-advance; on keyboard you advance via the
+  // on-screen Continue button (Enter/Space toggle the focused role instead).
+  setPrimaryShortcut({ gamepad: 'triangle', label: 'Continue',
                        action: () => advanceFromRolePicker() });
   // Tiles render after the async /roles fetch, so stagger them in here (the
   // morph's own stagger ran before they existed).
@@ -5771,10 +5773,13 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'Enter') {
       e.preventDefault();
       const cur = ring.current();
+      // Enter activates the focused item: on a role tile it toggles the
+      // checkbox (like Space); on the Cancel/Continue button it presses it.
+      // Advancing therefore only happens via the Continue button.
       if (cur && !cur.classList?.contains('role-tile') && typeof cur.click === 'function') {
         cur.click();
       } else {
-        advanceFromRolePicker();
+        toggleFocusedRole();
       }
     }
     else if (e.key === 'Escape')  { e.preventDefault(); renderProjects(); }
