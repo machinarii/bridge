@@ -3396,7 +3396,8 @@ async function postPartialTranscript(blob) {
     });
     if (!r.ok) return;
     const data = await r.json().catch(() => ({}));
-    const text = (data?.text || '').trim();
+    let text = (data?.text || '').trim();
+    if (mode === MODE_NEW_PROJ_NAME) text = stripNamePunct(text);   // name carries no punctuation
     const live = document.querySelector('.capture-tile .mic-live-text');
     if (live && text) live.textContent = text;
   } catch { /* partial is best-effort */ }
@@ -3435,9 +3436,16 @@ async function postLocalTranscript(blob) {
 
 /* Same logic as the Speech 'end' listener — extracted so both paths
  * route the final transcript through one handler. */
+/* Project names carry no punctuation — STT tends to add a trailing "." and
+ * commas. Keep letters, numbers, spaces (collapse runs). The objective keeps
+ * its punctuation. */
+function stripNamePunct(s) {
+  return String(s).replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+}
+
 function dispatchTranscript(text) {
   if (editBubbleOpen) { editBubbleTextEl.value = text; return; }
-  if (mode === MODE_NEW_PROJ_NAME) { newProjName = text; renderNewProjectName(); return; }
+  if (mode === MODE_NEW_PROJ_NAME) { newProjName = stripNamePunct(text); renderNewProjectName(); return; }
   if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = text; renderNewProjectGoal(); return; }
   if (mode === MODE_ZOOM) { submitIntent(text); return; }
   if (mode === MODE_GRID) { submitTeamIntent(text); return; }
