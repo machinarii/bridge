@@ -1677,11 +1677,12 @@ function animateMicBars() {
 }
 
 function renderNewProjectName() {
+  const entering = mode !== MODE_NEW_PROJ_NAME;  // animate only on screen transitions, not internal re-renders
   mode = MODE_NEW_PROJ_NAME;
   setBreadcrumbs([{ label: 'Projects' }, { label: 'New project' }, { label: 'Name' }]);
   surfaceEl.innerHTML = '';
   const t = document.createElement('section');
-  t.className = 'capture-tile';
+  t.className = 'capture-tile' + (entering ? ' capture-enter' : '');
   t.innerHTML = `
     <h2>Name this project</h2>
     <div class="capture-value ${newProjName ? 'has-value' : ''}">${captureValueInner(newProjName)}</div>
@@ -1737,17 +1738,19 @@ function renderNewProjectName() {
 }
 
 function renderNewProjectGoal() {
+  const entering = mode !== MODE_NEW_PROJ_GOAL;  // animate only on screen transitions, not internal re-renders
   mode = MODE_NEW_PROJ_GOAL;
   setBreadcrumbs([{ label: 'Projects' }, { label: 'New project' }, { label: 'Goal' }]);
   surfaceEl.innerHTML = '';
   const t = document.createElement('section');
-  t.className = 'capture-tile';
+  t.className = 'capture-tile' + (entering ? ' capture-enter' : '');
   t.innerHTML = `
     <h2>What's the objective?</h2>
     <div class="capture-value ${newProjGoal ? 'has-value' : ''}">${captureValueInner(newProjGoal)}</div>
     <div class="role-confirm-row">
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
       <button type="button" class="role-cancel role-back" id="capture-back">Back</button>
+      <button type="button" class="role-cancel role-redo" id="capture-redo" title="Clear the objective and say it again" aria-label="Clear objective">Clear</button>
       <button type="button" class="role-confirm" id="capture-done">Create project</button>
     </div>`;
   surfaceEl.appendChild(t);
@@ -1756,11 +1759,18 @@ function renderNewProjectGoal() {
   };
   const goalBackEl   = t.querySelector('#capture-back');
   const goalCancelEl = t.querySelector('#capture-cancel');
+  const goalRedoEl   = t.querySelector('#capture-redo');
   const goalDoneEl   = t.querySelector('#capture-done');
   if (goalDoneEl) goalDoneEl.disabled = !newProjGoal.trim();
   goalBackEl?.addEventListener('click', () => {
     stopMicVisualizer();
     renderNewProjectName();
+  });
+  // Clear the captured objective and re-render so the user can say it again.
+  goalRedoEl?.addEventListener('click', () => {
+    stopMicVisualizer();
+    newProjGoal = '';
+    renderNewProjectGoal();
   });
   goalCancelEl?.addEventListener('click', tryCancelGoalCapture);
   goalDoneEl?.addEventListener('click', () => confirmCapture());
@@ -1773,10 +1783,10 @@ function renderNewProjectGoal() {
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => confirmCapture() });
-  ring.set([goalCancelEl, goalBackEl, goalDoneEl].filter(Boolean));
-  ring.index = 0; // Cancel focused by default — leftmost in the row,
-                  // so ArrowDown from the surface-close × lands on it
-                  // first instead of skipping past to the primary.
+  const goalRing = [goalCancelEl, goalBackEl, goalRedoEl, goalDoneEl].filter(Boolean);
+  ring.set(goalRing);
+  // Create project focused by default — the primary action.
+  ring.index = Math.max(0, goalRing.indexOf(goalDoneEl));
   ring.paint();
 }
 
@@ -3176,6 +3186,7 @@ const PTT_MODES = new Set([MODE_PROJECTS, MODE_ZOOM, MODE_GRID, MODE_NEW_PROJ_NA
 let localSttUrl = '';
 let localRecorder = null;
 let localRecChunks = [];
+let _partialBusy = false;   // one in-flight live-partial transcription at a time
 
 (async function _initLocalStt() {
   try {
@@ -3328,7 +3339,16 @@ async function startLocalRecording() {
       ? 'audio/webm;codecs=opus' : 'audio/webm';
     localRecorder = new MediaRecorder(stream, { mimeType: mime });
     localRecChunks = [];
-    localRecorder.ondataavailable = (e) => { if (e.data?.size) localRecChunks.push(e.data); };
+    localRecorder.ondataavailable = (e) => {
+      if (e.data?.size) localRecChunks.push(e.data);
+      // Live partials: re-transcribe the audio captured so far so words appear
+      // in the box as the user speaks (capture screens only). Best-effort; the
+      // final transcribe on release (onstop) is authoritative.
+      if (pttActive && localRecChunks.length &&
+          (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL)) {
+        postPartialTranscript(new Blob(localRecChunks, { type: mime }));
+      }
+    };
     localRecorder.onstop = async () => {
       stream.getTracks().forEach(t => t.stop());
       const blob = new Blob(localRecChunks, { type: mime });
@@ -3336,7 +3356,7 @@ async function startLocalRecording() {
       localRecChunks = [];
       await postLocalTranscript(blob);
     };
-    localRecorder.start();
+    localRecorder.start(450);   // timeslice → periodic dataavailable for live partials
     setIndicator('listening', 'Listening…');
   } catch (err) {
     pttActive = false;
@@ -3359,6 +3379,28 @@ function showSttFailure(msg) {
   if (label) { label.textContent = msg; label.classList.add('mic-error'); }
   const pend = document.querySelector('.capture-tile .mic-live-text');
   if (pend) pend.classList.add('mic-error');
+}
+
+/* Re-transcribe the audio captured so far and show it live in the capture
+ * screen's text slot (Parakeet has no native partials). Best-effort: errors
+ * are ignored, and only one runs at a time so requests don't pile up. The
+ * authoritative final transcript still comes from postLocalTranscript. */
+async function postPartialTranscript(blob) {
+  if (_partialBusy) return;
+  _partialBusy = true;
+  try {
+    const r = await fetch('/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': blob.type || 'audio/webm' },
+      body: blob,
+    });
+    if (!r.ok) return;
+    const data = await r.json().catch(() => ({}));
+    const text = (data?.text || '').trim();
+    const live = document.querySelector('.capture-tile .mic-live-text');
+    if (live && text) live.textContent = text;
+  } catch { /* partial is best-effort */ }
+  finally { _partialBusy = false; }
 }
 
 async function postLocalTranscript(blob) {

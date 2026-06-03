@@ -2369,7 +2369,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   font-size: 1.4rem;
   /* Fixed height so the box doesn't resize as the content changes
      (hold hint → live wave → recognized text). Long text scrolls. */
-  height: 8.5rem;
+  height: 12.75rem;
   overflow-y: auto;
   padding: 1.5rem;
   background: rgba(255,255,255,0.06);
@@ -2415,9 +2415,17 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   line-height: 1.35;
   /* Hold space so the rest of the stack doesn't jump as text appears. */
 }
-.mic-live-text:empty::after {
-  content: '\00a0';
-  visibility: hidden;
+/* Collapse the live-text slot when empty so the hold hint and the wave stay
+   vertically centered in the (taller) capture box. */
+.mic-live-text:empty { display: none; }
+
+/* Text-box entrance when transitioning into the name / objective screens. */
+@keyframes captureBoxIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+.capture-tile.capture-enter .capture-value {
+  animation: captureBoxIn 340ms cubic-bezier(.2, .8, .2, 1) both;
 }
 .mic-bars {
   display: flex; align-items: center; justify-content: center;
