@@ -159,14 +159,52 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
   }
 }
 
+/* Repair the most common LLM JSON defect: raw control characters (newlines,
+ * tabs, carriage returns) inside string values — illegal in JSON, and exactly
+ * what a model emits when it stuffs a wireframe / ASCII art / code block into a
+ * "body" field. Walks the text and escapes control chars seen inside a string
+ * literal, leaving structural whitespace untouched. */
+function escapeControlCharsInStrings(s) {
+  let out = '', inStr = false, esc = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (esc) { out += ch; esc = false; continue; }
+    if (ch === '\\') { out += ch; esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; out += ch; continue; }
+    if (inStr) {
+      if (ch === '\n') { out += '\\n'; continue; }
+      if (ch === '\r') { out += '\\r'; continue; }
+      if (ch === '\t') { out += '\\t'; continue; }
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/* Best-effort extraction of the "body" value from JSON we couldn't parse, so
+ * rich content still reaches the user instead of being dropped. */
+function lenientBody(cleaned) {
+  const m = cleaned.match(/"body"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"\w+"\s*:|\}\s*$)/);
+  if (m) return m[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+  return cleaned;
+}
+
 function parseSpec(raw) {
   const cleaned = raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-  try { return JSON.parse(cleaned); }
-  catch {
-    const m = cleaned.match(/\{[\s\S]*\}/);
-    if (m) return JSON.parse(m[0]);
-    throw new Error('model did not return JSON');
+  // Try the text as-is, then with control chars escaped; for each, try a whole
+  // parse and then a brace-bounded slice.
+  for (const candidate of [cleaned, escapeControlCharsInStrings(cleaned)]) {
+    try { return JSON.parse(candidate); } catch { /* try next strategy */ }
+    const m = candidate.match(/\{[\s\S]*\}/);
+    if (m) { try { return JSON.parse(m[0]); } catch { /* try next strategy */ } }
   }
+  // Never throw: degrade to a plain answer so the model's content (e.g. a
+  // wireframe) still renders rather than 500-ing the whole request.
+  return {
+    intent: 'answer', template: 'reader', context: '', title: '',
+    body: lenientBody(cleaned),
+    actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+  };
 }
 
 /* ---------- streamed prose answers ----------
