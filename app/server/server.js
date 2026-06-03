@@ -13,6 +13,7 @@ import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, getContext, lastActivityAt, truncateFrom } from './scratchpad.js';
 import { runTeamVoice, resolveDelegateSpec } from './team.js';
+import { startKickoff, handleLeadMessageDuringKickoff } from './kickoff.js';
 import {
   notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
 } from './autosave.js';
@@ -357,6 +358,8 @@ app.post('/projects', async (req, res) => {
       title: 'Project created',
       body: `${p.name} · ${p.agents.length} agent${p.agents.length === 1 ? '' : 's'} assembled.`,
     });
+    // Kick off the PM plan in the background (non-blocking).
+    startKickoff(p.id).catch(err => console.warn('[kickoff] start failed:', err?.message));
     res.json(p);
   } catch (err) {
     res.status(400).json({ error: String(err?.message || err) });
@@ -465,6 +468,15 @@ app.post('/projects/:pid/notes', (req, res) => {
   res.json(note);
 });
 
+app.post('/projects/:pid/kickoff/approve', async (req, res) => {
+  try {
+    const result = await handleLeadMessageDuringKickoff(req.params.pid, 'yes');
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
 app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
   const { pid, aid } = req.params;
   const text = String(req.body?.text || '').trim();
@@ -472,6 +484,19 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
   const regenerate = Number(req.body?.regenerate) || 0;
   const effort = String(req.body?.effort || 'medium');
   try {
+    // During an awaiting kickoff, a message to the lead may approve it.
+    const project0 = getProject(pid);
+    if (project0 && aid === project0.leadAgentId) {
+      const ko = await handleLeadMessageDuringKickoff(pid, text);
+      if (ko.handled && ko.intent === 'approve') {
+        const msgs = getContext(aid).messages;
+        const last = msgs[msgs.length - 1];
+        const reportSpec = JSON.parse(last.content);
+        setLastSpec(aid, reportSpec);
+        return res.json(reportSpec);   // the kickoff report
+      }
+      // revise/unsure fall through to the normal PM reply below.
+    }
     let spec = await interpretIntent({ projectId: pid, agentId: aid, text, regenerate, effort });
     // If the agent chose to delegate, actually route it to the teammate and
     // return their answer (otherwise the delegate intent dead-ends here).
