@@ -1861,14 +1861,20 @@ function renderGrid() {
  * /projects/:pid/agents on Done. */
 let addAgentSelected = new Set(); // role ids checked in this session
 
-async function openAddAgentPicker() {
-  if (!activeProject) return;
-  // Always fetch fresh so renames / additions on the server show up
-  // without a hard page reload.
+async function ensureRolesLoaded() {
+  if (window._roles?.length) return;   // cached — render synchronously
   try {
     const r = await fetch('/roles');
     if (r.ok) window._roles = (await r.json()).roles || [];
   } catch { window._roles = window._roles || []; }
+}
+
+async function openAddAgentPicker() {
+  if (!activeProject) return;
+  // Use cached roles when available so the picker renders synchronously and the
+  // zoom morph hands off cleanly into it (the enterZoom add-agent branch
+  // prefetches before the morph). Falls back to a fetch on a cold cache.
+  await ensureRolesLoaded();
   const usedRoles = new Set(activeProject.agents.map(a => a.role));
   // Every role is shown. Existing agents are pre-checked and locked
   // (cannot be removed from this screen).
@@ -2098,6 +2104,7 @@ async function enterZoom(specOverride) {
   // pressing Enter on it opens the role picker with the same zoom-in morph
   // as a real agent tile (rather than snapping straight in).
   if (mode !== MODE_ZOOM && gridIndex === activeProject.agents.length) {
+    await ensureRolesLoaded();   // prefetch so the picker renders synchronously inside the morph
     const addTile = ring.current();
     const addRect = addTile?.getBoundingClientRect();
     await forwardMorph(addTile, addRect, surfaceContentRect(), () => openAddAgentPicker());
