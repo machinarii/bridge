@@ -1337,6 +1337,12 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .agent-view .bubble.agent .bubble-content > *:first-child { margin-top: 0; }
 .agent-view .bubble.agent .bubble-content > *:last-child  { margin-bottom: 0; }
 .agent-view .bubble.agent .bubble-content p { margin: 0 0 1.4em; line-height: 1.5; }
+/* Typing caret while a reply streams in token-by-token. */
+.agent-view .bubble.agent.streaming .bubble-content::after {
+  content: '▍'; margin-left: 1px; opacity: 0.6;
+  animation: streamCaret 1s steps(1) infinite;
+}
+@keyframes streamCaret { 50% { opacity: 0; } }
 .agent-view .bubble.agent .bubble-content h1,
 .agent-view .bubble.agent .bubble-content h2,
 .agent-view .bubble.agent .bubble-content h3,
