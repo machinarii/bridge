@@ -450,8 +450,9 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
   const text = String(req.body?.text || '').trim();
   if (!text) return res.status(400).json({ error: 'empty intent' });
   const regenerate = Number(req.body?.regenerate) || 0;
+  const effort = String(req.body?.effort || 'medium');
   try {
-    const spec = await interpretIntent({ projectId: pid, agentId: aid, text, regenerate });
+    const spec = await interpretIntent({ projectId: pid, agentId: aid, text, regenerate, effort });
     setLastSpec(aid, spec);
     res.json(spec);
   } catch (err) {

@@ -19,6 +19,7 @@ const BUTTON_MAP = {
   4: 'l1', 5: 'r1', 6: 'l2',
   9: 'options',
   12: 'up', 13: 'down', 14: 'left', 15: 'right',
+  17: 'touchpad',   // DualSense touchpad click (Chrome standard mapping)
 };
 const PTT_INDEX = 7; // R2
 const STICK_THRESHOLD = 0.55;
