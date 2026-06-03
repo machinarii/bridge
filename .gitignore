@@ -30,3 +30,9 @@ docs/
 # Editor / IDE
 .vscode/
 .idea/
+
+# Internal MVP planning doc — not published
+MVP-bridge-3day-prototype.md
+
+# Vendored Dosis font files — not published
+app/assets/fonts/dosis/
