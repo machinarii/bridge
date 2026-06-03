@@ -5025,6 +5025,7 @@ window.addEventListener('keydown', (e) => {
   if (isShortcutsFocused()) {
     if (e.key === 'ArrowLeft')  { e.preventDefault(); moveShortcutFocus(-1); return; }
     if (e.key === 'ArrowRight') { e.preventDefault(); moveShortcutFocus(+1); return; }
+    if (e.key === 'ArrowDown')  { e.preventDefault(); bumpEdge(document.getElementById('footer-rail'), 'down', 6); return; }
     if (e.key === 'ArrowUp')    {
       e.preventDefault();
       leaveShortcuts();
