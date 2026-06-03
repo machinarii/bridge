@@ -1801,6 +1801,12 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   border-radius: 0;
   color: var(--fg-dim);
 }
+/* Face-button glyphs are square (filled disc); keep them round and sized to
+   match the keyboard keycap height so chips are the same in both modes. */
+.glyph.for-gamepad.gp-icon[data-glyph="cross"],
+.glyph.for-gamepad.gp-icon[data-glyph="circle"],
+.glyph.for-gamepad.gp-icon[data-glyph="square"],
+.glyph.for-gamepad.gp-icon[data-glyph="triangle"] { width: 25px; height: 25px; }
 .glyph.for-gamepad.gp-icon svg { display: block; width: 100%; height: 100%; }
 .sc.focused .glyph.for-gamepad.gp-icon { color: var(--fg); }
 
