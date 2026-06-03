@@ -4,6 +4,10 @@
  * See docs/superpowers/specs/2026-06-03-pm-kickoff-design.md. */
 
 import { getRole } from './roles.js';
+import { getProject, setKickoff } from './projects.js';
+import { appendTurn, getContext } from './scratchpad.js';
+import { getModelForRole } from './models.js';
+import { emitNotification, emitActivity } from './events.js';
 
 export const DOC_TITLES = {
   prd:       'PRD',
@@ -86,4 +90,46 @@ export async function callOpenRouterText({ apiKey, model, prompt, timeoutMs = PL
     return data?.choices?.[0]?.message?.content || '';
   } catch { return ''; }
   finally { clearTimeout(timer); }
+}
+
+function planSpec(body) {
+  return JSON.stringify({
+    intent: 'answer', template: 'reader', context: 'Kickoff', title: 'Kickoff plan',
+    body,
+    actions: [
+      { verb: 'Approve', glyph: 'cross',  action: { type: 'approve_kickoff' } },
+      { verb: 'Revise',  glyph: 'circle', action: { type: 'cancel' } },
+    ],
+  });
+}
+
+export async function startKickoff(projectId, opts = {}) {
+  const project = getProject(projectId);
+  if (!project) return;
+  const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+  // Only check the key when callText is NOT overridden (i.e. a real network call
+  // would be made). When the caller injects callText, they own the whole call path.
+  const needsKeyCheck = !opts.callText;
+  if (needsKeyCheck && (!apiKey || apiKey.includes('replace-me'))) {
+    appendTurn(project.leadAgentId, 'assistant',
+      planSpec('Add OPENROUTER_API_KEY to enable an automatic project kickoff. I can still help if you prompt me.'));
+    setKickoff(projectId, { status: 'skipped_no_key' });
+    return;
+  }
+  // Explicit empty key always skips, even with an injected callText.
+  if ('apiKey' in opts && (!apiKey || apiKey.includes('replace-me'))) {
+    appendTurn(project.leadAgentId, 'assistant',
+      planSpec('Add OPENROUTER_API_KEY to enable an automatic project kickoff. I can still help if you prompt me.'));
+    setKickoff(projectId, { status: 'skipped_no_key' });
+    return;
+  }
+  const callText = opts.callText || callOpenRouterText;
+  const body = (await callText({ apiKey, model: getModelForRole('pm'), prompt: buildPlanPrompt(project) }))
+    || 'I\'ll draft a PRD, a roadmap, team operating notes, and an open-questions doc, then assign each teammate a starting task. Approve to begin.';
+  appendTurn(project.leadAgentId, 'assistant', planSpec(body));
+  const planTurnIndex = getContext(project.leadAgentId).messages.length - 1;
+  setKickoff(projectId, { status: 'awaiting_approval', planTurnIndex });
+  emitActivity(projectId, `${project.agents.find(a => a.id === project.leadAgentId)?.name || 'PM'}: kickoff plan ready`, project.leadAgentId);
+  emitNotification({ kind: 'info', projectId, title: 'Kickoff plan ready',
+                     body: `Open ${project.name} → PM to approve the kickoff.` });
 }
