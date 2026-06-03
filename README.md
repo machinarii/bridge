@@ -115,6 +115,15 @@ npm run stt          # starts the Parakeet sidecar on :8123
 ```
 Set `LOCAL_STT_URL=http://127.0.0.1:8123/transcribe` (Settings → General) to route voice through it instead of the browser engine. Leave blank to use the browser's built-in recognition.
 
+### Fonts
+
+Font files are **not bundled in this repository** — the licensing on the
+typefaces used (e.g. **Dosis**) is limited and doesn't permit redistributing
+them here. Most type loads from Google Fonts via a `<link>` in `index.html`; any
+local font files belong under `app/assets/fonts/` (git-ignored). Supply the
+matching files there yourself for the intended look — otherwise the UI falls
+back to system fonts.
+
 ---
 
 ## Controls
@@ -162,6 +171,7 @@ app/
 ├── electron/      # Electron host (main process) + STT setup
 ├── server/        # Express orchestrator: API, OpenRouter calls, static serving
 ├── renderer/      # UI: input, speech, gamepad icons, deterministic surfaces
+├── assets/fonts/  # local font files (git-ignored — not redistributed, see Fonts)
 ├── stt/           # optional local Parakeet (MLX) speech-to-text sidecar
 └── state/         # per-project state + git repos (git-ignored)
 build/             # app icon, entitlements, Python/STT packaging scripts
@@ -177,7 +187,7 @@ app/server/
 ├── team.js          # team voice: router → fan-out → synthesizer
 ├── projects.js      # projects store + per-project folder scaffold
 ├── roles.js         # role catalog (PM, Software/Hardware Engineer, Designer, …)
-├── charters.js      # per-project role charters (role-<label>.md base templates)
+├── charters.js      # per-project role charters (role-<slug>.md, no underscores; short slugs via CHARTER_SLUG_OVERRIDE)
 ├── skills.js        # agent skill (playbook) registry — toggled in Settings → Skills
 ├── scratchpad.js    # per-agent conversation context
 ├── events.js        # SSE event bus (status / activity / delegate / notification)
