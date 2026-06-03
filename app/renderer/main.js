@@ -248,7 +248,7 @@ function fadeInDestination(duration = 160) {
 /** Stagger-in the destination tiles (project / agent / role) — each card
  *  slides in from a negative-X offset and fades up. */
 function staggerInCards() {
-  const items = surfaceEl.querySelectorAll('.project-tile:not(.centered-create), .agent-tile, .role-tile');
+  const items = surfaceEl.querySelectorAll('.project-tile:not(.centered-create), .agent-tile, .role-tile, .topology-card');
   if (items.length === 0) return;
   for (const el of items) {
     el.style.opacity = '0';
@@ -1302,6 +1302,10 @@ async function renderNewProjectRoles() {
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Select',
                        action: () => advanceFromRolePicker() });
+  // Tiles render after the async /roles fetch, so stagger them in here (the
+  // morph's own stagger ran before they existed).
+  staggerInCards();
+  staggerInFooter();
 }
 
 function toggleFocusedRole() {
@@ -1491,6 +1495,8 @@ function renderNewProjectTopology() {
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Choose',
                        action: () => { const c = ring.current(); if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId); else c?.click?.(); } });
+  staggerInCards();
+  staggerInFooter();
 }
 
 function selectTopology(id) {
@@ -1956,6 +1962,10 @@ async function openAddAgentPicker() {
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Done',
                        action: () => commitAddAgentSelections() });
+  // Tiles render after the async /roles fetch, so the morph's own stagger ran
+  // before they existed — stagger them in here instead.
+  staggerInCards();
+  staggerInFooter();
 }
 
 function toggleFocusedAddAgentRole() {
@@ -2062,9 +2072,12 @@ function gridMove(dir) {
 async function enterZoom(specOverride) {
   if (!activeProject) return;
   // The "+ Add agent" tile sits at index activeProject.agents.length —
-  // pressing Enter on it opens the role picker instead of zooming.
+  // pressing Enter on it opens the role picker with the same zoom-in morph
+  // as a real agent tile (rather than snapping straight in).
   if (mode !== MODE_ZOOM && gridIndex === activeProject.agents.length) {
-    openAddAgentPicker();
+    const addTile = ring.current();
+    const addRect = addTile?.getBoundingClientRect();
+    await forwardMorph(addTile, addRect, surfaceContentRect(), () => openAddAgentPicker());
     return;
   }
   const wasAtGrid = mode !== MODE_ZOOM;
