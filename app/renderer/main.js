@@ -770,6 +770,7 @@ function setContextLabel(text, color) {
 }
 
 function renderProjects() {
+  delete document.body.dataset.addAgentOpen;
   mode = MODE_PROJECTS;
   document.body.dataset.mode = mode;
   document.documentElement.style.setProperty('--agent-color', '#6ea8ff');
@@ -1778,6 +1779,7 @@ function roleLabel(roleId) {
 }
 
 function renderGrid() {
+  delete document.body.dataset.addAgentOpen;   // left the add/remove screen
   if (!activeProject) return renderProjects();
   mode = MODE_GRID;
   document.body.dataset.mode = mode;
@@ -1867,6 +1869,7 @@ function renderGrid() {
  * /projects/:pid/agents on Done. */
 let addAgentSelected = new Set(); // desired final roster (role ids) in the picker
 let addAgentBaseline = new Set(); // the roster when the picker opened (diff anchor)
+let addAgentReturnProject = null; // project to return to (L1) when leaving the picker
 
 async function ensureRolesLoaded() {
   if (window._roles?.length) return;   // cached — render synchronously
@@ -1883,6 +1886,11 @@ async function openAddAgentPicker() {
   // grid's circle→exitToProjects (which goes to L0 *and* nulls activeProject).
   mode = MODE_ADD_AGENT;
   document.body.dataset.mode = mode;
+  // Robust return-to-L1: flag the screen + capture the project, so Back/Esc can
+  // always get back to this project's grid regardless of any mode/activeProject
+  // glitch (see the capture-phase Escape interceptor + gamepad guard).
+  document.body.dataset.addAgentOpen = '1';
+  addAgentReturnProject = activeProject;
   // Use cached roles when available so the picker renders synchronously and the
   // zoom morph hands off cleanly into it (the enterZoom add-agent branch
   // prefetches before the morph). Falls back to a fetch on a cold cache.
@@ -1913,7 +1921,7 @@ async function openAddAgentPicker() {
   surfaceEl.appendChild(heading);
   // Close × — confirms only if the roster's been changed.
   surfaceEl.appendChild(createSurfaceCloseButton(() => {
-    maybeConfirmCancel(addAgentChanged(), () => renderGrid());
+    maybeConfirmCancel(addAgentChanged(), () => leaveAddAgentToGrid());
   }));
 
   // Roles already on the project first (alphabetized), then the rest. Focus
@@ -1954,7 +1962,7 @@ async function openAddAgentPicker() {
 
   // Invisible row inside the picker — Cancel on the left of Continue.
   const tryCancelAddAgent = () => {
-    maybeConfirmCancel(addAgentChanged(), () => renderGrid());
+    maybeConfirmCancel(addAgentChanged(), () => leaveAddAgentToGrid());
   };
   const row = document.createElement('div');
   row.className = 'role-confirm-row';
@@ -2008,6 +2016,23 @@ function toggleFocusedAddAgentRole() {
   if (toggle) toggle.dataset.checked = String(addAgentSelected.has(id));
   syncAddAgentConfirm();
 }
+
+/* Bulletproof return from the add/remove screen to its project's grid (L1),
+ * independent of `mode` / `activeProject` state. */
+function leaveAddAgentToGrid() {
+  if (!activeProject && addAgentReturnProject) activeProject = addAgentReturnProject;
+  mode = MODE_GRID;
+  renderGrid();
+}
+// Capture-phase Escape: while the add/remove screen is open, Esc ALWAYS returns
+// to the grid and nothing else (e.g. the grid's Escape→exitToProjects) runs.
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || document.body.dataset.addAgentOpen !== '1') return;
+  // A modal open over the screen owns Esc (e.g. the "really cancel?" dialog).
+  if (settingsOpen || editBubbleOpen || confirmCancelOpen || projectEditOpen || notificationsOpen) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (!e.repeat) leaveAddAgentToGrid();
+}, true);
 
 /* True when the picker's desired roster differs from when it opened. */
 function addAgentChanged() {
@@ -4499,6 +4524,9 @@ gp.addEventListener('press', (e) => {
     if (b === 'circle') { leaveShortcuts(); ring.paint(); return; }
     return;
   }
+
+  // While the add/remove screen is open, Back (circle) always returns to L1.
+  if (document.body.dataset.addAgentOpen === '1' && b === 'circle') { leaveAddAgentToGrid(); return; }
 
   if (mode === MODE_PROJECTS) {
     if (b === 'left' || b === 'right' || b === 'up' || b === 'down') {
