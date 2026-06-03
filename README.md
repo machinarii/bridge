@@ -5,7 +5,7 @@ Bridge is an **AI-first command center for managing multi-agent work** — a pro
 It's built around **diverse input modalities**, so you can drive it however suits you (and however you're able to):
 
 - **Voice** — hold to talk; speech-to-text runs **locally via Parakeet** (your audio never leaves the machine for transcription) and appears live in the chat as you speak.
-- **Gamepad** — the fastest way to switch from project to project and agent to agent. Every on-screen action maps to a controller glyph, so **switching is a single button at your fingertips** (L1/R1 to cycle, ✕ to select) — no cursor travel. A trackpad or mouse forces you to move the pointer, aim at a tab, click, and repeat that whole trip every time you want to switch; the gamepad collapses it to one press, which adds up fast when you're hopping across many projects and agents.
+- **Gamepad** *(PlayStation 5 DualSense only, for now)* — the fastest way to switch from project to project and agent to agent. Every on-screen action maps to a controller glyph, so **switching is a single button at your fingertips** (L1/R1 to cycle, ✕ to select) — no cursor travel. A trackpad or mouse forces you to move the pointer, aim at a tab, click, and repeat that whole trip every time you want to switch; the gamepad collapses it to one press, which adds up fast when you're hopping across many projects and agents.
 - **Keyboard** — full parity with the controller.
 - **Trackpad / mouse** — click any tile, chip, or action to select; standard pointer navigation.
 - **Remote** *(planned)* — drive a Bridge session from a phone or second device.
@@ -119,7 +119,11 @@ Set `LOCAL_STT_URL=http://127.0.0.1:8123/transcribe` (Settings → General) to r
 
 ## Controls
 
-| Action | Keyboard | Controller (PS5/Xbox) |
+> **Controller support:** only the **PlayStation 5 DualSense** is supported right
+> now (glyphs and the touchpad binding assume it). Other controllers aren't
+> mapped yet.
+
+| Action | Keyboard | Controller (PS5 DualSense) |
 |---|---|---|
 | Push-to-talk | hold **V** | hold **R2 / RT** |
 | Navigate | arrows / **Tab** (into footer) | D-pad / left stick |
