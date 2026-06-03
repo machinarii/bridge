@@ -4408,34 +4408,48 @@ function stopGithubPoll() { if (ghPollTimer) { clearInterval(ghPollTimer); ghPol
 
 async function githubConnect() {
   stopGithubPoll();
-  // Persist the typed client ID first so the server can start the flow without
-  // a separate Save step.
+  if (ghDeviceEl) ghDeviceEl.hidden = true;   // keep hidden until the flow starts
+  // Need a client ID first (typed-but-unsaved is fine — persist it now).
   const cid = (ghClientIdEl?.value || '').trim();
-  if (cid) {
-    try {
-      await fetch('/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ GITHUB_OAUTH_CLIENT_ID: cid }) });
-    } catch {}
+  if (!cid) {
+    if (ghStatusEl) ghStatusEl.textContent = 'Enter your GitHub OAuth client ID first.';
+    ghClientIdEl?.focus();
+    return;
   }
-  ghDeviceStateEl && (ghDeviceStateEl.textContent = 'Starting…');
-  ghDeviceEl && (ghDeviceEl.hidden = false);
+  if (ghStatusEl) ghStatusEl.textContent = 'Starting…';
+  try {
+    await fetch('/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ GITHUB_OAUTH_CLIENT_ID: cid }) });
+  } catch {}
   let info;
   try {
     const r = await fetch('/github/device', { method: 'POST' });
     info = await r.json();
     if (!r.ok) throw new Error(info?.error || `server ${r.status}`);
   } catch (err) {
-    if (ghDeviceStateEl) ghDeviceStateEl.textContent = `Couldn't start: ${err.message}`;
+    // Failure → show it on the status line; don't reveal a broken device/QR area.
+    if (ghStatusEl) ghStatusEl.textContent = `Couldn't start: ${err.message}`;
     return;
   }
   const url = info.verification_uri_complete;
   if (ghCodeEl) ghCodeEl.textContent = info.user_code || '????-????';
-  if (ghLinkEl) { ghLinkEl.href = url; }
-  // QR of the verification URL for the phone path. The encoded value is a
-  // single-use device code that's useless without the user's own GitHub
-  // approval, so a public QR-image renderer is acceptably low-risk here.
-  if (ghQrEl) ghQrEl.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=${encodeURIComponent(url)}`;
+  if (ghLinkEl) ghLinkEl.href = url;
+  // QR of the verification URL (phone path). The value is a single-use device
+  // code, useless without the user's own GitHub approval, so a public QR-image
+  // renderer is acceptably low-risk. Hide the image gracefully if it can't load
+  // — the code + on-device link still work.
+  if (ghQrEl) {
+    ghQrEl.style.display = '';
+    ghQrEl.onload  = () => { ghQrEl.style.display = ''; };
+    ghQrEl.onerror = () => { ghQrEl.style.display = 'none'; };
+    ghQrEl.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=${encodeURIComponent(url)}`;
+  }
+  if (ghStatusEl) ghStatusEl.textContent = 'Not connected';
   if (ghDeviceStateEl) ghDeviceStateEl.textContent = 'Waiting for authorization…';
+  if (ghDeviceEl) {
+    ghDeviceEl.hidden = false;
+    ghDeviceEl.scrollIntoView({ block: 'center', behavior: 'smooth' });   // reveal the QR/code
+  }
   ghPollTimer = setInterval(async () => {
     try {
       const s = await (await fetch('/github')).json();
