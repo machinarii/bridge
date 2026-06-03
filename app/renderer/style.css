@@ -2812,3 +2812,32 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;
   padding: 0.2rem 0.6rem; cursor: pointer;
 }
+
+/* Kickoff approval embedded in the PM's plan bubble (bottom-right). Reuses the
+   standard role-cancel / role-confirm button styles, ~30% smaller to fit. */
+.agent-view .bubble.agent .bubble-kickoff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+.agent-view .bubble.agent .bubble-kickoff-actions .role-cancel,
+.agent-view .bubble.agent .bubble-kickoff-actions .role-confirm {
+  min-width: 0;
+  min-height: 0;
+  padding: 0.42rem 0.98rem;   /* ~30% smaller than the standard 0.6rem 1.4rem */
+  font-size: 14px;            /* ~30% smaller than the standard 20px */
+}
+
+/* Unseen agent message: the L1 tile glows with a smooth sine pulse until the
+   user opens that agent. */
+@keyframes tileUnseenGlow {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in oklab, var(--tile-color, #6ea8ff) 70%, transparent),
+                         0 0 6px 0 color-mix(in oklab, var(--tile-color, #6ea8ff) 35%, transparent); }
+  50%      { box-shadow: 0 0 0 1px var(--tile-color, #6ea8ff),
+                         0 0 22px 4px color-mix(in oklab, var(--tile-color, #6ea8ff) 75%, transparent); }
+}
+.agent-tile[data-unseen="true"] {
+  animation: tileUnseenGlow 1.8s ease-in-out infinite;
+}

@@ -625,6 +625,18 @@ let agentStatus = {}; // { [agentId]: 'idle'|'drafting'|'analyzing'|'waiting' }
 const VERB_LABELS = { idle: 'Idle', drafting: 'Drafting', analyzing: 'Analyzing', waiting: 'Waiting' };
 function verbLabel(v) { return VERB_LABELS[v] || 'Idle'; }
 
+/* Agents that produced a new message the user hasn't opened yet. Their L1 tile
+ * glows and reads "Waiting for response" (once the agent is idle). */
+const unseenAgents = new Set();
+function markUnseen(agentId) {
+  if (!agentId) return;
+  if (mode === MODE_ZOOM && currentAgent()?.id === agentId) return; // currently viewing it
+  if (!unseenAgents.has(agentId)) { unseenAgents.add(agentId); paintAgentStatus(agentId); }
+}
+function clearUnseen(agentId) {
+  if (agentId && unseenAgents.delete(agentId)) paintAgentStatus(agentId);
+}
+
 /* v2 — activity feed buffer. Holds events across ALL projects so
  * both the L0 cross-project feed (§2) and the L1/L2 in-project feed
  * (§3) can read from the same source. Per-project filtering happens
@@ -1842,12 +1854,14 @@ function renderGrid() {
     tile.style.setProperty('--tile-color', projectColor);
     tile.dataset.agentId = a.id;
     const verb = agentStatus[a.id] || (agentBusy[a.id] ? 'drafting' : 'idle');
+    const waiting = verb === 'idle' && unseenAgents.has(a.id);
     tile.dataset.busy = (verb !== 'idle') ? 'true' : 'false';
     tile.dataset.status = verb;
+    tile.dataset.unseen = waiting ? 'true' : 'false';
     tile.innerHTML = `
       <h2 class="name">${escapeHtml(a.name)}</h2>
       <div class="role">${escapeHtml(roleLabel(a.role))}</div>
-      <div class="status"><span class="dot"></span><span class="status-verb">${verbLabel(verb)}</span></div>`;
+      <div class="status"><span class="dot"></span><span class="status-verb">${waiting ? 'Waiting for response' : verbLabel(verb)}</span></div>`;
     tile.addEventListener('click', () => { gridIndex = i; ring.set(tileEls); ring.index = i; ring.paint(); enterZoom(); });
     grid.appendChild(tile);
     return tile;
@@ -2208,6 +2222,7 @@ async function enterZoom(specOverride) {
 function renderZoom(specOverride) {
   const agent = currentAgent();
   if (!agent) return renderGrid();
+  clearUnseen(agent.id);   // opening the agent marks its messages seen
   // Own the mode so direct callers (e.g. the boot-time restore) don't render
   // the agent view while `mode` is still MODE_PROJECTS — which would mis-size
   // the surface (no body[data-mode="zoom"]) and break all the zoom keybinds.
@@ -2253,12 +2268,8 @@ function renderZoom(specOverride) {
     renderActionBar([]);
     ring.set([]);
     _setL2Shortcuts();
-    // The PM's kickoff plan is appended to chat history but isn't carried
-    // as a client-side lastSpec on a fresh L2 open (GET /projects/history
-    // don't ship lastSpec). When the lead is awaiting kickoff approval,
-    // surface the plan's Approve/Revise actions from the latest history
-    // turn so the user can act on it. Runs after the async history load.
-    surfaceKickoffActions(agent);
+    // The PM's kickoff plan renders its Approve/Disapprove buttons inline,
+    // embedded in the plan bubble (see renderChatHistory) — not in the footer.
     return;
   }
 
@@ -2291,42 +2302,54 @@ function renderZoom(specOverride) {
  * the latest assistant turn that carries an `actions` array out of history
  * and surface those actions (Approve / Revise) in the L2 action bar, wired
  * to executeAction. No-op for non-lead agents or other kickoff states. */
-async function surfaceKickoffActions(agent) {
-  if (!activeProject || !agent) return;
-  if (agent.id !== activeProject.leadAgentId) return;
-  let messages;
+/* Inline kickoff approval embedded in the PM's plan bubble (bottom-right):
+ * Approve runs the kickoff, Disapprove dismisses it. */
+function buildKickoffApproval(agent, bubble) {
+  const row = document.createElement('div');
+  row.className = 'bubble-kickoff-actions';
+  // Reuse the standard secondary/primary button styles (role-cancel / role-confirm).
+  const reject = document.createElement('button');
+  reject.type = 'button';
+  reject.className = 'role-cancel';
+  reject.textContent = 'Reject';
+  reject.addEventListener('click', (e) => { e.stopPropagation(); kickoffDecide('decline', agent); });
+  const approve = document.createElement('button');
+  approve.type = 'button';
+  approve.className = 'role-confirm';
+  approve.textContent = 'Approve';
+  approve.addEventListener('click', (e) => { e.stopPropagation(); kickoffDecide('approve', agent); });
+  row.append(reject, approve);
+  // Make them reachable by keyboard / gamepad: put them in the L2 focus ring
+  // (default-focus Approve). Deferred so the bubble is in the DOM first and we
+  // run after renderZoom's own ring.set([]).
+  setTimeout(() => {
+    if (mode !== MODE_ZOOM || currentAgent()?.id !== agent.id) return;
+    // Ring: the plan bubble + the two buttons, so Left/Right (or d-pad) cycles
+    // bubble → Reject → Approve. The bubble is highlighted first.
+    ring.set([bubble, reject, approve].filter(Boolean));
+    ring.index = 0;
+    ring.paint();
+    _setL2Shortcuts();
+  }, 0);
+  return row;
+}
+
+async function kickoffDecide(which, agent) {
+  const path = which === 'approve' ? 'kickoff/approve' : 'kickoff/decline';
+  setIndicator('thinking', which === 'approve' ? 'Starting kickoff…' : 'Dismissing…');
   try {
-    const r = await fetch(`/projects/${activeProject.id}/agents/${agent.id}/history`);
-    if (!r.ok) return;
-    ({ messages } = await r.json());
-  } catch { return; }
-  // Bail if the user navigated away (or into a tile spec) while we awaited.
-  if (mode !== MODE_ZOOM || currentAgent()?.id !== agent.id) return;
-  if (currentAgent()?.lastSpec) return;
-  // Find the LATEST assistant turn (the cached kickoff.status is captured at
-  // project-create time, before the fire-and-forget startKickoff finishes, so
-  // it's stale in-session — gate on live history instead). Only surface the
-  // plan's actions when that newest assistant turn actually offers approval.
-  // After approval the kickoff REPORT becomes the latest assistant turn (its
-  // only action is `cancel`), so Approve correctly stops appearing.
-  let planSpec = null;
-  for (let i = (messages || []).length - 1; i >= 0; i--) {
-    const m = messages[i];
-    if (m.role !== 'assistant') continue;
-    try {
-      planSpec = JSON.parse(String(m.content || '').replace(/^```(?:json)?/i, '').replace(/```$/, '').trim());
-    } catch { /* not a spec turn */ }
-    break; // only inspect the most-recent assistant turn
+    const r = await fetch(`/projects/${activeProject.id}/${path}`, { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    const status = which === 'approve' ? 'running' : 'declined';
+    if (activeProject.kickoff) activeProject.kickoff.status = status;
+    else activeProject.kickoff = { status };
+    setIndicator('idle', 'Connected');
+    const chat = chatScrollEl();
+    if (chat) await renderChatHistory(chat, agent);
+  } catch (err) {
+    setIndicator('error', which === 'approve' ? 'Kickoff failed' : 'Failed');
+    console.error('[kickoff]', which, 'failed:', err);
   }
-  const hasApprove = Array.isArray(planSpec?.actions)
-    && planSpec.actions.some(a => (a.action?.type || a.type) === 'approve_kickoff');
-  if (!hasApprove) return;
-  const actionButtons = renderActionBar(planSpec.actions);
-  ring.set(actionButtons);
-  for (const btn of actionButtons) {
-    btn.addEventListener('click', () => executeAction(btn._action, planSpec));
-  }
-  _setL2Shortcuts();
 }
 
 /* Selectable chat bubbles: each prompt / response is a tabbable
@@ -2452,6 +2475,12 @@ async function renderChatHistory(container, agent) {
     if (!r.ok) return;
     const { messages } = await r.json();
     chatMessages = messages || [];
+    // Index of the most-recent assistant turn — the kickoff plan's inline
+    // Approve/Disapprove buttons render only on it (and only while pending).
+    let lastAssistantIdx = -1;
+    for (let k = (messages || []).length - 1; k >= 0; k--) {
+      if (messages[k].role === 'assistant') { lastAssistantIdx = k; break; }
+    }
     // iOS-group-chat style: each agent (left-side) bubble gets a sender
     // name + role header, suppressed for consecutive turns by the same
     // author. Reset on every user / system turn so a new run re-labels.
@@ -2483,34 +2512,36 @@ async function renderChatHistory(container, agent) {
       bubble.dataset.role = m.role;
       bubble.tabIndex = 0;
 
-      // Sender label (left/agent bubbles only). A "foreign" bubble — a
-      // delegate's reply surfaced into this agent's chat — carries its own
-      // author; the viewed agent's own turns fall back to its identity.
-      if (!isUser) {
-        const author = (m.author && m.author.name)
-          ? { name: m.author.name, role: m.author.role || '' }
-          : { name: agent.name, role: roleLabel(agent.role) };
-        if (m.author && m.author.id && m.author.id !== agent.id) bubble.classList.add('foreign');
-        if (author.name !== lastShownAuthor) {
+      // Sender label: only on OTHER agents' bubbles — a "foreign" bubble (e.g.
+      // a delegate's reply surfaced into this agent's chat). The viewed agent's
+      // own bubbles get no name header.
+      const isForeign = !isUser && !!(m.author && m.author.id && m.author.id !== agent.id);
+      if (isForeign) {
+        bubble.classList.add('foreign');
+        const name = m.author.name || '';
+        const role = m.author.role || '';
+        if (name !== lastShownAuthor) {
           const hdr = document.createElement('div');
           hdr.className = 'bubble-author';
           hdr.innerHTML =
-            `<span class="bubble-author-name">${escapeHtml(author.name)}</span>` +
-            (author.role ? `<span class="bubble-author-role">${escapeHtml(author.role)}</span>` : '');
+            `<span class="bubble-author-name">${escapeHtml(name)}</span>` +
+            (role ? `<span class="bubble-author-role">${escapeHtml(role)}</span>` : '');
           bubble.appendChild(hdr);
         }
-        lastShownAuthor = author.name;
+        lastShownAuthor = name;
       } else {
         lastShownAuthor = null;
       }
       let body = String(m.content || '').trim();
       let actionsTaken = null;
+      let isKickoffPlan = false;
       if (!isUser) {
         try {
           const parsed = JSON.parse(body.replace(/^```(?:json)?/i,'').replace(/```$/, '').trim());
           if (parsed?.body) body = parsed.body;
           else if (parsed?.title) body = parsed.title;
           if (Array.isArray(parsed?.actions_taken)) actionsTaken = parsed.actions_taken;
+          if (Array.isArray(parsed?.actions) && parsed.actions.some(a => (a.action?.type || a.type) === 'approve_kickoff')) isKickoffPlan = true;
         } catch { /* leave body as-is */ }
       }
       // Strip the "[team-voice] " prefix added by the team driver so the
@@ -2535,6 +2566,14 @@ async function renderChatHistory(container, agent) {
         attachCodeCopyHandlers(content);
       }
       bubble.appendChild(content);
+
+      // Kickoff plan: embed Approve / Disapprove in the bubble (bottom-right),
+      // only on the latest assistant turn and while the kickoff is still
+      // pending (not running/done/declined/no-key).
+      if (!isUser && isKickoffPlan && i === lastAssistantIdx &&
+          !['running', 'done', 'declined', 'skipped_no_key'].includes(activeProject?.kickoff?.status)) {
+        bubble.appendChild(buildKickoffApproval(agent, bubble));
+      }
 
       // Timestamp + retry / edit only render on user-authored bubbles.
       // Agent bubbles stay clean (no floating metadata).
@@ -3597,6 +3636,10 @@ function handleBridgeEvent(ev) {
       // filters by activeProject at render time; the L0 cross-project
       // feed shows everything.
       pushActivityEntry(ev);
+      // Glow the agent's L1 tile when it produces something the user hasn't
+      // opened (a reply, a kickoff plan, an assigned task).
+      if (ev.type === 'activity' && ev.agentId) markUnseen(ev.agentId);
+      else if (ev.type === 'delegate' && ev.toAgentId) markUnseen(ev.toAgentId);
       break;
     }
     case 'note_added':
@@ -3796,10 +3839,14 @@ function paintAgentStatus(agentId) {
   const tile = document.querySelector(`.agent-tile[data-agent-id="${agentId}"]`);
   if (!tile) return;
   const verb = agentStatus[agentId] || 'idle';
+  // "Waiting for response" + glow only once the agent is idle with an unseen
+  // message — while it's actively drafting/analyzing, show the work verb.
+  const waiting = verb === 'idle' && unseenAgents.has(agentId);
   tile.dataset.status = verb;
   tile.dataset.busy = (verb !== 'idle') ? 'true' : 'false';
+  tile.dataset.unseen = waiting ? 'true' : 'false';
   const verbEl = tile.querySelector('.status .status-verb');
-  if (verbEl) verbEl.textContent = verbLabel(verb);
+  if (verbEl) verbEl.textContent = waiting ? 'Waiting for response' : verbLabel(verb);
 }
 
 // Kick the SSE channel off once the renderer is ready.

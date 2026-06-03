@@ -265,3 +265,11 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
   // normal /interpret path will produce the PM's conversational reply.
   return { handled: true, intent, awaiting: true };
 }
+
+/* Disapprove: dismiss a pending kickoff so the PM won't auto-run it. The user
+ * can still drive the team conversationally afterward. */
+export function declineKickoff(projectId) {
+  if (getKickoff(projectId).status !== 'awaiting_approval') return { ok: false };
+  setKickoff(projectId, { status: 'declined' });
+  return { ok: true };
+}
