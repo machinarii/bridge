@@ -10,7 +10,7 @@ import { githubStatus, startDeviceFlow, disconnectGithub, setGithubPersist, dete
 import { listProjects, getProject, createProject, setAgentEnabled, addAgent, renameProject, deleteProject } from './projects.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
-import { setLastSpec, getContext, lastActivityAt } from './scratchpad.js';
+import { setLastSpec, getContext, lastActivityAt, truncateFrom } from './scratchpad.js';
 import { runTeamVoice } from './team.js';
 import {
   notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
@@ -467,6 +467,18 @@ app.post('/projects/:pid/agents/:aid/spec', (req, res) => {
 app.get('/projects/:pid/agents/:aid/history', (req, res) => {
   try {
     const ctx = getContext(req.params.aid);
+    res.json({ messages: ctx.messages || [] });
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// Drop a prompt + its response (and anything after) so the client can redo it.
+app.post('/projects/:pid/agents/:aid/history/truncate', (req, res) => {
+  try {
+    const index = Number(req.body?.index);
+    if (!Number.isInteger(index)) return res.status(400).json({ error: 'index required' });
+    const ctx = truncateFrom(req.params.aid, index);
     res.json({ messages: ctx.messages || [] });
   } catch (err) {
     res.status(500).json({ error: String(err?.message || err) });
