@@ -5,7 +5,7 @@ Bridge is an **AI-first command center for managing multi-agent work** — a pro
 It's built around **diverse input modalities**, so you can drive it however suits you (and however you're able to):
 
 - **Voice** — hold to talk; speech-to-text runs **locally via Parakeet** (your audio never leaves the machine for transcription), and results are spoken back.
-- **Gamepad** — the fastest way to drive Bridge. Every on-screen action maps to a controller glyph, so **switching project-to-project and agent-to-agent is a single button at your fingertips** (L1/R1 to cycle, ✕ to select) — no cursor travel. A trackpad or mouse forces you to move the pointer, aim at a tab, click, and repeat that whole trip every time you want to switch; the gamepad collapses it to one press, which adds up fast when you're hopping across many projects and agents.
+- **Gamepad** — the fastest way to switch from project to project and agent to agent. Every on-screen action maps to a controller glyph, so **switching is a single button at your fingertips** (L1/R1 to cycle, ✕ to select) — no cursor travel. A trackpad or mouse forces you to move the pointer, aim at a tab, click, and repeat that whole trip every time you want to switch; the gamepad collapses it to one press, which adds up fast when you're hopping across many projects and agents.
 - **Keyboard** — full parity with the controller.
 - **Trackpad / mouse** — click any tile, chip, or action to select; standard pointer navigation.
 - **Remote** *(planned)* — drive a Bridge session from a phone or second device.
