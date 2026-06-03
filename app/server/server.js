@@ -7,7 +7,7 @@ import { listRoles } from './roles.js';
 import { getRouterModel } from './models.js';
 import { listSkills, getSkill, withSkillEnabled } from './skills.js';
 import { githubStatus, startDeviceFlow, disconnectGithub, setGithubPersist, detectAndStore } from './github.js';
-import { listProjects, getProject, createProject, setAgentEnabled, addAgent, renameProject, deleteProject } from './projects.js';
+import { listProjects, getProject, createProject, setAgentEnabled, addAgent, removeAgent, renameProject, deleteProject } from './projects.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, getContext, lastActivityAt, truncateFrom } from './scratchpad.js';
@@ -404,6 +404,17 @@ app.post('/projects/:pid/agents', async (req, res) => {
       title: 'Agent added',
       body: `${newAgent?.name || roleId} joined ${p.name}.`,
     });
+    res.json(p);
+  } catch (err) {
+    res.status(400).json({ error: String(err?.message || err) });
+  }
+});
+
+app.delete('/projects/:pid/agents/:aid', (req, res) => {
+  try {
+    const p = removeAgent(req.params.pid, req.params.aid);
+    notifyStateChange(p.id, 'Agent removed');
+    publishEvent({ type: 'notification', kind: 'info', projectId: p.id, title: 'Agent removed', body: `An agent left ${p.name}.` });
     res.json(p);
   } catch (err) {
     res.status(400).json({ error: String(err?.message || err) });
