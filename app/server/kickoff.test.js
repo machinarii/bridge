@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyApproval, topologyGuidance, DOC_TITLES, buildPlanPrompt, startKickoff, executeKickoff } from './kickoff.js';
-import { createProject, getKickoff, deleteProject } from './projects.js';
+import { classifyApproval, topologyGuidance, DOC_TITLES, buildPlanPrompt, startKickoff, executeKickoff, handleLeadMessageDuringKickoff } from './kickoff.js';
+import { createProject, getKickoff, setKickoff, deleteProject } from './projects.js';
 import { getContext } from './scratchpad.js';
 
 test('classifyApproval recognizes clear yes/no', () => {
@@ -109,5 +109,23 @@ test('executeKickoff runs once and is idempotent', async () => {
     const second = await executeKickoff(p.id, deps);
     assert.equal(second.ran, false);
     assert.equal(listNotes(p.id).length, 4);
+  } finally { deleteProject(p.id); }
+});
+
+test('approval routing: yes runs, question replies, not-awaiting passes through', async () => {
+  const p = await createProject({ name: 'Approve KO', goal: 'do V', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    const deps = { apiKey: 'k', callText: async () => 'b',
+      callJSON: async () => JSON.stringify({ assignments: [] }) };
+    assert.equal((await handleLeadMessageDuringKickoff(p.id, 'hi', deps)).handled, false);
+    setKickoff(p.id, { status: 'awaiting_approval', planTurnIndex: 0 });
+    const q = await handleLeadMessageDuringKickoff(p.id, 'what is the budget?', deps);
+    assert.equal(q.handled, true);
+    assert.equal(q.intent, 'unsure');
+    assert.equal(getKickoff(p.id).status, 'awaiting_approval');
+    const yes = await handleLeadMessageDuringKickoff(p.id, 'yes go ahead', deps);
+    assert.equal(yes.handled, true);
+    assert.equal(yes.intent, 'approve');
+    assert.equal(getKickoff(p.id).status, 'done');
   } finally { deleteProject(p.id); }
 });
