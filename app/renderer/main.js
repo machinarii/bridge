@@ -4302,18 +4302,17 @@ gp.addEventListener('press', (e) => {
  * smoothly. y > 0 = stick deflected down → scroll down; y < 0 →
  * scroll up. Speed scales with deflection. The gamepad driver
  * already applies a 0.15 dead-zone. */
-const RSTICK_MAX_PX_PER_TICK = 384;
+const RSTICK_MAX_PX_PER_TICK = 48;  // px per polled frame at full deflection (instant scroll)
 gp.addEventListener('rstick', (e) => {
   if (mode !== MODE_ZOOM) return;
   const dy = e.detail?.y || 0;
   if (!dy) return;
   const chat = surfaceEl?.querySelector?.('.chat-scroll');
   if (!chat) return;
-  // Override the .chat-scroll's CSS smooth-scroll briefly so this
-  // call lands as a tight per-frame scroll. The auto behavior also
-  // ensures the next legitimate smooth scroll (e.g. arrow-key bubble
-  // focus) still animates.
-  chat.scrollBy({ top: dy * RSTICK_MAX_PX_PER_TICK, left: 0, behavior: 'auto' });
+  // 'instant' (NOT 'auto' — auto defers to the element's CSS scroll-behavior,
+  // which is `smooth`, so per-frame scrolls accumulated a far target that kept
+  // gliding after release). Instant = a tight, 1:1 per-frame scroll.
+  chat.scrollBy({ top: dy * RSTICK_MAX_PX_PER_TICK, left: 0, behavior: 'instant' });
 });
 
 /* L2: speak the currently-focused project/agent name. */
