@@ -13,7 +13,7 @@ import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, getContext, lastActivityAt, truncateFrom } from './scratchpad.js';
 import { runTeamVoice, resolveDelegateSpec } from './team.js';
-import { startKickoff, handleLeadMessageDuringKickoff } from './kickoff.js';
+import { startKickoff, handleLeadMessageDuringKickoff, declineKickoff } from './kickoff.js';
 import {
   notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
 } from './autosave.js';
@@ -472,6 +472,14 @@ app.post('/projects/:pid/kickoff/approve', async (req, res) => {
   try {
     const result = await handleLeadMessageDuringKickoff(req.params.pid, 'yes');
     res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.post('/projects/:pid/kickoff/decline', (req, res) => {
+  try {
+    res.json({ ok: true, ...declineKickoff(req.params.pid) });
   } catch (err) {
     res.status(500).json({ error: String(err?.message || err) });
   }
