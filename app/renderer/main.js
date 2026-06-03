@@ -1692,7 +1692,7 @@ function renderNewProjectName() {
   if (nameDoneEl) nameDoneEl.disabled = !newProjName.trim();
   nameBackEl?.addEventListener('click', () => {
     stopMicVisualizer();
-    renderNewProjectRoles();
+    renderNewProjectTopology();
   });
   nameCancelEl?.addEventListener('click', tryCancelNameCapture);
   nameDoneEl?.addEventListener('click', () => confirmCapture());
@@ -3299,6 +3299,13 @@ speech.addEventListener('partial', (e) => {
   // Enable the primary action button as soon as any text is recognized.
   const doneEl = document.getElementById('capture-done');
   if (doneEl && e.detail && e.detail.trim()) doneEl.disabled = false;
+  // Keep the backing state var in sync with the live transcript so the
+  // Continue gate (confirmCapture) sees the same value the user sees — even
+  // when the recognizer never emits a final result before 'end' fires.
+  if (e.detail && e.detail.trim()) {
+    if (mode === MODE_NEW_PROJ_NAME) newProjName = e.detail.trim();
+    else if (mode === MODE_NEW_PROJ_GOAL) newProjGoal = e.detail.trim();
+  }
 });
 speech.addEventListener('end', (e) => {
   // SpeechRecognition stopped (browser closed the session). Clear the
