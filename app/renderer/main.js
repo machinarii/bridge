@@ -2341,13 +2341,18 @@ function renderHandoffBubble(m, idx) {
   el.dataset.role = 'system';
 
   if (payload) {
-    const arrow = document.createElement('div');
-    arrow.className = 'handoff-line';
-    arrow.innerHTML =
-      `<span class="handoff-from">${escapeHtml(payload.from || '')}</span>` +
+    const party = (name, role) =>
+      `<span class="handoff-party">` +
+        `<span class="handoff-name">${escapeHtml(name || '')}</span>` +
+        (role ? `<span class="handoff-role">${escapeHtml(role)}</span>` : '') +
+      `</span>`;
+    const head = document.createElement('div');
+    head.className = 'handoff-heading';
+    head.innerHTML =
+      party(payload.from, payload.fromRole) +
       `<span class="handoff-arrow" aria-hidden="true">→</span>` +
-      `<span class="handoff-to">${escapeHtml(payload.to || '')}</span>`;
-    el.appendChild(arrow);
+      party(payload.to, payload.toRole);
+    el.appendChild(head);
     if (payload.task) {
       const task = document.createElement('div');
       task.className = 'handoff-task';
