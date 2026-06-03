@@ -4339,7 +4339,7 @@ function rebuildFileEntries() {
     }
   };
 
-  addFolder('charters', 'Charters', fileTree.charters, (li, c) => {
+  addFolder('charters', 'Roles', fileTree.charters, (li, c) => {
     // Show the actual on-disk filename (role-<label>.md, no underscores).
     const fname = c.path.replace(/^roles\//, '');
     li.innerHTML = `<span>${escapeHtml(fname)}</span><span class="who">${escapeHtml(c.agentName)}</span>`;
@@ -5436,6 +5436,13 @@ window.addEventListener('keydown', (e) => {
   // Esc only closes the menu rather than also triggering Back.
   if (settingsOpen || editBubbleOpen || confirmCancelOpen || projectEditOpen || notificationsOpen) return;
 
+  // Mode at handler entry. A branch below (e.g. add-agent Cancel/Esc → renderGrid)
+  // can flip `mode` mid-handler; the trailing MODE_GRID/MODE_ZOOM blocks are a
+  // SEPARATE `if`, so without this they'd then re-process the same keypress as a
+  // grid press (Enter on the Add tile → the picker reopens). Guard them on the
+  // mode we entered with, not the possibly-mutated live one.
+  const entryMode = mode;
+
   // Escape is a one-shot back action — ignore auto-repeat. Otherwise a held Esc
   // fires repeated keydowns that over-navigate (e.g. add-agent → L1 → L0).
   if (e.key === 'Escape' && e.repeat) { e.preventDefault(); return; }
@@ -5659,7 +5666,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  if (mode === MODE_GRID) {
+  if (entryMode === MODE_GRID) {
     // (gridMove/stepGrid own edge behavior: Up from the first row jumps to the
     // × close, Left/Right flow across rows, Down drops into the footer rail.)
     // Left from the leftmost grid column with the explorer open hops
@@ -5685,7 +5692,7 @@ window.addEventListener('keydown', (e) => {
     else if (e.code === 'Space') { e.preventDefault(); toggleFocusedAgentEnabled(); }
     else if (e.key === '[')      { e.preventDefault(); cycleProject(-1); }
     else if (e.key === ']')      { e.preventDefault(); cycleProject(+1); }
-  } else if (mode === MODE_ZOOM) {
+  } else if (entryMode === MODE_ZOOM) {
     // Chat bubble selection. ArrowUp from the surface enters the chat
     // history at the last bubble; once inside, ArrowUp/Down walks
     // bubbles, Left/Right cycles their action icons, Enter activates.
