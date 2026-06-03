@@ -1718,9 +1718,9 @@ function renderNewProjectName() {
   nameCancelEl?.addEventListener('click', tryCancelNameCapture);
   nameDoneEl?.addEventListener('click', () => confirmCapture());
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelNameCapture));
-  startMicVisualizer();
   // Push-to-talk: the user holds V / R2 to dictate the name, then releases to
-  // transcribe (Parakeet). The mic-stack shows "Hold V / R2 to talk".
+  // transcribe (Parakeet). The mic-stack shows "Hold V / R2 to talk" by default
+  // and swaps to the live wave only while holding (driven by setPttHeld).
   renderActionBar([]); // Back shown once via setShortcuts' Esc chip below
   setShortcuts([
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
@@ -1765,8 +1765,8 @@ function renderNewProjectGoal() {
   goalCancelEl?.addEventListener('click', tryCancelGoalCapture);
   goalDoneEl?.addEventListener('click', () => confirmCapture());
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelGoalCapture));
-  startMicVisualizer();
   // Push-to-talk: hold V / R2 to dictate the goal, release to transcribe.
+  // The mic-stack swaps the hold hint for the live wave only while holding.
   renderActionBar([]); // Back shown once via setShortcuts' Esc chip below
   setShortcuts([
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
@@ -3268,6 +3268,13 @@ function setPttHeld(on) {
   const chips = document.querySelectorAll('.sc.ptt-chip');
   chips.forEach(c => c.classList.toggle('talking', on));
   if (on && chips.length) startChipMic(); else stopChipMic();
+  // Capture screens (name/goal): show the live wave (and hide the "Hold V/R2
+  // to talk" hint) only while holding; revert on release.
+  const stack = document.querySelector('.capture-tile .mic-stack');
+  if (stack) {
+    stack.classList.toggle('talking', on);
+    if (on) startMicVisualizer(); else stopMicVisualizer();
+  }
 }
 
 /* ---------- Hold-to-talk chip mic visualizer ----------

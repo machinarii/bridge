@@ -2420,6 +2420,11 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   display: flex; align-items: center; justify-content: center;
   gap: 6px; height: 60px;
 }
+/* The wave only appears while holding to talk; by default the mic-stack shows
+   the "Hold V / R2 to talk" hint instead. */
+.mic-stack .mic-bars { display: none; }
+.mic-stack.talking .mic-bars { display: flex; }
+.mic-stack.talking .mic-label { display: none; }
 .mic-bars .bar {
   width: 8px;
   height: 6px;
