@@ -1308,9 +1308,7 @@ async function renderNewProjectRoles() {
   ring.index = 0;
   ring.paint();
 
-  renderActionBar([
-    { verb: 'Back', glyph: 'circle', action: { type: '_role_back' } },
-  ]);
+  renderActionBar([]); // Back shown once via setShortcuts' Esc chip below
   setShortcuts([
     { gamepad: 'cross',  keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedRole() },
     { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',   action: () => renderProjects() },
@@ -1492,19 +1490,22 @@ function renderNewProjectTopology() {
 
   const row = document.createElement('div');
   row.className = 'role-confirm-row';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button'; cancelBtn.className = 'role-cancel'; cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', () => maybeConfirmCancel(true, () => renderProjects()));
   const backBtn = document.createElement('button');
   backBtn.type = 'button'; backBtn.className = 'role-cancel'; backBtn.textContent = 'Back';
   backBtn.addEventListener('click', () => renderNewProjectRoles());
-  row.appendChild(backBtn);
+  row.append(cancelBtn, backBtn);
   wrap.appendChild(row);
 
   surfaceEl.appendChild(wrap);
 
-  ring.set([...cardEls, backBtn]);
+  ring.set([...cardEls, cancelBtn, backBtn]);
   ring.index = Math.max(0, TOPOLOGIES.findIndex(t => t.id === newProjTopology));
   ring.paint();
 
-  renderActionBar([{ verb: 'Back', glyph: 'circle', action: { type: '_topo_back' } }]);
+  renderActionBar([]); // Back lives in setShortcuts (Esc) below — avoid duplicate chip
   setShortcuts([
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderNewProjectRoles() },
   ]);
@@ -1679,6 +1680,7 @@ function renderNewProjectName() {
     <div class="role-confirm-row">
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
       <button type="button" class="role-cancel role-back" id="capture-back">Back</button>
+      <button type="button" class="role-cancel role-redo" id="capture-redo" title="Redo" aria-label="Redo">Redo</button>
       <button type="button" class="role-confirm" id="capture-done">Continue</button>
     </div>`;
   surfaceEl.appendChild(t);
@@ -1687,12 +1689,20 @@ function renderNewProjectName() {
   };
   const nameBackEl   = t.querySelector('#capture-back');
   const nameCancelEl = t.querySelector('#capture-cancel');
+  const nameRedoEl   = t.querySelector('#capture-redo');
   const nameDoneEl   = t.querySelector('#capture-done');
   // Primary stays disabled until something has been captured.
   if (nameDoneEl) nameDoneEl.disabled = !newProjName.trim();
   nameBackEl?.addEventListener('click', () => {
     stopMicVisualizer();
     renderNewProjectTopology();
+  });
+  // Redo clears the captured name and re-renders the screen, which
+  // resets the field, disables Continue, and auto-restarts voice capture.
+  nameRedoEl?.addEventListener('click', () => {
+    stopMicVisualizer();
+    newProjName = '';
+    renderNewProjectName();
   });
   nameCancelEl?.addEventListener('click', tryCancelNameCapture);
   nameDoneEl?.addEventListener('click', () => confirmCapture());
@@ -1702,19 +1712,18 @@ function renderNewProjectName() {
   // transcripts populate .mic-live-text in real time; the 'end' event
   // commits the value.
   setTimeout(() => startPTT(), 80);
-  renderActionBar([
-    { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
-  ]);
+  renderActionBar([]); // Back shown once via setShortcuts' Esc chip below
   setShortcuts([
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => confirmCapture() });
   // Action-row buttons join the focus ring so arrow / d-pad nav works.
-  ring.set([nameCancelEl, nameBackEl, nameDoneEl].filter(Boolean));
-  ring.index = 0; // Cancel focused by default — leftmost in the row,
-                  // so ArrowDown from the surface-close × lands on it
-                  // first instead of skipping past to the primary.
+  const nameRing = [nameCancelEl, nameBackEl, nameRedoEl, nameDoneEl].filter(Boolean);
+  ring.set(nameRing);
+  // Continue focused by default — the primary action. Derive its index
+  // from the final ring array so it stays correct as the row changes.
+  ring.index = Math.max(0, nameRing.indexOf(nameDoneEl));
   ring.paint();
 }
 
@@ -1749,9 +1758,7 @@ function renderNewProjectGoal() {
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelGoalCapture));
   startMicVisualizer();
   setTimeout(() => startPTT(), 80);
-  renderActionBar([
-    { verb: 'Back', glyph: 'circle', action: { type: '_capture_back' } },
-  ]);
+  renderActionBar([]); // Back shown once via setShortcuts' Esc chip below
   setShortcuts([
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
