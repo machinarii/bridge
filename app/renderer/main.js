@@ -4389,7 +4389,9 @@ function renderGithubStatus(st) {
     ? `Connected${st.login ? ` as ${st.login}` : ''}`
     : (configured ? 'Not connected' : 'Set a client ID to connect');
   ghStatusEl.dataset.connected = String(connected);
-  if (ghConnectEl)    ghConnectEl.hidden = connected || !configured;
+  // Show Connect whenever not connected (even before a client ID is saved —
+  // githubConnect persists the typed id first). Only hide it once connected.
+  if (ghConnectEl)    ghConnectEl.hidden = connected;
   if (ghDisconnectEl) ghDisconnectEl.hidden = !connected;
   if (ghClientIdField) ghClientIdField.hidden = connected;   // hide the id field once paired
   if (connected && ghDeviceEl) ghDeviceEl.hidden = true;
@@ -4406,6 +4408,15 @@ function stopGithubPoll() { if (ghPollTimer) { clearInterval(ghPollTimer); ghPol
 
 async function githubConnect() {
   stopGithubPoll();
+  // Persist the typed client ID first so the server can start the flow without
+  // a separate Save step.
+  const cid = (ghClientIdEl?.value || '').trim();
+  if (cid) {
+    try {
+      await fetch('/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ GITHUB_OAUTH_CLIENT_ID: cid }) });
+    } catch {}
+  }
   ghDeviceStateEl && (ghDeviceStateEl.textContent = 'Starting…');
   ghDeviceEl && (ghDeviceEl.hidden = false);
   let info;
