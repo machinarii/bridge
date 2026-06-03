@@ -1255,22 +1255,63 @@ function advanceDownFromRolePicker() {
   return false;
 }
 
+/* Role-picker traversal. The ring is [role tiles…, Cancel, Continue]; the tiles
+ * are a cols-wide grid and the two buttons are a separate bottom row (Cancel
+ * left, Continue right). Left/Right flow in reading order through the tiles;
+ * off the last tile, Right lands on Continue (bottom-right). Up from the first
+ * row hops to the × close; Down off the bottom of a column drops to the nearer
+ * bottom button (left half → Cancel, right half → Continue). */
 function roleGridMove(dir) {
-  const cols = 4;
   const n = ring.elements.length;
   if (n === 0) return;
+  const grid = surfaceEl.querySelector('.role-grid');
+  const cols = grid?._cols || 4;
+  const tileCount = ring.elements.filter(el => el.classList?.contains('role-tile')).length || n;
+  const cancelIdx  = ring.elements.findIndex(el => el.classList?.contains('role-cancel'));
+  const confirmIdx = ring.elements.findIndex(el => el.classList?.contains('role-confirm'));
   const i = ring.index;
-  const r = Math.floor(i / cols), c = i % cols;
-  const rows = Math.ceil(n / cols);
-  let nr = r, nc = c;
-  if (dir === 'left')  nc = (c + cols - 1) % cols;
-  if (dir === 'right') nc = (c + 1) % cols;
-  if (dir === 'up')    nr = (r + rows - 1) % rows;
-  if (dir === 'down')  nr = (r + 1) % rows;
-  let next = nr * cols + nc;
-  if (next >= n) next = n - 1;
-  ring.index = next;
-  ring.paint();
+  const onTile = i < tileCount;
+  const c = i % cols;
+  const lastRowStart = Math.floor((tileCount - 1) / cols) * cols;
+  const go = (x) => { ring.index = x; ring.paint(); };
+
+  if (dir === 'right') {
+    if (onTile) {
+      if (i + 1 < tileCount) return go(i + 1);                 // next tile (flows to next row)
+      return confirmIdx >= 0 ? go(confirmIdx) : bumpEdge(grid, 'right'); // last tile → Continue
+    }
+    if (i === cancelIdx && confirmIdx >= 0) return go(confirmIdx);       // Cancel → Continue
+    return bumpEdge(grid, 'right');
+  }
+  if (dir === 'left') {
+    if (onTile) return i > 0 ? go(i - 1) : bumpEdge(grid, 'left');
+    if (i === confirmIdx && cancelIdx >= 0) return go(cancelIdx);        // Continue → Cancel
+    if (i === cancelIdx) return go(tileCount - 1);                       // Cancel → last tile
+    return bumpEdge(grid, 'left');
+  }
+  if (dir === 'up') {
+    if (onTile) {
+      if (i - cols >= 0) return go(i - cols);
+      if (focusSurfaceClose()) return;                          // first row → × close
+      return bumpEdge(grid, 'up');
+    }
+    // On a bottom button → up into the last tile row (nearest side).
+    if (i === cancelIdx) return go(lastRowStart);
+    return go(Math.min(tileCount - 1, lastRowStart + cols - 1));
+  }
+  if (dir === 'down') {
+    if (onTile) {
+      const below = i + cols;
+      if (below < tileCount) return go(below);
+      // No tile below → drop to the nearer bottom button.
+      const target = (c < cols / 2) ? cancelIdx : confirmIdx;
+      if (target >= 0) return go(target);
+      if (enterShortcuts()) return;
+      return bumpEdge(grid, 'down');
+    }
+    if (enterShortcuts()) return;                               // button row → footer
+    return bumpEdge(grid, 'down');
+  }
 }
 
 function advanceFromRolePicker() {
