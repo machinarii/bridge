@@ -25,6 +25,13 @@ import os
 import sys
 import time
 
+# Imported at module level (not inside build_app) so that, with
+# `from __future__ import annotations` making annotations lazy ForwardRefs,
+# pydantic can resolve `UploadFile` from module globals when building the
+# request validator. A local import leaves the ForwardRef undefined → 500.
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import JSONResponse
+
 # Prefer MLX (Apple Silicon) backend; fall back to NeMo if MLX isn't
 # available (e.g. on a Linux CUDA box).
 _BACKEND = None
@@ -62,39 +69,31 @@ def _load_model():
 
 def transcribe_bytes(buf: bytes) -> str:
     _load_model()
-    import soundfile as sf  # type: ignore
-    audio, sr = sf.read(io.BytesIO(buf))
-    # Parakeet wants float32 mono at 16 kHz. Resample if needed.
-    import numpy as np
-    if audio.ndim > 1:
-        audio = audio.mean(axis=1)
-    audio = audio.astype("float32")
-    if sr != 16000:
+    # parakeet-mlx (and NeMo) take a file PATH and decode it with ffmpeg, which
+    # handles whatever container the browser records (webm/opus, ogg, wav…).
+    # Write the raw upload to a temp file and hand it to the model — don't
+    # pre-decode with soundfile, which can't read a webm container.
+    import tempfile, os as _os
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+        tmp.write(buf)
+        tmp_path = tmp.name
+    try:
+        if _BACKEND == "mlx":
+            result = _MODEL.transcribe(tmp_path)   # → AlignedResult
+            return (getattr(result, "text", "") or "").strip()
+        else:
+            res = _MODEL.transcribe([tmp_path])    # NeMo takes a list of paths
+            if isinstance(res, list) and res:
+                return res[0] if isinstance(res[0], str) else getattr(res[0], "text", "")
+            return ""
+    finally:
         try:
-            import librosa  # type: ignore
-            audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
-        except ImportError:
-            # MLX models tolerate other rates; NeMo doesn't but most
-            # callers send 16k already so this is best-effort only.
+            _os.unlink(tmp_path)
+        except OSError:
             pass
-    if _BACKEND == "mlx":
-        result = _MODEL.transcribe(audio)
-        # parakeet-mlx returns either an object with .text or a dict.
-        return getattr(result, "text", None) or result.get("text", "")
-    else:
-        # NeMo's transcribe takes a list of paths. Write a temp wav.
-        import tempfile, soundfile as sf
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            sf.write(tmp.name, audio, 16000)
-            res = _MODEL.transcribe([tmp.name])
-        if isinstance(res, list) and res:
-            return res[0] if isinstance(res[0], str) else getattr(res[0], "text", "")
-        return ""
 
 
 def build_app():
-    from fastapi import FastAPI, UploadFile
-    from fastapi.responses import JSONResponse
     app = FastAPI()
 
     @app.get("/health")
@@ -102,7 +101,9 @@ def build_app():
         return {"ok": True, "backend": _BACKEND}
 
     @app.post("/transcribe")
-    async def transcribe(file: UploadFile):
+    # Explicit File(...) — newer FastAPI/Starlette don't auto-classify a bare
+    # `file: UploadFile` as a multipart upload, returning 422 (field in query).
+    async def transcribe(file: UploadFile = File(...)):
         try:
             text = transcribe_bytes(await file.read())
             return {"text": text}
