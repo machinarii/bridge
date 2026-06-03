@@ -2394,6 +2394,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   left: 0.5rem;
   right: 0.5rem;
   bottom: 1rem;
+  justify-content: flex-end;   /* right-align the row: … Back · Clear · Continue */
 }
 
 /* ===== Mic visualizer (capture screens) ===== */
