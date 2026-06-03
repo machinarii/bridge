@@ -170,6 +170,10 @@ kbd {
   position: relative;
   transition: color 120ms, border-color 120ms, background 120ms;
 }
+/* Bell size + stroke are controlled here (not the SVG width/height attributes,
+   which a cached index.html can mask). ~2.1px rendered stroke at 30px. */
+#notification-btn svg { width: 30px; height: 30px; }
+#notification-btn svg path { stroke-width: 1.7; }
 #notification-btn:hover { color: var(--fg); background: rgba(255,255,255,0.06); }
 #notification-btn:focus,
 #notification-btn:focus-visible,
