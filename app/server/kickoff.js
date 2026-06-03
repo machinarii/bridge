@@ -4,7 +4,7 @@
  * See docs/superpowers/specs/2026-06-03-pm-kickoff-design.md. */
 
 import { getRole } from './roles.js';
-import { getProject, setKickoff, TOPOLOGIES } from './projects.js';
+import { getProject, setKickoff, getKickoff, TOPOLOGIES } from './projects.js';
 import { appendTurn, getContext } from './scratchpad.js';
 import { getModelForRole, getRouterModel } from './models.js';
 import { emitNotification, emitActivity, emitDelegate, publish as publishEvent } from './events.js';
@@ -215,4 +215,36 @@ export async function assignKickoffTasks(projectId, opts = {}) {
     out.push({ agentId: target.id, name: target.name, role: getRole(target.role).label, task });
   }
   return out;
+}
+
+function reportSpec(docCount, assigned, project) {
+  const lines = assigned.length
+    ? assigned.map(a => `- **${a.name}** (${a.role}): ${a.task}`).join('\n')
+    : '_No specialist tasks assigned (no matching enabled roles)._';
+  const body =
+    `Kickoff complete. I created ${docCount} project docs (see the file explorer): PRD, roadmap, operating notes, and open questions.\n\n` +
+    `**Starting assignments**\n${lines}\n\n` +
+    `Open the Open Questions doc and let me know your calls on anything there.`;
+  return JSON.stringify({
+    intent: 'answer', template: 'reader', context: 'Kickoff', title: 'Kickoff report', body,
+    actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+  });
+}
+
+export async function executeKickoff(projectId, opts = {}) {
+  const k = getKickoff(projectId);
+  if (k.status === 'running' || k.status === 'done') return { ran: false };
+  const project = getProject(projectId);
+  if (!project) return { ran: false };
+  setKickoff(projectId, { status: 'running', startedAt: Date.now() });
+  emitActivity(projectId, 'PM: kickoff in progress…', project.leadAgentId);
+  await generateKickoffDocs(projectId, opts);
+  const assigned = await assignKickoffTasks(projectId, opts);
+  if (getProject(projectId)) {
+    appendTurn(project.leadAgentId, 'assistant', reportSpec(Object.keys(DOC_TITLES).length, assigned, project));
+    setKickoff(projectId, { status: 'done', finishedAt: Date.now() });
+    emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
+                       body: `${project.name}: docs created and ${assigned.length} task${assigned.length === 1 ? '' : 's'} assigned.` });
+  }
+  return { ran: true, assigned };
 }
