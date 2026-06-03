@@ -3560,9 +3560,8 @@ function clearCenteredCreate() {
 /* Overscroll "rubberband" bounce on a container when the user tries to move
  * past the end of a list — signals "you've reached the end" instead of
  * silently wrapping around. */
-function bumpEdge(el, dir) {
+function bumpEdge(el, dir, d = 16) {
   if (!el) return;
-  const d = 16;
   const off = { left: [-d, 0], right: [d, 0], up: [0, -d], down: [0, d] }[dir];
   if (!off) return;
   el.animate(
@@ -4117,7 +4116,7 @@ gp.addEventListener('press', (e) => {
     if (b === 'left')   { moveShortcutFocus(-1); return; }
     if (b === 'right')  { moveShortcutFocus(+1); return; }
     if (b === 'up')     { leaveShortcuts(); ring.paint(); return; }
-    if (b === 'down')   { bumpEdge(document.getElementById('footer-rail'), 'down'); return; }
+    if (b === 'down')   { bumpEdge(document.getElementById('footer-rail'), 'down', 6); return; }
     if (b === 'cross')  { activateFocusedShortcut(); return; }
     if (b === 'circle') { leaveShortcuts(); ring.paint(); return; }
     return;
