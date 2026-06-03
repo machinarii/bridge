@@ -3185,10 +3185,16 @@ let localRecChunks = [];
   // actually reachable — poll briefly (it may still be loading its model on
   // first launch), and fall back to the browser engine if it never comes up.
   if (localSttUrl) {
+    // /stt-health is our own server (always reachable); it reports whether the
+    // Parakeet sidecar is up. Poll briefly in case it's still loading its model,
+    // but fall back to the browser engine quickly when it's simply absent — a
+    // long wait left the capture screen trying the dead local path. (If the
+    // sidecar is up but a request later fails, the 502 handler also blanks
+    // localSttUrl so subsequent capture uses the browser engine.)
     let ready = false;
-    for (let i = 0; i < 10 && !ready; i++) {
+    for (let i = 0; i < 4 && !ready; i++) {
       try { ready = (await (await fetch('/stt-health')).json()).available; } catch {}
-      if (!ready) await new Promise(res => setTimeout(res, 1200));
+      if (!ready) await new Promise(res => setTimeout(res, 700));
     }
     if (!ready) localSttUrl = '';
   }
