@@ -1602,7 +1602,10 @@ function captureValueInner(text) {
     <div class="mic-stack">
       <div class="mic-live-text" aria-live="polite"></div>
       <div class="mic-bars">${bars}</div>
-      <div class="mic-label">Speak now</div>
+      <div class="mic-label">
+        <span class="for-keyboard">Hold <kbd>V</kbd> to talk</span>
+        <span class="for-gamepad">Hold <kbd>R2</kbd> to talk</span>
+      </div>
     </div>`;
 }
 
@@ -1716,10 +1719,8 @@ function renderNewProjectName() {
   nameDoneEl?.addEventListener('click', () => confirmCapture());
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelNameCapture));
   startMicVisualizer();
-  // Auto-start speech recognition so the user can just speak. Partial
-  // transcripts populate .mic-live-text in real time; the 'end' event
-  // commits the value.
-  setTimeout(() => startPTT(), 80);
+  // Push-to-talk: the user holds V / R2 to dictate the name, then releases to
+  // transcribe (Parakeet). The mic-stack shows "Hold V / R2 to talk".
   renderActionBar([]); // Back shown once via setShortcuts' Esc chip below
   setShortcuts([
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
@@ -1765,7 +1766,7 @@ function renderNewProjectGoal() {
   goalDoneEl?.addEventListener('click', () => confirmCapture());
   surfaceEl.appendChild(createSurfaceCloseButton(tryCancelGoalCapture));
   startMicVisualizer();
-  setTimeout(() => startPTT(), 80);
+  // Push-to-talk: hold V / R2 to dictate the goal, release to transcribe.
   renderActionBar([]); // Back shown once via setShortcuts' Esc chip below
   setShortcuts([
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
