@@ -4387,13 +4387,14 @@ function renderGithubStatus(st) {
   const connected = !!st?.connected;
   ghStatusEl.textContent = connected
     ? `Connected${st.login ? ` as ${st.login}` : ''}`
-    : (configured ? 'Not connected' : 'Set a client ID to connect');
+    : (configured ? 'Not connected' : 'GitHub login isn’t set up yet');
   ghStatusEl.dataset.connected = String(connected);
-  // Show Connect whenever not connected (even before a client ID is saved —
-  // githubConnect persists the typed id first). Only hide it once connected.
-  if (ghConnectEl)    ghConnectEl.hidden = connected;
+  // Connect shows whenever not connected; the OAuth client id is baked in
+  // server-side, so end users never enter it. Disabled only if the maintainer
+  // hasn't configured the client id.
+  if (ghConnectEl)    { ghConnectEl.hidden = connected; ghConnectEl.disabled = !configured; }
   if (ghDisconnectEl) ghDisconnectEl.hidden = !connected;
-  if (ghClientIdField) ghClientIdField.hidden = connected;   // hide the id field once paired
+  if (ghClientIdField) ghClientIdField.hidden = true;        // baked in — not an end-user field
   if (connected && ghDeviceEl) ghDeviceEl.hidden = true;
 }
 
@@ -4409,18 +4410,7 @@ function stopGithubPoll() { if (ghPollTimer) { clearInterval(ghPollTimer); ghPol
 async function githubConnect() {
   stopGithubPoll();
   if (ghDeviceEl) ghDeviceEl.hidden = true;   // keep hidden until the flow starts
-  // Need a client ID first (typed-but-unsaved is fine — persist it now).
-  const cid = (ghClientIdEl?.value || '').trim();
-  if (!cid) {
-    if (ghStatusEl) ghStatusEl.textContent = 'Enter your GitHub OAuth client ID first.';
-    ghClientIdEl?.focus();
-    return;
-  }
   if (ghStatusEl) ghStatusEl.textContent = 'Starting…';
-  try {
-    await fetch('/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ GITHUB_OAUTH_CLIENT_ID: cid }) });
-  } catch {}
   let info;
   try {
     const r = await fetch('/github/device', { method: 'POST' });
