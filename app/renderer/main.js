@@ -2315,12 +2315,17 @@ function leaveBubbleFocus()    { chatBubbleIdx = -1; paintBubbleFocus(); }
  * currently-focused chat bubble. Shared by keyboard and gamepad. */
 function cycleBubbleAction(dir) {
   const bubble = chatBubbles[chatBubbleIdx];
-  const actions = bubble?.querySelectorAll('.bubble-action');
-  if (!actions || actions.length === 0) return;
-  const arr = [...actions];
+  if (!bubble) return;
+  const arr = [...bubble.querySelectorAll('.bubble-action')];
+  if (arr.length === 0) return;
   const idx = arr.indexOf(document.activeElement);
-  const next = (idx === -1) ? (dir > 0 ? 0 : arr.length - 1)
-             : Math.max(0, Math.min(arr.length - 1, idx + dir));
+  if (idx === -1) {                       // on the bubble itself → step into the actions
+    (dir > 0 ? arr[0] : arr[arr.length - 1]).focus();
+    return;
+  }
+  const next = idx + dir;
+  if (next < 0) { bubble.focus(); return; }      // Left off the first action → back to the prompt
+  if (next >= arr.length) return;                // Right off the last → stay put
   arr[next].focus();
 }
 
@@ -5177,17 +5182,8 @@ window.addEventListener('keydown', (e) => {
         moveBubbleFocus(+1); return;
       }
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        const bubble = chatBubbles[chatBubbleIdx];
-        const actions = bubble?.querySelectorAll('.bubble-action');
-        if (!actions || actions.length === 0) return;
-        const active = document.activeElement;
-        const arr = [...actions];
-        const idx = arr.indexOf(active);
-        const next = (idx === -1)
-          ? (e.key === 'ArrowRight' ? 0 : arr.length - 1)
-          : Math.max(0, Math.min(arr.length - 1, idx + (e.key === 'ArrowRight' ? 1 : -1)));
         e.preventDefault();
-        arr[next].focus();
+        cycleBubbleAction(e.key === 'ArrowRight' ? +1 : -1);
         return;
       }
       if (e.key === 'Enter' && document.activeElement?.classList?.contains('bubble-action')) {
