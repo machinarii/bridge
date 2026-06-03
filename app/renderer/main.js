@@ -423,26 +423,34 @@ function backZoomWithSnapshot(resolveToRect, renderNewView) {
   });
   document.body.appendChild(overlay);
 
-  // Render the destination view first so the recompute below can read
-  // the actual landing tile's rect.
-  renderNewView();
-  fadeInDestination(220);
+  // A brief beat before the destructive re-render so a just-flashed footer
+  // chip (e.g. the ○/Esc Back press) actually paints — giving Back the same
+  // press feedback as forward navigations. The static overlay covers the
+  // unchanged surface during the beat, so nothing else moves.
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      // Render the destination view first so the recompute below can read
+      // the actual landing tile's rect.
+      renderNewView();
+      fadeInDestination(220);
 
-  const toRect = typeof resolveToRect === 'function' ? resolveToRect() : resolveToRect;
-  if (!toRect) { overlay.remove(); return Promise.resolve(); }
+      const toRect = typeof resolveToRect === 'function' ? resolveToRect() : resolveToRect;
+      if (!toRect) { overlay.remove(); resolve(); return; }
 
-  const a = overlay.animate(
-    [
-      { offset: 0,    left: `${sRect.left}px`, top: `${sRect.top}px`,
-        width: `${sRect.width}px`, height: `${sRect.height}px`, opacity: 1 },
-      { offset: 0.85, left: `${toRect.left}px`, top: `${toRect.top}px`,
-        width: `${toRect.width}px`, height: `${toRect.height}px`, opacity: 1 },
-      { offset: 1,    left: `${toRect.left}px`, top: `${toRect.top}px`,
-        width: `${toRect.width}px`, height: `${toRect.height}px`, opacity: 0 },
-    ],
-    { duration: 320, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }
-  );
-  return a.finished.catch(() => {}).then(() => { overlay.remove(); });
+      const a = overlay.animate(
+        [
+          { offset: 0,    left: `${sRect.left}px`, top: `${sRect.top}px`,
+            width: `${sRect.width}px`, height: `${sRect.height}px`, opacity: 1 },
+          { offset: 0.85, left: `${toRect.left}px`, top: `${toRect.top}px`,
+            width: `${toRect.width}px`, height: `${toRect.height}px`, opacity: 1 },
+          { offset: 1,    left: `${toRect.left}px`, top: `${toRect.top}px`,
+            width: `${toRect.width}px`, height: `${toRect.height}px`, opacity: 0 },
+        ],
+        { duration: 320, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }
+      );
+      a.finished.catch(() => {}).then(() => { overlay.remove(); resolve(); });
+    }, 70);
+  });
 }
 
 /* ---------- Shortcut press feedback ----------
@@ -1394,13 +1402,13 @@ function roleGridMove(dir) {
       return confirmIdx >= 0 ? go(confirmIdx) : bumpEdge(grid, 'right'); // last tile → Continue
     }
     if (i === cancelIdx && confirmIdx >= 0) return go(confirmIdx);       // Cancel → Continue
-    return bumpEdge(ring.elements[i], 'right');                         // bump the button, not the tiles above
+    return;                                                             // on Continue → inert (no rubberband)
   }
   if (dir === 'left') {
     if (onTile) return i > 0 ? go(i - 1) : bumpEdge(grid, 'left');
     if (i === confirmIdx && cancelIdx >= 0) return go(cancelIdx);        // Continue → Cancel
     if (i === cancelIdx) return go(tileCount - 1);                       // Cancel → last tile
-    return bumpEdge(ring.elements[i], 'left');                          // bump the button, not the tiles above
+    return;                                                             // inert (no rubberband)
   }
   if (dir === 'up') {
     if (onTile) {
@@ -2550,6 +2558,15 @@ async function retryBubble(i) {
   const agent = currentAgent();
   if (!agent) return;
   leaveBubbleFocus();
+  // Optimistically delete the old response (and anything after) from the chat
+  // right away, so the previous answer is gone before the new "…" / reply
+  // populates — the prompt bubble stays put.
+  const _chat = chatScrollEl();
+  const _promptEl = _chat?.querySelector(`.bubble[data-idx="${i}"]`);
+  if (_promptEl) {
+    let n = _promptEl.nextElementSibling;
+    while (n) { const next = n.nextElementSibling; n.remove(); n = next; }
+  }
   // Remove this prompt and the agent's response (and anything after) so redo
   // regenerates a fresh answer rather than appending a duplicate exchange.
   try {
@@ -4497,19 +4514,10 @@ gp.addEventListener('press', (e) => {
     return;
   }
   if (mode === MODE_ADD_AGENT) {
-    // D-pad Up from the top row, or D-pad Right from the rightmost
-    // column, hops onto the × close button.
-    if ((b === 'up' || b === 'right') && document.activeElement !== surfaceEl.querySelector('.surface-close')) {
-      const grid = surfaceEl.querySelector('.role-grid');
-      if (grid) {
-        const cols = grid._cols || 4;
-        const r = Math.floor(ring.index / cols);
-        const c = ring.index % cols;
-        if ((b === 'up' && r === 0) || (b === 'right' && c === cols - 1)) {
-          if (focusSurfaceClose()) return;
-        }
-      }
-    }
+    // roleGridMove owns edge behavior: Up from the first row → × close;
+    // Left/Right flow through tiles in reading order and Cancel ⟷ Continue;
+    // Down drops to the nearer bottom button. (No inline right→close, which
+    // wrongly treated the Cancel button as a rightmost-column tile.)
     if (b === 'down') {
       if (advanceDownFromRolePicker()) return;
       roleGridMove('down');
@@ -5378,18 +5386,9 @@ window.addEventListener('keydown', (e) => {
     }
     else if (e.key === 'Escape')  { e.preventDefault(); renderProjects(); }
   } else if (mode === MODE_ADD_AGENT) {
-    // Up / Right from the top-right of the grid hops to the × close button.
-    if ((e.key === 'ArrowUp' || e.key === 'ArrowRight') && document.activeElement !== surfaceEl.querySelector('.surface-close')) {
-      const grid = surfaceEl.querySelector('.role-grid');
-      if (grid) {
-        const cols = grid._cols || 4;
-        const r = Math.floor(ring.index / cols);
-        const c = ring.index % cols;
-        if ((e.key === 'ArrowUp' && r === 0) || (e.key === 'ArrowRight' && c === cols - 1)) {
-          if (focusSurfaceClose()) { e.preventDefault(); return; }
-        }
-      }
-    }
+    // roleGridMove owns edge behavior (Up → × close, reading-order Left/Right
+    // incl. Cancel ⟷ Continue, Down → nearer bottom button). No inline
+    // right→close, which wrongly treated the Cancel button as a grid tile.
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (advanceDownFromRolePicker()) return;
