@@ -5,11 +5,11 @@ Bridge is an **AI-first command center for managing multi-agent work** — a pro
 It's built around **diverse input modalities**, so you can drive it however suits you (and however you're able to):
 
 - **Voice** — hold to talk; speech-to-text runs **locally via Parakeet** (your audio never leaves the machine for transcription), and results are spoken back.
-- **Game controller** — every on-screen action maps to a controller glyph; a single joystick is enough end to end.
+- **Gamepad** — every on-screen action maps to a controller glyph to maximize input speed.
 - **Keyboard** — full parity with the controller.
 - **Remote** *(planned)* — drive a Bridge session from a phone or second device.
 
-Agents are powered by **any model on OpenRouter** (choose a default and override per role), and **speech-to-text runs locally with the Parakeet model** — no cloud STT. It runs as a macOS desktop app (Electron).
+Agents are powered by **any model on OpenRouter** (choose a default and override per role), and **speech-to-text runs locally with the Parakeet model**. It runs as a macOS desktop app (Electron).
 
 ---
 
