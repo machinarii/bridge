@@ -4,10 +4,11 @@
  * See docs/superpowers/specs/2026-06-03-pm-kickoff-design.md. */
 
 import { getRole } from './roles.js';
-import { getProject, setKickoff } from './projects.js';
+import { getProject, setKickoff, TOPOLOGIES } from './projects.js';
 import { appendTurn, getContext } from './scratchpad.js';
 import { getModelForRole } from './models.js';
-import { emitNotification, emitActivity } from './events.js';
+import { emitNotification, emitActivity, publish as publishEvent } from './events.js';
+import { appendNote } from './backends/notes.js';
 
 export const DOC_TITLES = {
   prd:       'PRD',
@@ -132,4 +133,37 @@ export async function startKickoff(projectId, opts = {}) {
   emitActivity(projectId, `${project.agents.find(a => a.id === project.leadAgentId)?.name || 'PM'}: kickoff plan ready`, project.leadAgentId);
   emitNotification({ kind: 'info', projectId, title: 'Kickoff plan ready',
                      body: `Open ${project.name} → PM to approve the kickoff.` });
+}
+
+function docPrompt(kind, project) {
+  const head = `Project "${project.name}". Goal: "${project.goal}". Team: ${roster(project).replace(/\n- /g, ', ').replace(/^- /, '')}.`;
+  const topo = project.topology ? TOPOLOGIES[project.topology] : null;
+  switch (kind) {
+    case 'prd':
+      return `${head}\nWrite a concise PRD in markdown with sections: Problem, Goals / Non-goals, Scope (in/out), Milestones, Success metrics. Be specific to the goal. Markdown only.`;
+    case 'roadmap':
+      return `${head}\nWrite a short markdown roadmap: 3-5 milestones with one-line descriptions and rough sequencing. Markdown only.`;
+    case 'operating':
+      return `${head}\nTeam operating model: ${topo ? topo.label + ' — ' + topo.rule : 'standard PM-led'}. Write short markdown operating notes describing how this team coordinates and who owns what. Markdown only.`;
+    case 'questions':
+      return `${head}\nList 4-8 open questions / decisions you need from the user before the team can go far. Markdown bullet list only.`;
+  }
+}
+
+export async function generateKickoffDocs(projectId, opts = {}) {
+  const project = getProject(projectId);
+  if (!project) return;
+  const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+  const callText = opts.callText || callOpenRouterText;
+  const model = getModelForRole('pm');
+  for (const kind of Object.keys(DOC_TITLES)) {
+    if (!getProject(projectId)) return; // deleted mid-run
+    const md = (await callText({ apiKey, model, prompt: docPrompt(kind, project), timeoutMs: 30_000 })) || '_not generated_';
+    const title = DOC_TITLES[kind] + (kind === 'operating' && project.topology ? ` (${TOPOLOGIES[project.topology]?.label || project.topology})` : '');
+    // Deterministic first line so the explorer label is always the doc title
+    // (don't trust the model's own heading).
+    const body = `# ${title}\n\n${md.replace(/^#+\s.*\n+/, '')}`;
+    const note = appendNote(projectId, body);
+    publishEvent({ type: 'note_added', projectId, noteId: note.id });
+  }
 }

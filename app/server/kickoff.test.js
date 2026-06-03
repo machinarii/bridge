@@ -61,3 +61,18 @@ test('startKickoff with no api key skips and marks skipped_no_key', async () => 
     assert.equal(getKickoff(p.id).status, 'skipped_no_key');
   } finally { deleteProject(p.id); }
 });
+
+import { generateKickoffDocs } from './kickoff.js';
+import { listNotes } from './backends/notes.js';
+
+test('generateKickoffDocs writes four titled notes', async () => {
+  const p = await createProject({ name: 'Docs KO', goal: 'do Z', roleIds: ['pm', 'designer'], topology: 'feature-teams' });
+  try {
+    let n = 0;
+    await generateKickoffDocs(p.id, { apiKey: 'k', callText: async () => `body ${n++}` });
+    const labels = listNotes(p.id).map(x => x.label).join(' | ');
+    for (const title of ['PRD', 'Roadmap & Milestones', 'Team Operating Notes', 'Open Questions']) {
+      assert.ok(labels.includes(title), `missing doc: ${title} in ${labels}`);
+    }
+  } finally { deleteProject(p.id); }
+});
