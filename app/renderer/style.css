@@ -15,6 +15,9 @@
 /* Input-mode swap: render both keyboard and gamepad hints, show only one. */
 body[data-input-mode="keyboard"] .for-gamepad { display: none !important; }
 body[data-input-mode="gamepad"]  .for-keyboard { display: none !important; }
+/* Keyboard-only shortcut chips (e.g. "/ Type prompt") have no controller
+   equivalent, so hide them entirely while driving with a gamepad. */
+body[data-input-mode="gamepad"]  .sc.sc-kbd-only { display: none !important; }
 .glyph.for-keyboard {
   width: auto;
   min-width: 32px;
