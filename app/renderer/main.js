@@ -5157,6 +5157,24 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
+  // × close button focused (reached via Up from the first row): Down returns to
+  // the content; the other arrows rubberband — matches the gamepad behavior.
+  {
+    const closeBtn = surfaceEl.querySelector('.surface-close');
+    if (closeBtn && document.activeElement === closeBtn) {
+      if (e.key === 'Enter')      { e.preventDefault(); closeBtn.click(); return; }
+      if (e.key === 'ArrowDown')  {
+        e.preventDefault(); closeBtn.blur();
+        if (mode === MODE_ZOOM && chatBubbles.length) focusFirstBubble();
+        else ring.paint();
+        return;
+      }
+      if (e.key === 'ArrowUp')    { e.preventDefault(); bumpEdge(closeBtn, 'up', 5); return; }
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); bumpEdge(closeBtn, 'left', 5); return; }
+      if (e.key === 'ArrowRight') { e.preventDefault(); bumpEdge(closeBtn, 'right', 5); return; }
+    }
+  }
+
   if (document.activeElement === typedInput) {
     if (e.key === 'Enter') {
       const t = typedInput.value.trim();
