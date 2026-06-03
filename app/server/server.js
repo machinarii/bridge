@@ -412,8 +412,10 @@ app.post('/projects/:pid/agents', async (req, res) => {
 
 app.delete('/projects/:pid/agents/:aid', (req, res) => {
   try {
-    const p = removeAgent(req.params.pid, req.params.aid);
+    const { project: p, removedRole } = removeAgent(req.params.pid, req.params.aid);
     notifyStateChange(p.id, 'Agent removed');
+    // Tell the renderer the charter file is gone so the explorer drops it.
+    if (removedRole) publishEvent({ type: 'file_removed', projectId: p.id, kind: 'charter', file: `${removedRole}.md` });
     publishEvent({ type: 'notification', kind: 'info', projectId: p.id, title: 'Agent removed', body: `An agent left ${p.name}.` });
     res.json(p);
   } catch (err) {
@@ -518,7 +520,10 @@ app.get('/projects/:pid/files', (req, res) => {
       const roleId = f.replace(/\.md$/, '');
       const agent = p.agents.find(a => a.role === roleId);
       return { ...fileEntry(resolve(projDir, 'roles', f), 'charter'), roleId, agentName: agent?.name || '' };
-    });
+    })
+    // Only surface charters for agents currently on the project — drop any
+    // orphaned charter left by a removed agent so the explorer matches the team.
+    .filter(c => p.agents.some(a => a.role === c.roleId));
   const notes = readdirSync(resolve(projDir, 'notes'))
     .filter(f => f.endsWith('.md'))
     .sort().reverse()

@@ -208,12 +208,17 @@ export function removeAgent(projectId, agentId) {
   const p = getProject(projectId);
   if (!p) throw new Error('unknown project');
   if (agentId === p.leadAgentId) throw new Error('cannot remove the lead');
-  const before = p.agents.length;
+  const agent = p.agents.find(a => a.id === agentId);
+  if (!agent) throw new Error('unknown agent');
   p.agents = p.agents.filter(a => a.id !== agentId);
-  if (p.agents.length === before) throw new Error('unknown agent');
   p.updatedAt = Date.now();
   save();
-  return p;
+  // Remove the agent's charter file so the explorer doesn't show a stale entry.
+  try {
+    const charterPath = resolve(STATE_DIR, projectId, 'roles', `${agent.role}.md`);
+    if (existsSync(charterPath)) rmSync(charterPath);
+  } catch (err) { console.warn(`[removeAgent] charter cleanup failed: ${err.message}`); }
+  return { project: p, removedRole: agent.role };
 }
 
 export function setAgentEnabled(projectId, agentId, enabled) {

@@ -3369,6 +3369,7 @@ function handleBridgeEvent(ev) {
       break;
     }
     case 'note_added':
+    case 'file_removed':
     case 'file_created': {
       // File explorer is per-project — only refresh when the event
       // matches the active project. Memory is global (L0) — refresh
