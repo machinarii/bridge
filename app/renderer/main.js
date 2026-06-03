@@ -1526,8 +1526,14 @@ function chooseTopology(id) { selectTopology(id); renderNewProjectName(); }
  * Back; up returns from Back into the cards. */
 function topoMoveCard(dir) {
   const n = TOPOLOGIES.length;
-  if (ring.index >= n) { ring.index = dir < 0 ? n - 1 : 0; }   // from Back → into cards
-  else ring.index = (ring.index + dir + n) % n;
+  const L = ring.elements.length;
+  if (ring.index >= n) {
+    // On the footer row (Cancel · Back): move between the footer buttons,
+    // clamped to the row so Left/Right doesn't jump back into the cards.
+    ring.index = Math.min(L - 1, Math.max(n, ring.index + dir));
+  } else {
+    ring.index = (ring.index + dir + n) % n;   // cycle among topology cards
+  }
   ring.paint();
 }
 function topoFocusBack() { ring.index = TOPOLOGIES.length; ring.paint(); }
