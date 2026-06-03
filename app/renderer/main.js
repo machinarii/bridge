@@ -264,6 +264,7 @@ function staggerInCards() {
 function staggerInFooter() {
   const items = [
     ...document.querySelectorAll('#shortcuts-rail .sc'),
+    ...document.querySelectorAll('#back-shortcut .sc'),
     ...document.querySelectorAll('#primary-shortcut .sc'),
     ...document.querySelectorAll('#action-bar .action'),
   ];
