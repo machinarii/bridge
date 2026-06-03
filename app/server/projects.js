@@ -114,6 +114,19 @@ export function getProject(id) {
   return load().projects.find(p => p.id === id) || null;
 }
 
+export function getKickoff(id) {
+  const p = getProject(id);
+  return p?.kickoff || { status: 'idle' };
+}
+
+export function setKickoff(id, patch) {
+  const p = getProject(id);
+  if (!p) return null;
+  p.kickoff = { ...(p.kickoff || { status: 'idle' }), ...patch };
+  save();
+  return p.kickoff;
+}
+
 export async function createProject({ name, goal, roleIds, topology }) {
   if (!name) throw new Error('name required');
   if (!goal) throw new Error('goal required');
