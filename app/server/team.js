@@ -6,7 +6,7 @@
  *      summary: spec }
  */
 
-import { getProject } from './projects.js';
+import { getProject, TOPOLOGIES } from './projects.js';
 import { getRole } from './roles.js';
 import { interpretIntent } from './orchestrator.js';
 import { appendTurn, getContext } from './scratchpad.js';
@@ -101,8 +101,14 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
   const rosterWithDigest = others.map(a =>
     `- ${a.name} (${getRole(a.role).label}) [id:${a.id}] — last work: ${digestLineFor(a)}`
   ).join('\n');
+  const topo = project.topology ? TOPOLOGIES[project.topology] : null;
+  const topoBlock = topo
+    ? `Team operating model — ${topo.label}: ${topo.rule}\n` +
+      `Route work to honor this operating model when choosing who to assign and whether teammates should coordinate or report back to you.\n\n`
+    : '';
   const routingPrompt =
     `You are ${lead.name}, lead of project "${project.name}". The project goal is: "${project.goal}".\n\n` +
+    topoBlock +
     `Active team:\n${rosterWithDigest || '(no other agents)'}\n\n` +
     `The user said: "${text}".\n\n` +
     `Return a single JSON object: ` +
@@ -183,7 +189,16 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
           snippet: (spec.body || '').slice(0, SHARED_SNIPPET_MAX_CHARS),
         }],
       };
-      return runWithDelegation(nextAsg, depth + 1);
+      const childSpec = await runWithDelegation(nextAsg, depth + 1);
+      // Group-chat view: surface the delegate's answer as a bubble in the
+      // delegating agent's L2 chat, tagged with the delegate's identity so it
+      // renders on the left under *their* name/role (not the host agent's).
+      if (childSpec && (childSpec.body || childSpec.title)) {
+        appendTurn(asg.agentId, 'assistant',
+          JSON.stringify({ body: childSpec.body || childSpec.title }),
+          { author: { id: target.id, name: target.name || target.id, role: getRole(target.role)?.label || '' } });
+      }
+      return childSpec;
     } catch (err) {
       console.warn(`[team] assignee ${asg.agentId} failed:`, err.message);
       perAgent[asg.agentId] = null;
@@ -229,4 +244,59 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
 
   return { routing: { assignments: kept, summary_intent: routing.summary_intent, dropped: dropped.length },
            perAgent, delegations: delegationLog, summary };
+}
+
+/* Resolve a delegate spec produced in a 1:1 (L2) chat. The team pipeline has
+ * its own in-closure resolver (runWithDelegation); this is the standalone
+ * entry point so a `delegate` intent from a direct agent chat actually routes
+ * to a teammate instead of dead-ending. Mirrors the team path: writes a
+ * handoff turn into both histories, emits the delegate event, runs the target,
+ * follows further hops up to MAX_DELEGATION_DEPTH, and surfaces the teammate's
+ * reply as a foreign-author bubble in the delegating agent's chat. Returns the
+ * terminal (non-delegate) spec — the teammate's answer — or the original spec
+ * when it can't resolve (e.g. no enabled agent of the requested role). */
+export async function resolveDelegateSpec({ projectId, fromAgentId, spec, effort = 'medium', depth = 0 }) {
+  if (!spec || spec.intent !== 'delegate') return spec;
+  if (depth >= MAX_DELEGATION_DEPTH) return spec;
+  const project = getProject(projectId);
+  if (!project) return spec;
+
+  const toRoleId = String(spec.to_role || '').trim();
+  const target = project.agents.find(a => a.role === toRoleId && a.enabled);
+  const fromAgent = project.agents.find(a => a.id === fromAgentId);
+  if (!target) {
+    console.warn(`[delegate:1:1] to ${toRoleId} failed: no enabled agent for that role`);
+    return spec;
+  }
+  const task = (String(spec.task || '').trim() || `Help with: ${spec.body || ''}`).slice(0, 400);
+
+  const handoff = JSON.stringify({
+    kind: 'handoff',
+    from: fromAgent?.name || fromAgentId,
+    to:   target.name || target.id,
+    fromRole: getRole(fromAgent?.role)?.label || '',
+    toRole:   getRole(target.role)?.label || '',
+    task,
+  });
+  appendTurn(fromAgentId, 'system', handoff);
+  appendTurn(target.id,    'system', handoff);
+  emitDelegate(projectId, fromAgentId, target.id, task);
+
+  const sharedFrom = [{
+    fromAgentName: fromAgent?.name || '',
+    fromRole: getRole(fromAgent?.role)?.label || '',
+    snippet: (spec.body || '').slice(0, SHARED_SNIPPET_MAX_CHARS),
+  }];
+  let childSpec = await interpretIntent({ projectId, agentId: target.id, text: task, sharedFrom, effort });
+  // follow any further delegate hops the teammate makes
+  childSpec = await resolveDelegateSpec({ projectId, fromAgentId: target.id, spec: childSpec, effort, depth: depth + 1 });
+
+  // Group-chat view: surface the teammate's answer in the delegating agent's
+  // L2 chat, tagged with the teammate's identity.
+  if (childSpec && (childSpec.body || childSpec.title)) {
+    appendTurn(fromAgentId, 'assistant',
+      JSON.stringify({ body: childSpec.body || childSpec.title }),
+      { author: { id: target.id, name: target.name || target.id, role: getRole(target.role)?.label || '' } });
+  }
+  return childSpec;
 }

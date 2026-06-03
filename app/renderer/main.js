@@ -2372,6 +2372,10 @@ async function renderChatHistory(container, agent) {
     if (!r.ok) return;
     const { messages } = await r.json();
     chatMessages = messages || [];
+    // iOS-group-chat style: each agent (left-side) bubble gets a sender
+    // name + role header, suppressed for consecutive turns by the same
+    // author. Reset on every user / system turn so a new run re-labels.
+    let lastShownAuthor = null;
     messages.forEach((m, i) => {
       // v2 §4: a 'system' turn carrying a JSON handoff payload renders
       // as a distinct neutral bubble between agent / user bubbles.
@@ -2380,7 +2384,17 @@ async function renderChatHistory(container, agent) {
       if (m.role === 'system') {
         const handoffEl = renderHandoffBubble(m, i);
         if (handoffEl) container.appendChild(handoffEl);
+        lastShownAuthor = null;
         return;
+      }
+      // A host agent's own "delegate" turn is already represented by the
+      // handoff bubble + the delegate's surfaced reply — don't also render
+      // its raw spec JSON as a bubble.
+      if (m.role === 'assistant' && !m.author) {
+        try {
+          const p = JSON.parse(String(m.content || '').replace(/^```(?:json)?/i,'').replace(/```$/, '').trim());
+          if (p?.intent === 'delegate') return;
+        } catch { /* not a delegate spec — render normally */ }
       }
       const isUser = m.role === 'user';
       const bubble = document.createElement('div');
@@ -2388,6 +2402,27 @@ async function renderChatHistory(container, agent) {
       bubble.dataset.idx = String(i);
       bubble.dataset.role = m.role;
       bubble.tabIndex = 0;
+
+      // Sender label (left/agent bubbles only). A "foreign" bubble — a
+      // delegate's reply surfaced into this agent's chat — carries its own
+      // author; the viewed agent's own turns fall back to its identity.
+      if (!isUser) {
+        const author = (m.author && m.author.name)
+          ? { name: m.author.name, role: m.author.role || '' }
+          : { name: agent.name, role: roleLabel(agent.role) };
+        if (m.author && m.author.id && m.author.id !== agent.id) bubble.classList.add('foreign');
+        if (author.name !== lastShownAuthor) {
+          const hdr = document.createElement('div');
+          hdr.className = 'bubble-author';
+          hdr.innerHTML =
+            `<span class="bubble-author-name">${escapeHtml(author.name)}</span>` +
+            (author.role ? `<span class="bubble-author-role">${escapeHtml(author.role)}</span>` : '');
+          bubble.appendChild(hdr);
+        }
+        lastShownAuthor = author.name;
+      } else {
+        lastShownAuthor = null;
+      }
       let body = String(m.content || '').trim();
       let actionsTaken = null;
       if (!isUser) {
@@ -2530,7 +2565,12 @@ function showPendingAgentBubble() {
   if (!pendingAgentBubbleEl || !chat.contains(pendingAgentBubbleEl)) {
     const b = document.createElement('div');
     b.className = 'bubble agent pending';
-    b.innerHTML = `<div class="bubble-content">${TYPING_DOTS}</div>`;
+    const who = currentAgent();
+    const hdr = who
+      ? `<div class="bubble-author"><span class="bubble-author-name">${escapeHtml(who.name)}</span>` +
+        `<span class="bubble-author-role">${escapeHtml(roleLabel(who.role))}</span></div>`
+      : '';
+    b.innerHTML = `${hdr}<div class="bubble-content">${TYPING_DOTS}</div>`;
     chat.appendChild(b);
     pendingAgentBubbleEl = b;
   }

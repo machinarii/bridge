@@ -2,7 +2,7 @@
 
 ## Mission control for multi-agentic orchestration using Speech to Text (STT) + gamepad for increased productivity. Orchestrate agents across projects on any model on OpenRouter.
 
-Bridge is an **AI-first command center for managing multi-agent work** — a productivity surface for running teams of role-typed AI agents across multiple projects. You describe intent; the orchestrator routes it to the right agents, combines cloud and local models, and composes a consistent, navigable surface that's read back to you. The goal is to make *coordinating a team of agents* — assigning, steering, and tracking their work — fast and low-friction.
+Bridge is an **AI-first command center for managing multi-agent work** — a productivity surface for running teams of role-typed AI agents across multiple projects. You describe intent; the orchestrator routes it to the right agents, combines cloud and local models, and composes a consistent, navigable surface that's read back to you. Agents work **in parallel** — many run at once across your projects — and can **spawn subagents** to fan a large task out into smaller pieces, then roll the results back up. The goal is to make *coordinating a team of agents* — assigning, steering, and tracking their work — fast and low-friction.
 
 It's built around **diverse input modalities**, so you can drive it however suits you (and however you're able to):
 
@@ -22,6 +22,7 @@ Agents are powered by **any model on OpenRouter** (choose a default and override
   - **L0 — Projects:** pick a project (or create one) and talk to its lead.
   - **L1 — Team grid:** the project's agents as tiles.
   - **L2 — Agent view:** zoom into one agent and converse.
+- **Parallel agents & subagents.** Agents run *concurrently* rather than one-at-a-time — you can have several projects' teams working at once — and any agent can **delegate to subagents**, splitting a big task into parallel pieces and synthesizing their results back into one answer.
 - **Topology-shaped teams.** Creating a project walks you through *roles → topology → name → goal*. The **work topology** — Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, or Async pull / queue — defines how the team coordinates, and is written into the project's `project.md` as its operating rule.
 - **Voice-first, controller-navigable.** Hold to talk; every on-screen action shows its controller glyph (✕ select, ○ back, L1/R1 switch, R2 push-to-talk). Keyboard mirrors all of it.
 - **The model assembles, it doesn't author.** Agents return a small structured spec; a deterministic renderer turns it into a consistent surface — fast, cheap, and visually stable (which matters for spatial memory and accessibility).

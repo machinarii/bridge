@@ -1,6 +1,6 @@
 import { listNotes } from './backends/notes.js';
 import { appendTurn, getContext } from './scratchpad.js';
-import { getProject } from './projects.js';
+import { getProject, TOPOLOGIES } from './projects.js';
 import { readProjectCharter } from './charters.js';
 import { getRole } from './roles.js';
 import { getModelForRole, getRouterModel } from './models.js';
@@ -13,6 +13,8 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 function systemPrompt({ project, agent, sharedFrom }) {
   const role = getRole(agent.role);
   const charter = readProjectCharter(project.id, agent.role);
+  const topo = project.topology ? TOPOLOGIES[project.topology] : null;
+  const topoLine = topo ? `\nTeam operating model — ${topo.label}: ${topo.rule}\nLet this shape whether you handle the task yourself, delegate, or report back to the lead.\n` : '';
   const sharedBlock = (Array.isArray(sharedFrom) && sharedFrom.length)
     ? `\nContext shared with you by your teammates:\n` +
       sharedFrom.map(s => `- ${s.fromAgentName} (${s.fromRole}): "${String(s.snippet).slice(0, 240)}"`).join('\n') +
@@ -24,7 +26,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${sharedBlock}
+${topoLine}${sharedBlock}
 Stay in role and on-goal. Speak briefly, in first person when relevant. The user is talking to you specifically.
 
 Your job: classify the user's intent and return a single JSON object describing the tile surface to render. No prose, no markdown, no code fences. JSON only.
@@ -176,6 +178,8 @@ function parseSpec(raw) {
 function proseSystemPrompt({ project, agent, sharedFrom }) {
   const role = getRole(agent.role);
   const charter = readProjectCharter(project.id, agent.role);
+  const topo = project.topology ? TOPOLOGIES[project.topology] : null;
+  const topoLine = topo ? `\nTeam operating model — ${topo.label}: ${topo.rule}\n` : '';
   const sharedBlock = (Array.isArray(sharedFrom) && sharedFrom.length)
     ? `\nContext shared with you by teammates:\n` +
       sharedFrom.map(s => `- ${s.fromAgentName} (${s.fromRole}): "${String(s.snippet).slice(0, 240)}"`).join('\n') + '\n'
@@ -186,7 +190,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${sharedBlock}
+${topoLine}${sharedBlock}
 Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.`;
 }
 
