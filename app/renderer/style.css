@@ -2433,6 +2433,13 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   opacity: 0.7;
   letter-spacing: 0.04em;
 }
+/* Speech-to-text failure surfaced in the capture screen's mic area. */
+.mic-label.mic-error,
+.mic-live-text.mic-error {
+  color: #ff7b86;
+  opacity: 1;
+  font-weight: 400;
+}
 .capture-tile .lead-badge {
   margin-top: 1rem;
   font-size: 0.9rem;

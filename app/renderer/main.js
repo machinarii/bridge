@@ -3184,19 +3184,17 @@ let localRecChunks = [];
   // Local Parakeet is the default engine, but only use it if the sidecar is
   // actually reachable — poll briefly (it may still be loading its model on
   // first launch), and fall back to the browser engine if it never comes up.
+  // Voice ALWAYS uses the local Parakeet sidecar — never the browser speech
+  // engine. localSttUrl stays set (the server defaults LOCAL_STT_URL on); if
+  // Parakeet is unavailable we surface an error rather than switching engines.
+  // Probe once just to hint when the sidecar isn't up yet.
   if (localSttUrl) {
-    // /stt-health is our own server (always reachable); it reports whether the
-    // Parakeet sidecar is up. Poll briefly in case it's still loading its model,
-    // but fall back to the browser engine quickly when it's simply absent — a
-    // long wait left the capture screen trying the dead local path. (If the
-    // sidecar is up but a request later fails, the 502 handler also blanks
-    // localSttUrl so subsequent capture uses the browser engine.)
     let ready = false;
     for (let i = 0; i < 4 && !ready; i++) {
       try { ready = (await (await fetch('/stt-health')).json()).available; } catch {}
       if (!ready) await new Promise(res => setTimeout(res, 700));
     }
-    if (!ready) localSttUrl = '';
+    if (!ready) setIndicator('error', 'Parakeet STT not running — start it with: npm run stt');
   }
 })();
 
@@ -3344,6 +3342,17 @@ function stopLocalRecording() {
   try { localRecorder?.stop(); } catch {}
 }
 
+/* Surface a speech-to-text failure both on the global status indicator AND,
+ * when a capture screen is open, in its mic area — so a Parakeet failure is
+ * clearly visible right where the user is trying to speak. */
+function showSttFailure(msg) {
+  setIndicator('error', msg);
+  const label = document.querySelector('.capture-tile .mic-label');
+  if (label) { label.textContent = msg; label.classList.add('mic-error'); }
+  const pend = document.querySelector('.capture-tile .mic-live-text');
+  if (pend) pend.classList.add('mic-error');
+}
+
 async function postLocalTranscript(blob) {
   setIndicator('thinking', 'Transcribing…');
   try {
@@ -3354,12 +3363,10 @@ async function postLocalTranscript(blob) {
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
-      // Local STT failed mid-session (sidecar died/unreachable) — fall back to
-      // the browser engine for subsequent presses so voice keeps working.
-      if (r.status === 502 || r.status === 400) localSttUrl = '';
+      // Local STT failed (Parakeet sidecar down/unreachable). We never switch
+      // to the browser engine — surface the error and keep using Parakeet.
       clearPendingBubble();
-      setIndicator('error', data?.error || `Transcribe ${r.status}`);
-      setTimeout(() => setIndicator('idle', 'Connected'), 2000);
+      showSttFailure(data?.error ? `STT failed: ${data.error}` : `Speech-to-text failed (Parakeet ${r.status}) — is it running?`);
       return;
     }
     const text = (data?.text || '').trim();
@@ -3369,9 +3376,9 @@ async function postLocalTranscript(blob) {
     // the app behaves identically to the browser-STT flow.
     dispatchTranscript(text);
   } catch (err) {
-    localSttUrl = ''; // network error reaching local STT — use the browser engine next time
+    // Don't fall back to the browser engine — keep using Parakeet.
     clearPendingBubble();
-    setIndicator('error', `Transcribe failed: ${err.message}`);
+    showSttFailure(`Speech-to-text failed — Parakeet unreachable (${err.message})`);
     setTimeout(() => setIndicator('idle', 'Connected'), 2000);
   }
 }
