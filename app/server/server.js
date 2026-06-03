@@ -512,8 +512,9 @@ app.get('/projects/:pid/files', (req, res) => {
 app.post('/projects/:pid/team/interpret', async (req, res) => {
   const text = String(req.body?.text || '').trim();
   if (!text) return res.status(400).json({ error: 'empty intent' });
+  const effort = String(req.body?.effort || 'medium');
   try {
-    const result = await runTeamVoice({ projectId: req.params.pid, text });
+    const result = await runTeamVoice({ projectId: req.params.pid, text, effort });
     res.json(result);
   } catch (err) {
     console.error(`[team:${req.params.pid}]`, err);

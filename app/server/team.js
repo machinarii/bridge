@@ -77,7 +77,7 @@ async function callOpenRouterJSON({ apiKey, model, prompt, timeoutMs }) {
   } finally { clearTimeout(t); }
 }
 
-export async function runTeamVoice({ projectId, text }) {
+export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
   const project = getProject(projectId);
   if (!project) throw new Error(`unknown project: ${projectId}`);
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -135,6 +135,7 @@ export async function runTeamVoice({ projectId, text }) {
           agentId: asg.agentId,
           text: asg.task,
           sharedFrom: asg.sharedFrom,
+          effort,
         }),
         new Promise((_, rej) => setTimeout(() => rej(new Error('assignee timeout')), ASSIGNEE_TIMEOUT_MS)),
       ]);

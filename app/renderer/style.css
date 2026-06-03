@@ -1385,6 +1385,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .agent-view .bubble.agent .bubble-content > *:first-child { margin-top: 0; }
 .agent-view .bubble.agent .bubble-content > *:last-child  { margin-bottom: 0; }
 .agent-view .bubble.agent .bubble-content p { margin: 0 0 1.4em; line-height: 1.5; }
+.agent-view .bubble.agent .bubble-content .md-code { margin: 0 0 1.4em; }
 /* Typing caret while a reply streams in token-by-token. */
 .agent-view .bubble.agent.streaming .bubble-content::after {
   content: '▍'; margin-left: 1px; opacity: 0.6;
@@ -1859,6 +1860,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .glyph.for-gamepad.gp-icon[data-glyph="l2"],
 .glyph.for-gamepad.gp-icon[data-glyph="r1"],
 .glyph.for-gamepad.gp-icon[data-glyph="r2"] { width: 30px; height: 24px; }
+.glyph.for-gamepad.gp-icon[data-glyph="touchpad"] { width: 34px; height: 24px; }
 .glyph.for-gamepad.gp-icon svg { display: block; width: 100%; height: 100%; }
 .sc.focused .glyph.for-gamepad.gp-icon { color: var(--fg); }
 

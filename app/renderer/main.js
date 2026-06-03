@@ -483,18 +483,41 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('mousemove', () => setInputMode('keyboard'), true);
 
 /* ---------- Reasoning-effort quick picker ----------
- * Hold the DualSense touchpad (or the 'T' key) and nudge Up/Down with the
- * d-pad or either analog stick to pick a reasoning effort; release to commit.
- * The chosen effort rides every prompt — the orchestrator maps it to a
- * reasoning budget (non-reasoning models ignore it). Up = more effort. */
+ * Hold R (keyboard) or the DualSense touchpad, then nudge Up/Down with the
+ * arrows / d-pad / either analog stick; release to commit. Effort is scoped:
+ * set per-project on L1 and per-agent on L2. When a prompt runs, the agent's
+ * own effort wins, else its project's, else medium (the default). The
+ * orchestrator maps it to a reasoning budget (non-reasoning models ignore it). */
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'extra', 'max'];
 const EFFORT_LABELS = { low: 'Low', medium: 'Medium', high: 'High', extra: 'Extra', max: 'Max' };
-let reasoningEffort = (() => {
-  try { const v = localStorage.getItem('bridge.effort'); return EFFORT_LEVELS.includes(v) ? v : 'medium'; }
-  catch { return 'medium'; }
+let _effortStore = (() => {
+  try { const s = JSON.parse(localStorage.getItem('bridge.effort.v2') || '{}'); return (s && typeof s === 'object') ? s : {}; }
+  catch { return {}; }
 })();
+function _saveEffortStore() { try { localStorage.setItem('bridge.effort.v2', JSON.stringify(_effortStore)); } catch {} }
+const _lvl = (l) => (EFFORT_LEVELS.includes(l) ? l : null);
+function effortForAgent(pid, aid) { return _lvl(_effortStore.agent?.[aid]) || _lvl(_effortStore.proj?.[pid]) || 'medium'; }
+function effortForProject(pid)    { return _lvl(_effortStore.proj?.[pid]) || 'medium'; }
+/* Which scope the picker edits, by screen: L2 → this agent, L1 → this project. */
+function effortScope() {
+  if (mode === MODE_ZOOM && currentAgent()) return { kind: 'agent', id: currentAgent().id };
+  if (mode === MODE_GRID && activeProject)  return { kind: 'project', id: activeProject.id };
+  return null;
+}
+function scopeEffort(scope) {
+  if (!scope) return 'medium';
+  return _lvl((scope.kind === 'agent' ? _effortStore.agent : _effortStore.proj)?.[scope.id]) || 'medium';
+}
+function setScopeEffort(scope, lvl) {
+  if (!scope) return;
+  const key = scope.kind === 'agent' ? 'agent' : 'proj';
+  (_effortStore[key] = _effortStore[key] || {})[scope.id] = lvl;
+  _saveEffortStore();
+}
+
 let effortPickerOpen = false;
-let effortPickerIdx = EFFORT_LEVELS.indexOf(reasoningEffort);
+let effortPickerScope = null;
+let effortPickerIdx = 1;
 let _effortEl = null;
 let _rstickLatch = 0;   // one step per analog-stick push while picking
 
@@ -503,13 +526,15 @@ function effortPickerEl() {
   const el = document.createElement('div');
   el.id = 'effort-picker';
   el.hidden = true;
-  el.innerHTML = `<div class="effort-title">Reasoning effort</div><div class="effort-list"></div><div class="effort-hint"></div>`;
+  el.innerHTML = `<div class="effort-title"></div><div class="effort-list"></div><div class="effort-hint"></div>`;
   document.body.appendChild(el);
   _effortEl = el;
   return el;
 }
 function renderEffortPicker() {
   const el = effortPickerEl();
+  const scopeTxt = effortPickerScope?.kind === 'agent' ? 'this agent' : 'this project';
+  el.querySelector('.effort-title').textContent = `Reasoning effort · ${scopeTxt}`;
   // Max at top → Low at bottom so Up = more effort.
   el.querySelector('.effort-list').innerHTML = EFFORT_LEVELS.slice().reverse().map(lvl => {
     const sel = EFFORT_LEVELS.indexOf(lvl) === effortPickerIdx ? ' selected' : '';
@@ -517,12 +542,15 @@ function renderEffortPicker() {
   }).join('');
   el.querySelector('.effort-hint').textContent = document.body.dataset.inputMode === 'gamepad'
     ? 'Hold touchpad · stick / d-pad Up·Down · release to set'
-    : 'Hold T · ↑ ↓ · release to set';
+    : 'Hold R · ↑ ↓ · release to set';
 }
 function openEffortPicker() {
   if (effortPickerOpen) return;
+  const scope = effortScope();
+  if (!scope) return;   // only meaningful on L1 / L2
+  effortPickerScope = scope;
   effortPickerOpen = true;
-  effortPickerIdx = Math.max(0, EFFORT_LEVELS.indexOf(reasoningEffort));
+  effortPickerIdx = Math.max(0, EFFORT_LEVELS.indexOf(scopeEffort(scope)));
   renderEffortPicker();
   effortPickerEl().hidden = false;
 }
@@ -534,9 +562,24 @@ function moveEffortPicker(delta) {
 function closeEffortPicker() { effortPickerOpen = false; effortPickerEl().hidden = true; }
 function commitEffortPicker() {
   if (!effortPickerOpen) return;
-  reasoningEffort = EFFORT_LEVELS[effortPickerIdx];
-  try { localStorage.setItem('bridge.effort', reasoningEffort); } catch {}
+  setScopeEffort(effortPickerScope, EFFORT_LEVELS[effortPickerIdx]);
   closeEffortPicker();
+  refreshEffortChip();
+}
+/* Footer chip: shows the current scope's effort; click cycles it one step. */
+function cycleScopeEffort() {
+  const scope = effortScope();
+  if (!scope) return;
+  const cur = EFFORT_LEVELS.indexOf(scopeEffort(scope));
+  setScopeEffort(scope, EFFORT_LEVELS[(cur + 1) % EFFORT_LEVELS.length]);
+  refreshEffortChip();
+}
+function refreshEffortChip() {
+  if (mode === MODE_ZOOM) _setL2Shortcuts();
+  else if (mode === MODE_GRID) updateGridShortcuts();
+}
+function effortChipItem() {
+  return { gamepad: 'touchpad', keyboard: 'R', label: 'Effort', action: () => cycleScopeEffort() };
 }
 
 /* ---------- App state ---------- */
@@ -952,7 +995,7 @@ gp.addEventListener('release', (e) => {
 // Releasing Enter at L0 (no modal) finishes a tile long-press.
 window.addEventListener('keyup', (e) => {
   if (e.key === 'Enter' && mode === MODE_PROJECTS && !projectEditOpen) endProjectHold(true);
-  if (e.key === 't' || e.key === 'T') commitEffortPicker();  // release T → set reasoning effort
+  if (e.key === 'r' || e.key === 'R') commitEffortPicker();  // release R → set reasoning effort
 });
 
 /** On L0, the shortcuts rail reflects the focused project's lead so
@@ -1956,6 +1999,7 @@ function updateGridShortcuts() {
   const isLeadFocused = focused?.id === activeProject.leadAgentId;
   const items = [
     { gamepad: 'r2', keyboard: 'V', label: 'Hold to talk', action: () => startPTT() },
+    effortChipItem(),
     { gamepad: 'l1', keyboard: '[', label: 'Prev project', action: () => cycleProject(-1) },
     { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
     {                    gamepad: 'triangle', keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
@@ -2667,6 +2711,7 @@ function handleEditBubbleGamepad(button) {
 function _setL2Shortcuts() {
   setShortcuts([
     { gamepad: 'r2',      keyboard: 'V', label: 'Hold to talk', action: () => startPTT() },
+    effortChipItem(),
     {                     keyboard: '/', label: 'Type prompt',  action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     { gamepad: 'l1',      keyboard: '[', label: 'Prev agent',   action: () => cycleAgent(-1) },
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
@@ -5145,10 +5190,10 @@ window.addEventListener('keydown', (e) => {
   // Esc only closes the menu rather than also triggering Back.
   if (settingsOpen || editBubbleOpen || confirmCancelOpen || projectEditOpen || notificationsOpen) return;
 
-  // Reasoning-effort picker: hold T, nudge ↑/↓, release T to set.
+  // Reasoning-effort picker: hold R, nudge ↑/↓, release R to set.
   const _typing = document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
   if (!_typing) {
-    if ((e.key === 't' || e.key === 'T') && !e.repeat) { e.preventDefault(); openEffortPicker(); return; }
+    if ((e.key === 'r' || e.key === 'R') && !e.repeat) { e.preventDefault(); openEffortPicker(); return; }
     if (effortPickerOpen) {
       if (e.key === 'ArrowUp')   { e.preventDefault(); moveEffortPicker(+1); return; }
       if (e.key === 'ArrowDown') { e.preventDefault(); moveEffortPicker(-1); return; }
@@ -5498,7 +5543,7 @@ async function submitIntent(text, regenerate = 0) {
     const r = await fetch(`/projects/${activeProject.id}/agents/${targetId}/interpret`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, regenerate, effort: reasoningEffort }),
+      body: JSON.stringify({ text, regenerate, effort: effortForAgent(activeProject.id, targetId) }),
       signal: myCtl.signal,
     });
     if (!r.ok) throw new Error(`server ${r.status}`);
@@ -5535,7 +5580,7 @@ async function submitTeamIntent(text) {
     const r = await fetch(`/projects/${activeProject.id}/team/interpret`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, effort: effortForProject(activeProject.id) }),
       signal: myCtl.signal,
     });
     if (!r.ok) throw new Error(`server ${r.status}`);
