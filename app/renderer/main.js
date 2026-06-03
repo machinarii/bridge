@@ -4864,8 +4864,9 @@ gp.addEventListener('press', (e) => {
       if (b === 'cross')      { closeBtn.click(); return; }
       if (b === 'down')       {
         closeBtn.blur();
-        // On L2, Down returns to the chat (oldest bubble) it came from.
-        if (mode === MODE_ZOOM && chatBubbles.length) focusFirstBubble();
+        // On L2, Down re-enters the chat at the most-recent (last) bubble,
+        // which is on-screen so the highlight is visible.
+        if (mode === MODE_ZOOM && chatBubbles.length) focusLastBubble();
         else ring.paint();
         return;
       }
@@ -5755,7 +5756,7 @@ window.addEventListener('keydown', (e) => {
       if (e.key === 'Enter')      { e.preventDefault(); closeBtn.click(); return; }
       if (e.key === 'ArrowDown')  {
         e.preventDefault(); closeBtn.blur();
-        if (mode === MODE_ZOOM && chatBubbles.length) focusFirstBubble();
+        if (mode === MODE_ZOOM && chatBubbles.length) focusLastBubble();
         else ring.paint();
         return;
       }

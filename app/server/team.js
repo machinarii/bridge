@@ -8,7 +8,7 @@
 
 import { getProject, TOPOLOGIES } from './projects.js';
 import { getRole } from './roles.js';
-import { interpretIntent } from './orchestrator.js';
+import { interpretIntent, RESPONSE_STYLE } from './orchestrator.js';
 import { appendTurn, getContext } from './scratchpad.js';
 import { getModelForRole, getDefaultModel, getRouterModel } from './models.js';
 import { emitStatus, emitActivity, emitDelegate, emitNotification } from './events.js';
@@ -219,7 +219,8 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
     `You are ${lead.name}. Project goal: "${project.goal}". The team replied to "${text}":\n${perAgentText || '(no assignees)'}\n` +
     `Compose a single response to the user that synthesizes their work. 1-3 sentences, spoken-friendly. ` +
     `Output the standard answer tile-spec JSON: ` +
-    `{"intent":"answer","template":"reader","context":"Team","title":"<short>","body":"<text>","actions":[{"verb":"Back","glyph":"circle","action":{"type":"cancel"}}]}`;
+    `{"intent":"answer","template":"reader","context":"Team","title":"<short>","body":"<text>","actions":[{"verb":"Back","glyph":"circle","action":{"type":"cancel"}}]}` +
+    RESPONSE_STYLE;
   emitStatus(projectId, lead.id, 'drafting');
   const synthRaw = await callOpenRouterJSON({ apiKey, model: leadModel, prompt: synthPrompt, timeoutMs: SYNTHESIS_TIMEOUT_MS });
   let summary;
