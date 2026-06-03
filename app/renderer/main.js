@@ -1784,8 +1784,8 @@ async function openAddAgentPicker() {
   renderActionBar([]);
   setShortcuts([
     { gamepad: 'cross',   keyboard: 'Space', label: 'Toggle',   action: () => toggleFocusedAddAgentRole() },
-    { gamepad: 'square',  keyboard: 'E',     label: 'Explorer', action: () => toggleFileExplorer() },
     { gamepad: 'triangle', keyboard: 'A',     label: 'Activity', action: () => toggleActivityDrawer() },
+    { gamepad: 'square',  keyboard: 'E',     label: 'Explorer', action: () => toggleFileExplorer() },
     { gamepad: 'circle',  keyboard: 'Esc',   label: 'Back',     action: () => renderGrid() },
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Done',
@@ -1842,8 +1842,8 @@ function updateGridShortcuts() {
     { gamepad: 'r2', keyboard: 'V', label: 'Hold to talk', action: () => startPTT() },
     { gamepad: 'l1', keyboard: '[', label: 'Prev project', action: () => cycleProject(-1) },
     { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
-    { gamepad: 'square', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
     {                    gamepad: 'triangle', keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
+    { gamepad: 'square', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
   ];
   if (!isLeadFocused) {
     items.push({ gamepad: 'options', keyboard: 'Space', label: 'Agent on / off',
@@ -1882,17 +1882,8 @@ function gridMove(dir) {
   if (mode !== MODE_GRID) return;
   const grid = surfaceEl.querySelector('.agent-grid');
   if (!grid) return;
-  const cols = grid._cols, rows = grid._rows;
-  const n = ring.elements.length;
-  const i = ring.index;
-  const r = Math.floor(i / cols), c = i % cols;
-  let nr = r, nc = c;
-  if (dir === 'left')  nc = (c + cols - 1) % cols;
-  if (dir === 'right') nc = (c + 1) % cols;
-  if (dir === 'up')    nr = (r + rows - 1) % rows;
-  if (dir === 'down')  nr = (r + 1) % rows;
-  let next = nr * cols + nc;
-  if (next >= n) next = n - 1;
+  const next = stepGrid(grid, ring.index, ring.elements.length, dir);
+  if (next == null) return;   // consumed by footer entry / rubberband
   ring.index = next;
   gridIndex = next;
   ring.paint();
@@ -2456,8 +2447,8 @@ function _setL2Shortcuts() {
     {                     keyboard: '/', label: 'Type prompt',  action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     { gamepad: 'l1',      keyboard: '[', label: 'Prev agent',   action: () => cycleAgent(-1) },
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
-    { gamepad: 'square', keyboard: 'E', label: 'Explorer',     action: () => toggleFileExplorer() },
     {                     gamepad: 'triangle', keyboard: 'A', label: 'Activity',     action: () => toggleActivityDrawer() },
+    { gamepad: 'square', keyboard: 'E', label: 'Explorer',     action: () => toggleFileExplorer() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => pressCross() });
@@ -2483,12 +2474,14 @@ async function exitZoom() {
 
 /** Slide to the next / previous project from L1 (project detail). */
 function cycleProject(delta) {
-  if (mode !== MODE_GRID || projects.length < 2 || !activeProject) return;
+  if (mode !== MODE_GRID || !activeProject) return;
+  // Only one project — nothing to switch to: rubberband to say so.
+  if (projects.length < 2) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
   const curIdx = projects.findIndex(p => p.id === activeProject.id);
   const nextIdx = (curIdx + delta + projects.length) % projects.length;
-  if (nextIdx === curIdx) return;
+  if (nextIdx === curIdx) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
   slideAgent(delta, () => {
     activeProject = withLeadFirst(projects[nextIdx]);
     gridIndex = 0;
@@ -2499,15 +2492,16 @@ function cycleProject(delta) {
 
 function cycleAgent(delta) {
   if (mode !== MODE_ZOOM || !activeProject) return;
-  if (inflightController) { inflightController.abort(); inflightController = null; }
-  stopSpeaking();
   const n = activeProject.agents.length;
   let i = zoomedIndex;
   for (let k = 0; k < n; k++) {
     i = (i + delta + n) % n;
     if (activeProject.agents[i].enabled) break;
   }
-  if (i === zoomedIndex) { renderZoom(); return; }
+  // No other (enabled) agent to land on — rubberband to say so.
+  if (i === zoomedIndex) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
+  if (inflightController) { inflightController.abort(); inflightController = null; }
+  stopSpeaking();
   slideAgent(delta, () => { zoomedIndex = i; renderZoom(); });
 }
 
@@ -3503,23 +3497,59 @@ function clearCenteredCreate() {
   for (const el of ring.elements) el.classList?.remove('centered-create');
 }
 
+/* Overscroll "rubberband" bounce on a container when the user tries to move
+ * past the end of a list — signals "you've reached the end" instead of
+ * silently wrapping around. */
+function bumpEdge(el, dir) {
+  if (!el) return;
+  const d = 16;
+  const off = { left: [-d, 0], right: [d, 0], up: [0, -d], down: [0, d] }[dir];
+  if (!off) return;
+  el.animate(
+    [
+      { transform: 'translate(0,0)' },
+      { transform: `translate(${off[0]}px, ${off[1]}px)` },
+      { transform: 'translate(0,0)' },
+    ],
+    { duration: 300, easing: 'cubic-bezier(.34,1.56,.64,1)' }
+  );
+}
+
+/* Step within a tile grid with HARD EDGES (no wrap-around):
+ *  - Down off the last content row drops focus into the footer shortcuts rail.
+ *  - Any other off-grid press rubberbands the container instead of wrapping.
+ * Returns the new index, or null when the press was consumed (footer entry or
+ * a rubberband) and the caller should not move. */
+function stepGrid(grid, i, n, dir) {
+  const cols = grid._cols, rows = grid._rows;
+  const r = Math.floor(i / cols), c = i % cols;
+  if (dir === 'down') {
+    const below = (r + 1) * cols + c;
+    if (r < rows - 1 && below < n) return below;   // a tile sits below → move
+    if (enterShortcuts()) return null;             // nothing below → footer rail
+    bumpEdge(grid, 'down'); return null;
+  }
+  if (dir === 'up') {
+    if (r === 0) { bumpEdge(grid, 'up'); return null; }
+    return (r - 1) * cols + c;
+  }
+  if (dir === 'left') {
+    if (c === 0) { bumpEdge(grid, 'left'); return null; }
+    return i - 1;
+  }
+  if (dir === 'right') {
+    if (c === cols - 1 || i + 1 >= n) { bumpEdge(grid, 'right'); return null; }
+    return i + 1;
+  }
+  return null;
+}
+
 function pickerMove(dir) {
   clearCenteredCreate();
-  // (focus changes; defer the shortcut update until after the move below)
   const grid = surfaceEl.querySelector('.project-picker');
   if (!grid) return;
-  const cols = grid._cols, rows = grid._rows;
-  const n = ring.elements.length;
-  if (n <= 1) return;
-  const i = ring.index;
-  const r = Math.floor(i / cols), c = i % cols;
-  let nr = r, nc = c;
-  if (dir === 'left')  nc = (c + cols - 1) % cols;
-  if (dir === 'right') nc = (c + 1) % cols;
-  if (dir === 'up')    nr = (r + rows - 1) % rows;
-  if (dir === 'down')  nr = (r + 1) % rows;
-  let next = nr * cols + nc;
-  if (next >= n) next = n - 1;
+  const next = stepGrid(grid, ring.index, ring.elements.length, dir);
+  if (next == null) return;   // consumed by footer entry / rubberband
   ring.index = next;
   pickerIndex = next;
   ring.paint();
@@ -4019,6 +4049,18 @@ gp.addEventListener('press', (e) => {
       if (b === 'cross') { closeBtn.click(); return; }
       closeBtn.blur(); ring.paint(); return;
     }
+  }
+
+  // Footer shortcuts rail has focus (entered with Down from the grid): the
+  // d-pad walks the chips, Up/Circle returns to the surface, Cross activates.
+  if (isShortcutsFocused()) {
+    if (b === 'left')   { moveShortcutFocus(-1); return; }
+    if (b === 'right')  { moveShortcutFocus(+1); return; }
+    if (b === 'up')     { leaveShortcuts(); ring.paint(); return; }
+    if (b === 'down')   { bumpEdge(document.getElementById('footer-rail'), 'down'); return; }
+    if (b === 'cross')  { activateFocusedShortcut(); return; }
+    if (b === 'circle') { leaveShortcuts(); ring.paint(); return; }
+    return;
   }
 
   if (mode === MODE_PROJECTS) {
@@ -4884,20 +4926,11 @@ window.addEventListener('keydown', (e) => {
     if (e.key === '[' || e.key === ']') {
       e.preventDefault();
       slideToAdjacentProject(e.key === ']' ? +1 : -1);
-    } else if (e.key === 'ArrowDown') {
-      // Descend into the rail when the cursor is on the last row that
-      // has actual content (not the grid's nominal last row — sparse
-      // grids may have empty rows below).
-      const grid = surfaceEl.querySelector('.project-picker');
-      if (grid) {
-        const cols = grid._cols;
-        const n = ring.elements.length;
-        const lastRow = Math.max(0, Math.ceil(n / cols) - 1);
-        const r = Math.floor(ring.index / cols);
-        if (r >= lastRow && enterShortcuts()) { e.preventDefault(); return; }
-      }
+    } else if (dir) {
+      // pickerMove owns edge behavior: Down off the last content row drops
+      // into the footer rail; other off-grid presses rubberband (no wrap).
       e.preventDefault(); pickerMove(dir);
-    } else if (dir) { e.preventDefault(); pickerMove(dir); }
+    }
     else if (e.key === 'Enter' && !e.repeat) {
       e.preventDefault();
       if (ring.index < projects.length) startProjectHold(ring.index); // hold a project → edit modal
@@ -5024,17 +5057,11 @@ window.addEventListener('keydown', (e) => {
         return;
       }
     }
-    if (e.key === 'ArrowDown') {
-      const grid = surfaceEl.querySelector('.agent-grid');
-      if (grid) {
-        const cols = grid._cols;
-        const n = ring.elements.length;
-        const lastRow = Math.max(0, Math.ceil(n / cols) - 1);
-        const r = Math.floor(ring.index / cols);
-        if (r >= lastRow && enterShortcuts()) { e.preventDefault(); return; }
-      }
-      e.preventDefault(); gridMove('down');
-    } else if (dir) { e.preventDefault(); gridMove(dir); }
+    if (dir) {
+      // gridMove owns edge behavior: Down off the last content row drops into
+      // the footer rail; other off-grid presses rubberband (no wrap).
+      e.preventDefault(); gridMove(dir);
+    }
     else if (e.key === 'Enter') { e.preventDefault(); enterZoom(); }
     else if (e.key === 'Escape') { e.preventDefault(); exitToProjects(); }
     else if (e.code === 'Space') { e.preventDefault(); toggleFocusedAgentEnabled(); }
