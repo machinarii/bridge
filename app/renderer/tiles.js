@@ -3,6 +3,7 @@
  * Templates: list | reader | compose | confirm.
  * Glyphs (PS5): cross ✕ · circle ○ · square □ · triangle △.
  */
+import { GAMEPAD_ICON_SVG } from './gamepad-icons.js';
 
 const GLYPH_SHAPES = {
   cross:    '✕',
@@ -91,10 +92,18 @@ export function renderActionBar(actions = []) {
   const primary = bar.querySelector('#primary-shortcut');
   const buttons = [];
   for (const a of actions) {
-    const glyphChar = GLYPH_SHAPES[a.glyph] || '';
     const keyLabel  = GLYPH_KEYS[a.glyph] || '';
+    // Gamepad glyph: prefer the PlayStation SVG icon (filled, matches the
+    // footer chips); fall back to the legacy text symbol for unmapped glyphs.
+    let gpSpan = null;
+    if (a.glyph) {
+      gpSpan = el('span', { class: 'glyph for-gamepad', dataset: { glyph: a.glyph } });
+      const svg = GAMEPAD_ICON_SVG[a.glyph];
+      if (svg) { gpSpan.classList.add('gp-icon'); gpSpan.innerHTML = svg; }
+      else gpSpan.textContent = GLYPH_SHAPES[a.glyph] || '';
+    }
     const btn = el('button', { class: 'action', type: 'button', dataset: { verb: a.verb, glyph: a.glyph || '' } },
-      glyphChar ? el('span', { class: 'glyph for-gamepad', dataset: { glyph: a.glyph } }, glyphChar) : null,
+      gpSpan,
       keyLabel  ? el('span', { class: 'glyph for-keyboard', dataset: { glyph: a.glyph } }, keyLabel)  : null,
       el('span', {}, a.verb),
     );
