@@ -1681,9 +1681,7 @@ function renderGrid() {
   ring.index = clamp(gridIndex, 0, tileEls.length - 1);
   ring.paint();
 
-  renderActionBar([
-    { verb: 'Back', glyph: 'circle', action: { type: '_grid_back' } },
-  ]);
+  renderActionBar([]);   // Back is a footer chip (see updateGridShortcuts), matching L2
   updateGridShortcuts();
 }
 
@@ -1867,6 +1865,7 @@ function updateGridShortcuts() {
     items.push({ gamepad: 'options', keyboard: 'Space', label: 'Agent on / off',
                  action: () => toggleFocusedAgentEnabled() });
   }
+  items.push({ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => exitToProjects() });
   setShortcuts(items);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => enterZoom() });
@@ -3612,15 +3611,22 @@ function stepGrid(grid, i, n, dir) {
     bumpEdge(grid, 'down'); return null;
   }
   if (dir === 'up') {
-    if (r === 0) { bumpEdge(grid, 'up'); return null; }
+    // From the first row, jump to the × close button if the screen has one
+    // (e.g. L1); otherwise (e.g. L0 home) rubberband.
+    if (r === 0) {
+      if (focusSurfaceClose()) return null;
+      bumpEdge(grid, 'up'); return null;
+    }
     return (r - 1) * cols + c;
   }
+  // Left/Right traverse in reading order: off the end of a row flows to the
+  // adjacent row; only the very first / last item rubberbands.
   if (dir === 'left') {
-    if (c === 0) { bumpEdge(grid, 'left'); return null; }
+    if (i === 0) { bumpEdge(grid, 'left'); return null; }
     return i - 1;
   }
   if (dir === 'right') {
-    if (c === cols - 1 || i + 1 >= n) { bumpEdge(grid, 'right'); return null; }
+    if (i + 1 >= n) { bumpEdge(grid, 'right'); return null; }
     return i + 1;
   }
   return null;
@@ -4123,12 +4129,15 @@ gp.addEventListener('press', (e) => {
     return;
   }
 
-  // While the × close button holds focus (reached via Up/Right), Cross
-  // activates it; any other button hands focus back to the surface ring.
+  // While the × close button holds focus (reached via Up from the first row),
+  // Cross activates it and Down returns to the grid; the close button is the
+  // top-right corner, so Up / Left / Right just rubberband.
   {
     const closeBtn = surfaceEl.querySelector('.surface-close');
     if (closeBtn && document.activeElement === closeBtn) {
-      if (b === 'cross') { closeBtn.click(); return; }
+      if (b === 'cross')      { closeBtn.click(); return; }
+      if (b === 'down')       { closeBtn.blur(); ring.paint(); return; }
+      if (b === 'up' || b === 'left' || b === 'right') { bumpEdge(closeBtn, b); return; }
       closeBtn.blur(); ring.paint(); return;
     }
   }
@@ -4293,7 +4302,7 @@ gp.addEventListener('press', (e) => {
  * smoothly. y > 0 = stick deflected down → scroll down; y < 0 →
  * scroll up. Speed scales with deflection. The gamepad driver
  * already applies a 0.15 dead-zone. */
-const RSTICK_MAX_PX_PER_TICK = 96;
+const RSTICK_MAX_PX_PER_TICK = 384;
 gp.addEventListener('rstick', (e) => {
   if (mode !== MODE_ZOOM) return;
   const dy = e.detail?.y || 0;
@@ -5147,19 +5156,8 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (mode === MODE_GRID) {
-    // Up arrow at the top row of the grid hops focus to the × close
-    // button at the top-right; Right at the rightmost cell does the same.
-    if ((e.key === 'ArrowUp' || e.key === 'ArrowRight') && document.activeElement !== surfaceEl.querySelector('.surface-close')) {
-      const grid = surfaceEl.querySelector('.agent-grid');
-      if (grid) {
-        const cols = grid._cols, rows = grid._rows;
-        const r = Math.floor(ring.index / cols);
-        const c = ring.index % cols;
-        if ((e.key === 'ArrowUp' && r === 0) || (e.key === 'ArrowRight' && c === cols - 1)) {
-          if (focusSurfaceClose()) { e.preventDefault(); return; }
-        }
-      }
-    }
+    // (gridMove/stepGrid own edge behavior: Up from the first row jumps to the
+    // × close, Left/Right flow across rows, Down drops into the footer rail.)
     // Left from the leftmost grid column with the explorer open hops
     // focus back into the explorer.
     if (e.key === 'ArrowLeft' && fileExplorerOpen && !explorerFocused) {
