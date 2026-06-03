@@ -1720,11 +1720,11 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   color: var(--fg);
   opacity: 0.5;
 }
-/* A delegate's reply surfaced into another agent's chat: tint + accent
-   border so it reads as a different speaker in the group thread. */
+/* A delegate's reply surfaced into another agent's chat: a subtle tint so it
+   reads as a different speaker in the group thread (distinguished by its
+   author header, not a border). */
 .agent-view .bubble.agent.foreign {
   background: rgba(255,255,255,0.055);
-  border-left: 2px solid color-mix(in oklab, var(--agent-color, #6ea8ff) 60%, transparent);
 }
 .agent-view .bubble.agent.foreign .bubble-author-name {
   color: color-mix(in oklab, var(--agent-color, #6ea8ff) 70%, #ffd9a0);
