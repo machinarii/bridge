@@ -204,6 +204,18 @@ export async function addAgent(projectId, roleId) {
   return p;
 }
 
+export function removeAgent(projectId, agentId) {
+  const p = getProject(projectId);
+  if (!p) throw new Error('unknown project');
+  if (agentId === p.leadAgentId) throw new Error('cannot remove the lead');
+  const before = p.agents.length;
+  p.agents = p.agents.filter(a => a.id !== agentId);
+  if (p.agents.length === before) throw new Error('unknown agent');
+  p.updatedAt = Date.now();
+  save();
+  return p;
+}
+
 export function setAgentEnabled(projectId, agentId, enabled) {
   const p = getProject(projectId);
   if (!p) throw new Error('unknown project');

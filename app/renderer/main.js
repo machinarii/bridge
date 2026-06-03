@@ -1839,7 +1839,7 @@ function renderGrid() {
       ring.set(tileEls.concat(addTile));
       ring.index = addIdx;
       ring.paint();
-      openAddAgentPicker();
+      enterZoom();   // zoom-morph into the picker (same as keyboard/gamepad)
     });
     grid.appendChild(addTile);
     tileEls.push(addTile);
@@ -1865,7 +1865,8 @@ function renderGrid() {
  * from the create-project flow. PM is excluded since the project
  * already has one. Selected roles are POSTed sequentially to
  * /projects/:pid/agents on Done. */
-let addAgentSelected = new Set(); // role ids checked in this session
+let addAgentSelected = new Set(); // desired final roster (role ids) in the picker
+let addAgentBaseline = new Set(); // the roster when the picker opened (diff anchor)
 
 async function ensureRolesLoaded() {
   if (window._roles?.length) return;   // cached — render synchronously
@@ -1886,27 +1887,20 @@ async function openAddAgentPicker() {
   // zoom morph hands off cleanly into it (the enterZoom add-agent branch
   // prefetches before the morph). Falls back to a fetch on a cold cache.
   await ensureRolesLoaded();
-  const usedRoles = new Set(activeProject.agents.map(a => a.role));
-  // Every role is shown. Existing agents are pre-checked and locked
-  // (cannot be removed from this screen).
-  const available = (window._roles || []).filter(r => !usedRoles.has(r.id));
-  if (available.length === 0) {
-    mode = MODE_GRID; document.body.dataset.mode = mode;   // nothing to add — stay on the grid
-    renderGrid();
-    setIndicator('error', 'No roles left to add');
-    setTimeout(() => setIndicator('idle', 'Connected'), 1500);
-    return;
-  }
-  mode = MODE_ADD_AGENT;
-  document.body.dataset.mode = mode;
-  // Keep the project's color wash so the add-agent screen reads as
-  // "still inside this project."
+  // Keep the project's color wash so the screen reads as "still inside this
+  // project."
   document.documentElement.style.setProperty('--agent-color', getProjectColor(activeProject));
-  addAgentSelected = new Set();
+  const leadRole = activeProject.agents.find(a => a.id === activeProject.leadAgentId)?.role;
+  const currentRoles = new Set(activeProject.agents.map(a => a.role));
+  // addAgentSelected = the desired final roster. Start from the current one:
+  // untick a role to remove its agent, tick a new role to add one. The lead
+  // (PM) is locked and can't be removed. addAgentBaseline is the diff anchor.
+  addAgentSelected = new Set(currentRoles);
+  addAgentBaseline = new Set(currentRoles);
   setBreadcrumbs([
     { label: 'Projects' },
     { label: activeProject.name },
-    { label: 'Add agent' },
+    { label: 'Add / remove agents' },
   ]);
   surfaceEl.innerHTML = '';
 
@@ -1914,22 +1908,22 @@ async function openAddAgentPicker() {
   const heading = document.createElement('header');
   heading.className = 'project-heading';
   heading.innerHTML = `
-    <h2 class="project-title">Add agent</h2>
-    <p class="project-goal">Pick one or more roles to add.</p>`;
+    <h2 class="project-title">Add / remove agents</h2>
+    <p class="project-goal">Tick a role to add it, untick to remove it. The lead can't be removed.</p>`;
   surfaceEl.appendChild(heading);
-  // Close × — confirms if the user has any new selections.
+  // Close × — confirms only if the roster's been changed.
   surfaceEl.appendChild(createSurfaceCloseButton(() => {
-    maybeConfirmCancel(addAgentSelected.size > 0, () => renderGrid());
+    maybeConfirmCancel(addAgentChanged(), () => renderGrid());
   }));
 
-  // Locked (already on project) first, alphabetized; then the rest,
-  // also alphabetized. Focus lands on the first togglable tile.
+  // Roles already on the project first (alphabetized), then the rest. Focus
+  // lands on the first togglable tile (the first non-lead role).
   const allRoles = window._roles || [];
-  const locked = allRoles.filter(r => usedRoles.has(r.id))
+  const onProject = allRoles.filter(r => currentRoles.has(r.id))
     .sort((a, b) => a.label.localeCompare(b.label));
-  const open = allRoles.filter(r => !usedRoles.has(r.id))
+  const off = allRoles.filter(r => !currentRoles.has(r.id))
     .sort((a, b) => a.label.localeCompare(b.label));
-  const roles = [...locked, ...open];
+  const roles = [...onProject, ...off];
 
   const wrap = document.createElement('section');
   wrap.className = 'role-picker';
@@ -1940,7 +1934,8 @@ async function openAddAgentPicker() {
   let firstOpenTile = null;
   for (const role of roles) {
     const sample = role.namePool?.[0] || '';
-    const isLocked = usedRoles.has(role.id);
+    const isLocked = role.id === leadRole;            // only the lead can't be removed
+    const checked  = addAgentSelected.has(role.id);
     const t = document.createElement('div');
     t.className = 'role-tile';
     t.dataset.roleId = role.id;
@@ -1949,7 +1944,7 @@ async function openAddAgentPicker() {
     t.innerHTML = `
       <div class="role-label">${escapeHtml(role.label)}</div>
       <div class="role-sample">${escapeHtml(sample)}</div>
-      <div class="role-toggle" data-checked="${isLocked ? 'true' : 'false'}" ${isLocked ? 'data-locked="true"' : ''}></div>`;
+      <div class="role-toggle" data-checked="${checked ? 'true' : 'false'}" ${isLocked ? 'data-locked="true"' : ''}></div>`;
     t.addEventListener('click', () => { ring.moveTo(el => el === t); toggleFocusedAddAgentRole(); });
     grid.appendChild(t);
     tileEls.push(t);
@@ -1959,7 +1954,7 @@ async function openAddAgentPicker() {
 
   // Invisible row inside the picker — Cancel on the left of Continue.
   const tryCancelAddAgent = () => {
-    maybeConfirmCancel(addAgentSelected.size > 0, () => renderGrid());
+    maybeConfirmCancel(addAgentChanged(), () => renderGrid());
   };
   const row = document.createElement('div');
   row.className = 'role-confirm-row';
@@ -2014,31 +2009,42 @@ function toggleFocusedAddAgentRole() {
   syncAddAgentConfirm();
 }
 
-/* Continue is enabled only once at least one new role is picked; grayed out
- * (disabled) otherwise. */
+/* True when the picker's desired roster differs from when it opened. */
+function addAgentChanged() {
+  if (addAgentSelected.size !== addAgentBaseline.size) return true;
+  for (const r of addAgentSelected) if (!addAgentBaseline.has(r)) return true;
+  return false;
+}
+/* Continue is enabled only once the roster has actually changed (an add or a
+ * remove); grayed out (disabled) otherwise. */
 function syncAddAgentConfirm() {
   if (mode !== MODE_ADD_AGENT) return;
   const btn = surfaceEl.querySelector('.role-confirm');
-  if (btn) btn.disabled = addAgentSelected.size === 0;
+  if (btn) btn.disabled = !addAgentChanged();
 }
 
 async function commitAddAgentSelections() {
-  if (!activeProject || addAgentSelected.size === 0) return;  // Continue is disabled with no selection
+  if (!activeProject) return;
   const pid = activeProject.id;
-  setIndicator('thinking', `Adding ${addAgentSelected.size} agent${addAgentSelected.size > 1 ? 's' : ''}…`);
+  const leadId = activeProject.leadAgentId;
+  const toAdd = [...addAgentSelected].filter(r => !addAgentBaseline.has(r));
+  const toRemove = activeProject.agents.filter(a => a.id !== leadId && !addAgentSelected.has(a.role));
+  if (toAdd.length === 0 && toRemove.length === 0) { renderGrid(); return; }
+  setIndicator('thinking', 'Updating team…');
   let updated = null;
-  for (const roleId of addAgentSelected) {
+  for (const roleId of toAdd) {
     try {
       const r = await fetch(`/projects/${pid}/agents`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roleId }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roleId }),
       });
-      if (!r.ok) throw new Error(await r.text());
-      updated = await r.json();
-    } catch (err) {
-      console.error(`[add-agent] failed for ${roleId}`, err);
-    }
+      if (r.ok) updated = await r.json();
+    } catch (err) { console.error(`[add-agent] add failed: ${roleId}`, err); }
+  }
+  for (const a of toRemove) {
+    try {
+      const r = await fetch(`/projects/${pid}/agents/${a.id}`, { method: 'DELETE' });
+      if (r.ok) updated = await r.json();
+    } catch (err) { console.error(`[add-agent] remove failed: ${a.id}`, err); }
   }
   if (updated) {
     const i = projects.findIndex(p => p.id === pid);
