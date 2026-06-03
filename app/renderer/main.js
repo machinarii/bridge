@@ -2269,6 +2269,18 @@ function isBubbleFocused() {
   return a.classList?.contains('bubble') || a.classList?.contains('bubble-action');
 }
 function leaveBubbleFocus()    { chatBubbleIdx = -1; paintBubbleFocus(); }
+/* Move focus across the action icons (retry / edit / copy …) inside the
+ * currently-focused chat bubble. Shared by keyboard and gamepad. */
+function cycleBubbleAction(dir) {
+  const bubble = chatBubbles[chatBubbleIdx];
+  const actions = bubble?.querySelectorAll('.bubble-action');
+  if (!actions || actions.length === 0) return;
+  const arr = [...actions];
+  const idx = arr.indexOf(document.activeElement);
+  const next = (idx === -1) ? (dir > 0 ? 0 : arr.length - 1)
+             : Math.max(0, Math.min(arr.length - 1, idx + dir));
+  arr[next].focus();
+}
 
 async function retryBubble(i) {
   const m = chatMessages[i];
@@ -4087,6 +4099,8 @@ gp.addEventListener('press', (e) => {
     if (b === 'up' || b === 'down' || b === 'left' || b === 'right') gridMove(b);
     else if (b === 'cross')   enterZoom();
     else if (b === 'circle')  exitToProjects();
+    else if (b === 'l1')      cycleProject(-1);
+    else if (b === 'r1')      cycleProject(+1);
     else if (b === 'square')  toggleFileExplorer();
     else if (b === 'options') toggleFocusedAgentEnabled();
     else if (b === 'triangle') toggleActivityDrawer();
@@ -4100,8 +4114,40 @@ gp.addEventListener('press', (e) => {
       if (b === 'cross')                { openFocusedFile(); return; }
       if (b === 'circle')               { closeFileExplorer(); return; }
     }
-    if (b === 'up' || b === 'left')      ring.move(-1);
-    else if (b === 'down' || b === 'right') ring.move(+1);
+    // Chat-history navigation (mirrors the keyboard model): once a bubble is
+    // focused, Up/Down walk bubbles, Left/Right cycle a bubble's action icons,
+    // Cross activates, Down past the last bubble (or Circle) drops back out.
+    if (isBubbleFocused()) {
+      if (b === 'up')     { moveBubbleFocus(-1); return; }
+      if (b === 'down')   {
+        if (chatBubbleIdx >= chatBubbles.length - 1) {
+          leaveBubbleFocus();
+          if (ring.elements.length === 0) enterShortcuts(); else ring.paint();
+        } else moveBubbleFocus(+1);
+        return;
+      }
+      if (b === 'left')   { cycleBubbleAction(-1); return; }
+      if (b === 'right')  { cycleBubbleAction(+1); return; }
+      if (b === 'cross')  { const a = document.activeElement; if (a?.classList?.contains('bubble-action')) a.click(); return; }
+      if (b === 'circle') { leaveBubbleFocus(); ring.paint(); return; }
+      if (b === 'l1')     { cycleAgent(-1); return; }
+      if (b === 'r1')     { cycleAgent(+1); return; }
+      return;
+    }
+    // Surface ring. Up from the top enters the chat history (last bubble);
+    // Down from the bottom drops into the footer shortcuts rail.
+    if (b === 'up') {
+      if (ring.index === 0 && chatBubbles.length > 0) { focusLastBubble(); return; }
+      if (ring.index === 0 && focusSurfaceClose()) return;
+      ring.move(-1); return;
+    }
+    if (b === 'down') {
+      const lastIdx = Math.max(0, ring.elements.length - 1);
+      if ((ring.elements.length === 0 || ring.index === lastIdx) && enterShortcuts()) return;
+      ring.move(+1); return;
+    }
+    if (b === 'left')                    ring.move(-1);
+    else if (b === 'right')              ring.move(+1);
     else if (b === 'cross')              pressCross();
     else if (b === 'circle')             pressCircle();
     else if (b === 'l1')                 cycleAgent(-1);
@@ -4177,7 +4223,7 @@ gp.addEventListener('press', (e) => {
  * smoothly. y > 0 = stick deflected down → scroll down; y < 0 →
  * scroll up. Speed scales with deflection. The gamepad driver
  * already applies a 0.15 dead-zone. */
-const RSTICK_MAX_PX_PER_TICK = 32;
+const RSTICK_MAX_PX_PER_TICK = 96;
 gp.addEventListener('rstick', (e) => {
   if (mode !== MODE_ZOOM) return;
   const dy = e.detail?.y || 0;
@@ -4923,12 +4969,11 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (mode === MODE_PROJECTS) {
-    if (e.key === '[' || e.key === ']') {
-      e.preventDefault();
-      slideToAdjacentProject(e.key === ']' ? +1 : -1);
-    } else if (dir) {
+    if (dir) {
       // pickerMove owns edge behavior: Down off the last content row drops
       // into the footer rail; other off-grid presses rubberband (no wrap).
+      // ([ / ] intentionally do nothing on L0 — there's no "adjacent project"
+      // to cycle to from the picker itself.)
       e.preventDefault(); pickerMove(dir);
     }
     else if (e.key === 'Enter' && !e.repeat) {
