@@ -1,6 +1,6 @@
 # Bridge
 
-## Mission control for multi-agentic orchestration using Speech to Text (STT) + gamepad for increased productivity. Orchestrate agents across projects on any model on OpenRouter.
+## Command center for multi-agentic orchestration using Speech to Text (STT) + gamepad for increased productivity. Orchestrate agents across projects on any model on OpenRouter.
 
 Bridge is an **AI-first command center for managing multi-agent work** — a productivity surface for running teams of role-typed AI agents across multiple projects. You describe intent; the orchestrator routes it to the right agents, combines cloud and local models, and composes a consistent, navigable surface that's read back to you. Agents work **in parallel** — many run at once across your projects — and can **spawn subagents** to fan a large task out into smaller pieces, then roll the results back up. The goal is to make *coordinating a team of agents* — assigning, steering, and tracking their work — fast and low-friction.
 
