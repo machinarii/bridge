@@ -1999,6 +1999,7 @@ function renderZoom(specOverride) {
 let chatBubbles = [];      // DOM nodes in order
 let chatBubbleIdx = -1;    // -1 = not in chat
 let chatMessages = [];     // last-fetched message records
+let pendingUserBubbleEl = null;  // optimistic "you" bubble shown while holding to talk
 
 function formatBubbleTime(at) {
   if (!at) return '';
@@ -2100,6 +2101,7 @@ async function renderChatHistory(container, agent) {
   chatBubbles = [];
   chatBubbleIdx = -1;
   chatMessages = [];
+  pendingUserBubbleEl = null;   // the optimistic bubble (if any) was just cleared by innerHTML = ''
   try {
     const r = await fetch(`/projects/${activeProject.id}/agents/${agent.id}/history`);
     if (!r.ok) return;
@@ -2217,6 +2219,41 @@ async function renderChatHistory(container, agent) {
   } catch (err) {
     console.warn('[chat] history failed:', err);
   }
+}
+
+/* ---------- Optimistic "you" bubble while holding to talk ----------
+ * The instant the user holds to talk in the agent view, drop a user bubble
+ * into the chat showing a "…" typing animation, then the live transcript
+ * (word-by-word with the browser engine; the final text on release with local
+ * Parakeet). It's replaced by the real persisted bubble when history re-renders
+ * after the agent responds. */
+function chatScrollEl() { return surfaceEl?.querySelector?.('.chat-scroll') || null; }
+const TYPING_DOTS = '<span class="typing-dots" aria-label="listening"><span></span><span></span><span></span></span>';
+function showPendingBubble() {
+  if (mode !== MODE_ZOOM) return;
+  const chat = chatScrollEl();
+  if (!chat) return;
+  if (!pendingUserBubbleEl || !chat.contains(pendingUserBubbleEl)) {
+    const b = document.createElement('div');
+    b.className = 'bubble user pending';
+    b.innerHTML = `<div class="bubble-content">${TYPING_DOTS}</div>`;
+    chat.appendChild(b);
+    pendingUserBubbleEl = b;
+  }
+  chat.scrollTop = chat.scrollHeight;
+}
+function updatePendingBubble(text) {
+  if (!pendingUserBubbleEl) return;
+  const content = pendingUserBubbleEl.querySelector('.bubble-content');
+  if (!content) return;
+  if (text && text.trim()) content.textContent = text;
+  else content.innerHTML = TYPING_DOTS;
+  const chat = chatScrollEl();
+  if (chat) chat.scrollTop = chat.scrollHeight;
+}
+function clearPendingBubble() {
+  if (pendingUserBubbleEl) { try { pendingUserBubbleEl.remove(); } catch {} }
+  pendingUserBubbleEl = null;
 }
 
 function paintBubbleFocus() {
@@ -2490,11 +2527,12 @@ function cycleProject(delta) {
   if (mode !== MODE_GRID || !activeProject) return;
   // Only one project — nothing to switch to: rubberband to say so.
   if (projects.length < 2) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
+  const curIdx = projects.findIndex(p => p.id === activeProject.id);
+  const nextIdx = curIdx + delta;
+  // No wrap-around — rubberband at the first / last project.
+  if (nextIdx < 0 || nextIdx >= projects.length) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
-  const curIdx = projects.findIndex(p => p.id === activeProject.id);
-  const nextIdx = (curIdx + delta + projects.length) % projects.length;
-  if (nextIdx === curIdx) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
   slideAgent(delta, () => {
     activeProject = withLeadFirst(projects[nextIdx]);
     gridIndex = 0;
@@ -2506,13 +2544,11 @@ function cycleProject(delta) {
 function cycleAgent(delta) {
   if (mode !== MODE_ZOOM || !activeProject) return;
   const n = activeProject.agents.length;
-  let i = zoomedIndex;
-  for (let k = 0; k < n; k++) {
-    i = (i + delta + n) % n;
-    if (activeProject.agents[i].enabled) break;
-  }
-  // No other (enabled) agent to land on — rubberband to say so.
-  if (i === zoomedIndex) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
+  // Step in the requested direction to the next ENABLED agent — no wrap-around.
+  let i = zoomedIndex + delta;
+  while (i >= 0 && i < n && !activeProject.agents[i].enabled) i += delta;
+  // Ran off the end (no further agent that way) — rubberband instead of cycling.
+  if (i < 0 || i >= n) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
   slideAgent(delta, () => { zoomedIndex = i; renderZoom(); });
@@ -2661,6 +2697,7 @@ function startPTT() {
   if (isShortcutsFocused()) leaveShortcuts();
   setPttHeld(true); // light the PTT control (V cap / R2 icon) for the whole hold
   stopSpeaking();
+  showPendingBubble();  // optimistic "you" bubble with a "…" animation
   if (localSttUrl) {
     // Local STT path — MediaRecorder → /transcribe proxy → text.
     startLocalRecording();
@@ -2787,18 +2824,20 @@ async function postLocalTranscript(blob) {
       // Local STT failed mid-session (sidecar died/unreachable) — fall back to
       // the browser engine for subsequent presses so voice keeps working.
       if (r.status === 502 || r.status === 400) localSttUrl = '';
+      clearPendingBubble();
       setIndicator('error', data?.error || `Transcribe ${r.status}`);
       setTimeout(() => setIndicator('idle', 'Connected'), 2000);
       return;
     }
     const text = (data?.text || '').trim();
     setIndicator('idle', 'Connected');
-    if (!text) { setIndicator('idle', 'No speech detected'); setTimeout(() => setIndicator('idle', 'Connected'), 1500); return; }
+    if (!text) { clearPendingBubble(); setIndicator('idle', 'No speech detected'); setTimeout(() => setIndicator('idle', 'Connected'), 1500); return; }
     // Hand off to the same routes Speech 'end' uses so the rest of
     // the app behaves identically to the browser-STT flow.
     dispatchTranscript(text);
   } catch (err) {
     localSttUrl = ''; // network error reaching local STT — use the browser engine next time
+    clearPendingBubble();
     setIndicator('error', `Transcribe failed: ${err.message}`);
     setTimeout(() => setIndicator('idle', 'Connected'), 2000);
   }
@@ -2817,6 +2856,7 @@ function dispatchTranscript(text) {
 
 speech.addEventListener('partial', (e) => {
   if (e.detail) setIndicator('listening', `“${e.detail}”`);
+  updatePendingBubble(e.detail);  // live word-by-word transcript in the chat bubble
   // Mirror the live transcript into the capture screen's mic-stack so
   // the user sees their words above the visualizer.
   const liveEl = document.querySelector('.capture-tile .mic-live-text');
@@ -2833,6 +2873,7 @@ speech.addEventListener('end', (e) => {
   setPttHeld(false);
   const text = e.detail;
   if (!text) {
+    clearPendingBubble();
     setIndicator('idle', 'No speech detected');
     setTimeout(() => setIndicator('idle', 'Connected'), 1500);
     return;
@@ -2861,6 +2902,7 @@ speech.addEventListener('end', (e) => {
 speech.addEventListener('error', (e) => {
   pttActive = false;
   setPttHeld(false);
+  clearPendingBubble();
   setIndicator('error', `Speech error: ${e.detail}`);
   setTimeout(() => setIndicator('idle', 'Connected'), 2000);
 });
@@ -5192,6 +5234,9 @@ function submitTypedText(text) {
 async function submitIntent(text) {
   const agent = currentAgent();
   if (!agent || mode !== MODE_ZOOM) return;
+  // Lock the optimistic bubble to the final transcript while the agent thinks
+  // (it's replaced by the persisted bubble when history re-renders).
+  if (pendingUserBubbleEl) { pendingUserBubbleEl.classList.remove('pending'); updatePendingBubble(text); }
   if (inflightController) inflightController.abort();
   inflightController = new AbortController();
   const myCtl = inflightController;

@@ -1336,6 +1336,21 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .agent-view .bubble .bubble-content {
   display: block;
 }
+/* Optimistic "you" bubble shown while holding to talk (before the transcript
+   lands). Slightly dimmed; carries the "…" typing animation. */
+.agent-view .bubble.user.pending { opacity: 0.8; }
+.typing-dots { display: inline-flex; gap: 4px; align-items: center; padding: 2px 0; }
+.typing-dots span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; opacity: 0.45;
+  animation: typingDot 1.2s infinite ease-in-out;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.18s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes typingDot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30%           { transform: translateY(-4px); opacity: 1; }
+}
 /* ===== v2 markdown rendering in agent bubbles ===== */
 .agent-view .bubble.agent .bubble-content > *:first-child { margin-top: 0; }
 .agent-view .bubble.agent .bubble-content > *:last-child  { margin-bottom: 0; }
@@ -1806,7 +1821,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .glyph.for-gamepad.gp-icon[data-glyph="cross"],
 .glyph.for-gamepad.gp-icon[data-glyph="circle"],
 .glyph.for-gamepad.gp-icon[data-glyph="square"],
-.glyph.for-gamepad.gp-icon[data-glyph="triangle"] { width: 33px; height: 33px; }
+.glyph.for-gamepad.gp-icon[data-glyph="triangle"] { width: 31px; height: 31px; }
 /* Shoulder buttons a touch smaller than the default icon box. */
 .glyph.for-gamepad.gp-icon[data-glyph="l1"],
 .glyph.for-gamepad.gp-icon[data-glyph="l2"],
