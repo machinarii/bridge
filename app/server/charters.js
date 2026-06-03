@@ -30,6 +30,7 @@ const CHARTER_SLUG_OVERRIDE = {
   hw_engineer: 'hw-eng',
   pm: 'pm',
   sw_engineer: 'sw-eng',
+  data_sci: 'ds',
 };
 
 function kebab(s) {
