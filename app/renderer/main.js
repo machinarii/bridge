@@ -4181,7 +4181,7 @@ gp.addEventListener('press', (e) => {
     if (closeBtn && document.activeElement === closeBtn) {
       if (b === 'cross')      { closeBtn.click(); return; }
       if (b === 'down')       { closeBtn.blur(); ring.paint(); return; }
-      if (b === 'up' || b === 'left' || b === 'right') { bumpEdge(closeBtn, b); return; }
+      if (b === 'up' || b === 'left' || b === 'right') { bumpEdge(closeBtn, b, 5); return; }
       closeBtn.blur(); ring.paint(); return;
     }
   }
@@ -4342,21 +4342,30 @@ gp.addEventListener('press', (e) => {
   }
 });
 
-/* Right thumbstick on the controller scrolls the L2 chat-scroll
- * smoothly. y > 0 = stick deflected down → scroll down; y < 0 →
- * scroll up. Speed scales with deflection. The gamepad driver
- * already applies a 0.15 dead-zone. */
-const RSTICK_MAX_PX_PER_TICK = 48;  // px per polled frame at full deflection (instant scroll)
+/* Right thumbstick scrolls the L2 chat with a velocity model: holding up/down
+ * ramps the scroll speed up (acceleration) and releasing eases it back to a
+ * stop (deceleration / momentum). y > 0 = down, y < 0 = up. The gamepad driver
+ * already applies a 0.15 dead-zone. Scrolls are 'instant' per frame — the
+ * easing lives in the velocity, not the browser's smooth-scroll. */
+const RSCROLL_MAX   = 22;    // px/frame at full deflection (top speed)
+const RSCROLL_ACCEL = 0.14;  // ramp toward target speed while holding
+const RSCROLL_DECEL = 0.08;  // ease back to 0 after release (lower = longer glide)
+let _rstickY = 0;            // latest stick deflection (-1..1)
+let _rscrollVel = 0;         // current scroll velocity (px/frame)
+let _rscrollRAF = null;
+function _rscrollTick() {
+  const chat = mode === MODE_ZOOM ? surfaceEl?.querySelector?.('.chat-scroll') : null;
+  if (!chat) { _rscrollVel = 0; _rstickY = 0; _rscrollRAF = null; return; }
+  const target = _rstickY * RSCROLL_MAX;
+  const rate = Math.abs(target) > Math.abs(_rscrollVel) ? RSCROLL_ACCEL : RSCROLL_DECEL;
+  _rscrollVel += (target - _rscrollVel) * rate;
+  if (target === 0 && Math.abs(_rscrollVel) < 0.3) { _rscrollVel = 0; _rscrollRAF = null; return; }
+  chat.scrollBy({ top: _rscrollVel, left: 0, behavior: 'instant' });
+  _rscrollRAF = requestAnimationFrame(_rscrollTick);
+}
 gp.addEventListener('rstick', (e) => {
-  if (mode !== MODE_ZOOM) return;
-  const dy = e.detail?.y || 0;
-  if (!dy) return;
-  const chat = surfaceEl?.querySelector?.('.chat-scroll');
-  if (!chat) return;
-  // 'instant' (NOT 'auto' — auto defers to the element's CSS scroll-behavior,
-  // which is `smooth`, so per-frame scrolls accumulated a far target that kept
-  // gliding after release). Instant = a tight, 1:1 per-frame scroll.
-  chat.scrollBy({ top: dy * RSTICK_MAX_PX_PER_TICK, left: 0, behavior: 'instant' });
+  _rstickY = mode === MODE_ZOOM ? (e.detail?.y || 0) : 0;
+  if (_rscrollRAF == null && (_rstickY || _rscrollVel)) _rscrollRAF = requestAnimationFrame(_rscrollTick);
 });
 
 /* L2: speak the currently-focused project/agent name. */
