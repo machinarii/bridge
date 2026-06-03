@@ -8,7 +8,12 @@
  * Requires a GitHub OAuth App client id in GITHUB_OAUTH_CLIENT_ID (the app must
  * have "Device Flow" enabled). The resulting token + login are persisted via the
  * injected `persist({ token, login })` callback (writes the .env).
+ *
+ * Login also auto-detects an existing token on the machine (GitHub CLI, then the
+ * git credential helper / macOS keychain) so a single-user local install just
+ * picks it up with no setup; the device flow is the fallback.
  */
+import { execFile } from 'node:child_process';
 
 const DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const TOKEN_URL       = 'https://github.com/login/oauth/access_token';
@@ -119,5 +124,40 @@ async function fetchLogin(token) {
 export function disconnectGithub() {
   pending = null;
   try { _persist({ token: '', login: '' }); } catch {}
+  return githubStatus();
+}
+
+/* ---------- auto-detect an existing local token ---------- */
+
+function run(cmd, args, input) {
+  return new Promise((resolve) => {
+    let cp;
+    try {
+      cp = execFile(cmd, args, { timeout: 5000 }, (err, stdout) => resolve(err ? null : String(stdout)));
+    } catch { return resolve(null); }
+    if (input != null) { try { cp.stdin.write(input); cp.stdin.end(); } catch {} }
+  });
+}
+
+async function detectLocalToken() {
+  // 1. GitHub CLI session
+  const gh = await run('gh', ['auth', 'token']);
+  if (gh && gh.trim()) return { token: gh.trim(), source: 'gh' };
+  // 2. git credential helper (macOS keychain, etc.)
+  const cred = await run('git', ['credential', 'fill'], 'protocol=https\nhost=github.com\n\n');
+  const m = cred && cred.match(/^password=(.+)$/m);
+  if (m && m[1].trim()) return { token: m[1].trim(), source: 'git' };
+  return null;
+}
+
+/* Try to connect from an existing local token (no prompts). No-op if already
+ * connected or nothing valid is found. Returns the resulting status. */
+export async function detectAndStore() {
+  if (process.env.GITHUB_TOKEN) return githubStatus();
+  const found = await detectLocalToken();
+  if (!found) return githubStatus();
+  const login = await fetchLogin(found.token).catch(() => null);
+  if (!login) return githubStatus();   // token invalid/expired — ignore it
+  try { _persist({ token: found.token, login }); } catch {}
   return githubStatus();
 }
