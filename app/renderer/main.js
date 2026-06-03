@@ -42,7 +42,7 @@ function footerFocusables() {
   // gear.
   return [...document.querySelectorAll(
     '#footer-rail .sc, #footer-rail .action, #footer-rail #notification-btn, #footer-rail #settings-btn, #footer-rail #fullscreen-btn'
-  )];
+  )].filter(el => el.offsetParent !== null);  // skip chips hidden in the current input mode
 }
 
 const GAMEPAD_GLYPHS = { cross: '✕', circle: '○', square: '□', triangle: '△' };
@@ -84,6 +84,9 @@ function buildChip(it) {
   l.className = 'label';
   l.textContent = it.label;
   wrap.appendChild(l);
+  // Keyboard-only chips (e.g. "/ Type prompt") are irrelevant on a controller —
+  // CSS hides them while the input mode is 'gamepad'.
+  if (!it.gamepad && it.keyboard) wrap.classList.add('sc-kbd-only');
   return wrap;
 }
 
@@ -1781,7 +1784,7 @@ async function openAddAgentPicker() {
   renderActionBar([]);
   setShortcuts([
     { gamepad: 'cross',   keyboard: 'Space', label: 'Toggle',   action: () => toggleFocusedAddAgentRole() },
-    { gamepad: 'options', keyboard: 'E',     label: 'Explorer', action: () => toggleFileExplorer() },
+    { gamepad: 'square',  keyboard: 'E',     label: 'Explorer', action: () => toggleFileExplorer() },
     { gamepad: 'triangle', keyboard: 'A',     label: 'Activity', action: () => toggleActivityDrawer() },
     { gamepad: 'circle',  keyboard: 'Esc',   label: 'Back',     action: () => renderGrid() },
   ]);
@@ -1839,11 +1842,11 @@ function updateGridShortcuts() {
     { gamepad: 'r2', keyboard: 'V', label: 'Hold to talk', action: () => startPTT() },
     { gamepad: 'l1', keyboard: '[', label: 'Prev project', action: () => cycleProject(-1) },
     { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
-    { gamepad: 'options', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
+    { gamepad: 'square', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
     {                    gamepad: 'triangle', keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
   ];
   if (!isLeadFocused) {
-    items.push({ gamepad: 'square', keyboard: 'Space', label: 'Agent on / off',
+    items.push({ gamepad: 'options', keyboard: 'Space', label: 'Agent on / off',
                  action: () => toggleFocusedAgentEnabled() });
   }
   setShortcuts(items);
@@ -2453,7 +2456,7 @@ function _setL2Shortcuts() {
     {                     keyboard: '/', label: 'Type prompt',  action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     { gamepad: 'l1',      keyboard: '[', label: 'Prev agent',   action: () => cycleAgent(-1) },
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
-    { gamepad: 'options', keyboard: 'E', label: 'Explorer',     action: () => toggleFileExplorer() },
+    { gamepad: 'square', keyboard: 'E', label: 'Explorer',     action: () => toggleFileExplorer() },
     {                     gamepad: 'triangle', keyboard: 'A', label: 'Activity',     action: () => toggleActivityDrawer() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
@@ -4042,7 +4045,8 @@ gp.addEventListener('press', (e) => {
     if (b === 'up' || b === 'down' || b === 'left' || b === 'right') gridMove(b);
     else if (b === 'cross')   enterZoom();
     else if (b === 'circle')  exitToProjects();
-    else if (b === 'square')  toggleFocusedAgentEnabled();
+    else if (b === 'square')  toggleFileExplorer();
+    else if (b === 'options') toggleFocusedAgentEnabled();
     else if (b === 'triangle') toggleActivityDrawer();
     return;
   }
@@ -4060,6 +4064,7 @@ gp.addEventListener('press', (e) => {
     else if (b === 'circle')             pressCircle();
     else if (b === 'l1')                 cycleAgent(-1);
     else if (b === 'r1')                 cycleAgent(+1);
+    else if (b === 'square')             toggleFileExplorer();
     else if (b === 'triangle')           toggleActivityDrawer();
     return;
   }
@@ -4107,6 +4112,7 @@ gp.addEventListener('press', (e) => {
     } else if (b === 'up' || b === 'left' || b === 'right') {
       roleGridMove(b);
     } else if (b === 'cross')    toggleFocusedAddAgentRole();
+    else if (b === 'square')     toggleFileExplorer();
     else if (b === 'triangle')   commitAddAgentSelections();
     else if (b === 'circle')     renderGrid();
     return;
@@ -4123,10 +4129,6 @@ gp.addEventListener('press', (e) => {
     else if (b === 'circle') goBackInCreateFlow();
     return;
   }
-});
-
-gp.addEventListener('press', (e) => {
-  if (e.detail.button === 'options') toggleFileExplorer();
 });
 
 /* Right thumbstick on the controller scrolls the L2 chat-scroll
