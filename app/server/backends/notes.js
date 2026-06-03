@@ -2,6 +2,7 @@
  * app/state/<projectId>/notes/. */
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,10 +38,11 @@ export function readNote(projectId, id) {
   return readFileSync(path, 'utf8');
 }
 
-let _seq = 0;
 export function appendNote(projectId, body) {
-  const seq = String(++_seq).padStart(4, '0');
-  const id = new Date().toISOString().replace(/[:.]/g, '-') + '-' + seq;
+  // Timestamp prefix keeps IDs lexicographically time-ordered (listNotes sorts
+  // by filename); the random suffix avoids same-millisecond collisions without
+  // a process-local counter that resets across restarts.
+  const id = new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomBytes(3).toString('hex');
   writeFileSync(join(notesDir(projectId), `${id}.md`), body, 'utf8');
   return { id, label: deriveLabel(body) };
 }
