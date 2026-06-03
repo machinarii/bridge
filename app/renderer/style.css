@@ -1806,7 +1806,12 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .glyph.for-gamepad.gp-icon[data-glyph="cross"],
 .glyph.for-gamepad.gp-icon[data-glyph="circle"],
 .glyph.for-gamepad.gp-icon[data-glyph="square"],
-.glyph.for-gamepad.gp-icon[data-glyph="triangle"] { width: 25px; height: 25px; }
+.glyph.for-gamepad.gp-icon[data-glyph="triangle"] { width: 33px; height: 33px; }
+/* Shoulder buttons a touch smaller than the default icon box. */
+.glyph.for-gamepad.gp-icon[data-glyph="l1"],
+.glyph.for-gamepad.gp-icon[data-glyph="l2"],
+.glyph.for-gamepad.gp-icon[data-glyph="r1"],
+.glyph.for-gamepad.gp-icon[data-glyph="r2"] { width: 30px; height: 24px; }
 .glyph.for-gamepad.gp-icon svg { display: block; width: 100%; height: 100%; }
 .sc.focused .glyph.for-gamepad.gp-icon { color: var(--fg); }
 
