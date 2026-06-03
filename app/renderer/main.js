@@ -2315,10 +2315,16 @@ function clearPendingBubble() {
 }
 
 function paintBubbleFocus() {
-  // The bubble shows its selected ring only when the bubble itself holds focus —
-  // not when focus has moved onto one of its action icons (retry / edit).
+  // The bubble shows its selected ring only when the bubble itself holds focus.
+  // When focus is on one of its action icons (retry / edit), drop the ring but
+  // keep the action row visible via .actions-open (the icons live in a panel
+  // that only renders for .focused / .actions-open).
   const onAction = document.activeElement?.classList?.contains('bubble-action');
-  chatBubbles.forEach((b, i) => b.classList.toggle('focused', i === chatBubbleIdx && !onAction));
+  chatBubbles.forEach((b, i) => {
+    const cur = i === chatBubbleIdx;
+    b.classList.toggle('focused', cur && !onAction);
+    b.classList.toggle('actions-open', cur && onAction);
+  });
 }
 
 function focusBubble(i) {
