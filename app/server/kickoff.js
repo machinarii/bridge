@@ -6,8 +6,8 @@
 import { getRole } from './roles.js';
 import { getProject, setKickoff, TOPOLOGIES } from './projects.js';
 import { appendTurn, getContext } from './scratchpad.js';
-import { getModelForRole } from './models.js';
-import { emitNotification, emitActivity, publish as publishEvent } from './events.js';
+import { getModelForRole, getRouterModel } from './models.js';
+import { emitNotification, emitActivity, emitDelegate, publish as publishEvent } from './events.js';
 import { appendNote } from './backends/notes.js';
 
 export const DOC_TITLES = {
@@ -166,4 +166,53 @@ export async function generateKickoffDocs(projectId, opts = {}) {
     const note = appendNote(projectId, body);
     publishEvent({ type: 'note_added', projectId, noteId: note.id });
   }
+}
+
+const FANOUT_CAP = 5;
+
+async function callOpenRouterJSON({ apiKey, model, prompt, timeoutMs = 20_000 }) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json',
+                 'HTTP-Referer': 'http://localhost/bridge', 'X-Title': 'Bridge - kickoff' },
+      body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages: [{ role: 'user', content: prompt }] }),
+      signal: ctrl.signal,
+    });
+    if (!r.ok) return '{"assignments":[]}';
+    const data = await r.json();
+    return data?.choices?.[0]?.message?.content || '{"assignments":[]}';
+  } catch { return '{"assignments":[]}'; }
+  finally { clearTimeout(timer); }
+}
+
+export async function assignKickoffTasks(projectId, opts = {}) {
+  const project = getProject(projectId);
+  if (!project) return [];
+  const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+  const callJSON = opts.callJSON || callOpenRouterJSON;
+  const others = project.agents.filter(a => a.enabled && a.id !== project.leadAgentId);
+  const rosterLines = others.map(a => `- ${a.name} (${getRole(a.role).label}) [id:${a.id}]`).join('\n') || '(none)';
+  const prompt =
+    `You are the PM of project "${project.name}". Goal: "${project.goal}".\n` +
+    `Operating model: ${topologyGuidance(project.topology)}\n` +
+    `Team:\n${rosterLines}\n\n` +
+    `Return JSON {"assignments":[{"agentId":"<id from roster>","task":"<one concrete starting task>"}]}. ` +
+    `Use exact agent ids. Assign only roles that apply. Max ${FANOUT_CAP} assignments.`;
+  let parsed;
+  try { parsed = JSON.parse(await callJSON({ apiKey, model: getRouterModel(), prompt })); }
+  catch { parsed = { assignments: [] }; }
+  const assignments = (parsed.assignments || []).slice(0, FANOUT_CAP);
+  const out = [];
+  for (const a of assignments) {
+    const target = others.find(o => o.id === a.agentId);
+    if (!target || !a.task) continue;
+    const task = String(a.task).slice(0, 400);
+    appendTurn(target.id, 'user', task);
+    emitDelegate(projectId, project.leadAgentId, target.id, task);
+    out.push({ agentId: target.id, name: target.name, role: getRole(target.role).label, task });
+  }
+  return out;
 }

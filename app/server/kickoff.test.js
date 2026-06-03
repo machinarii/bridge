@@ -62,7 +62,7 @@ test('startKickoff with no api key skips and marks skipped_no_key', async () => 
   } finally { deleteProject(p.id); }
 });
 
-import { generateKickoffDocs } from './kickoff.js';
+import { generateKickoffDocs, assignKickoffTasks } from './kickoff.js';
 import { listNotes } from './backends/notes.js';
 
 test('generateKickoffDocs writes four titled notes', async () => {
@@ -74,5 +74,21 @@ test('generateKickoffDocs writes four titled notes', async () => {
     for (const title of ['PRD', 'Roadmap & Milestones', 'Team Operating Notes', 'Open Questions']) {
       assert.ok(labels.includes(title), `missing doc: ${title} in ${labels}`);
     }
+  } finally { deleteProject(p.id); }
+});
+
+test('assignKickoffTasks posts a task into each named agent history', async () => {
+  const p = await createProject({ name: 'Assign KO', goal: 'build a hub', roleIds: ['pm', 'designer', 'sw_engineer'], topology: 'hub-and-spoke' });
+  try {
+    const designer = p.agents.find(a => a.role === 'designer');
+    const engineer = p.agents.find(a => a.role === 'sw_engineer');
+    const stub = async () => JSON.stringify({ assignments: [
+      { agentId: designer.id, task: 'Draft the main screen wireframe.' },
+      { agentId: engineer.id, task: 'Stand up the project skeleton.' },
+    ] });
+    const assigned = await assignKickoffTasks(p.id, { apiKey: 'k', callJSON: stub });
+    assert.equal(assigned.length, 2);
+    assert.match(getContext(designer.id).messages.at(-1).content, /wireframe/);
+    assert.match(getContext(engineer.id).messages.at(-1).content, /skeleton/);
   } finally { deleteProject(p.id); }
 });
