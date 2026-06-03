@@ -4515,6 +4515,18 @@ gp.addEventListener('press', (e) => {
     handleProjectEditGamepad(b);
     return;
   }
+  // "Really cancel?" confirm modal takes over while open — otherwise gamepad
+  // input leaks to the screen underneath and the modal can't be answered.
+  if (confirmCancelOpen) {
+    if (b === 'left' || b === 'right') {
+      (document.activeElement === confirmCancelYesEl ? confirmCancelNoEl : confirmCancelYesEl)?.focus();
+    } else if (b === 'cross') {
+      (document.activeElement === confirmCancelYesEl ? confirmCancelYesEl : confirmCancelNoEl)?.click();
+    } else if (b === 'circle') {
+      closeConfirmCancel();   // back out of the confirm = keep editing (matches Esc)
+    }
+    return;
+  }
 
   // Notification menu takes over while open — Up/Down step entries,
   // Cross activates the focused entry's primary action, Circle closes.

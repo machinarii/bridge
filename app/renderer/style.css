@@ -2715,7 +2715,9 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   line-height: 1.55;
   color: var(--fg);
   border: 2px solid transparent;
-  border-radius: 8px;
+  /* Body fills the bottom of the viewer; bottom corners follow the container's
+   * radius, top corners stay square (the header sits flush above). */
+  border-radius: 0 0 var(--radius) var(--radius);
 }
 /* When the viewer body holds focus (after selecting a file): highlight the
  * container so it's clear the right stick will scroll it. */
