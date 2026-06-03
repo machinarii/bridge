@@ -4621,8 +4621,10 @@ gp.addEventListener('press', (e) => {
 
   if (mode === MODE_GRID) {
     if (fileExplorerOpen) {
-      if (b === 'up' || b === 'left')   { fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
-      if (b === 'down' || b === 'right'){ fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+      // Explorer is a vertical list — only Up/Down walk it; Left/Right no-op.
+      if (b === 'up')                   { fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
+      if (b === 'down')                 { fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+      if (b === 'left' || b === 'right'){ return; }
       if (b === 'cross')                { openFocusedFile(); return; }
       if (b === 'circle')               { closeFileExplorer(); return; }
     }
@@ -4639,8 +4641,10 @@ gp.addEventListener('press', (e) => {
 
   if (mode === MODE_ZOOM) {
     if (fileExplorerOpen) {
-      if (b === 'up' || b === 'left')   { fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
-      if (b === 'down' || b === 'right'){ fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+      // Explorer is a vertical list — only Up/Down walk it; Left/Right no-op.
+      if (b === 'up')                   { fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
+      if (b === 'down')                 { fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+      if (b === 'left' || b === 'right'){ return; }
       if (b === 'cross')                { openFocusedFile(); return; }
       if (b === 'circle')               { closeFileExplorer(); return; }
     }
@@ -5518,27 +5522,13 @@ window.addEventListener('keydown', (e) => {
   // File explorer (overlay at L1/L2) intercepts navigation while the
   // explorer holds focus. Right-arrow exits the explorer to the right.
   if (fileExplorerOpen && explorerFocused) {
-    if (e.key === 'ArrowUp') {
-      e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return;
-    }
-    if (e.key === 'ArrowLeft')                               { e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
-    if (e.key === 'ArrowDown')                               { e.preventDefault(); fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
-    if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      explorerFocused = false;
-      fileEntries.forEach(el => el.classList.remove('focused'));
-      if (fileViewerOpen && fileViewerCloseEl) {
-        // Land on the viewer's × close button.
-        fileViewerCloseEl.focus();
-      } else {
-        // No viewer — give focus back to the main surface (agent grid /
-        // agent zoom). Re-paint the ring so the user sees their cursor.
-        ring.paint();
-      }
-      return;
-    }
-    if (e.key === 'Enter')                                  { e.preventDefault(); openFocusedFile(); return; }
-    if (e.key === 'Escape')                                 { e.preventDefault(); closeFileExplorer(); return; }
+    // Explorer is a vertical list — only Up/Down walk it. Left/Right are
+    // swallowed so they do nothing (Enter opens, Esc closes).
+    if (e.key === 'ArrowUp')    { e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
+    if (e.key === 'ArrowDown')  { e.preventDefault(); fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); return; }
+    if (e.key === 'Enter')      { e.preventDefault(); openFocusedFile(); return; }
+    if (e.key === 'Escape')     { e.preventDefault(); closeFileExplorer(); return; }
   }
   // Shortcuts rail (bottom-left) is part of the focus order: arrow-down
   // from the main surface enters it; arrow-up exits back to the grid.
