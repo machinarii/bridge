@@ -1394,13 +1394,13 @@ function roleGridMove(dir) {
       return confirmIdx >= 0 ? go(confirmIdx) : bumpEdge(grid, 'right'); // last tile → Continue
     }
     if (i === cancelIdx && confirmIdx >= 0) return go(confirmIdx);       // Cancel → Continue
-    return bumpEdge(grid, 'right');
+    return bumpEdge(ring.elements[i], 'right');                         // bump the button, not the tiles above
   }
   if (dir === 'left') {
     if (onTile) return i > 0 ? go(i - 1) : bumpEdge(grid, 'left');
     if (i === confirmIdx && cancelIdx >= 0) return go(cancelIdx);        // Continue → Cancel
     if (i === cancelIdx) return go(tileCount - 1);                       // Cancel → last tile
-    return bumpEdge(grid, 'left');
+    return bumpEdge(ring.elements[i], 'left');                          // bump the button, not the tiles above
   }
   if (dir === 'up') {
     if (onTile) {
@@ -3835,11 +3835,8 @@ function stepGrid(grid, i, n, dir) {
   }
   if (dir === 'up') {
     // From the first row, jump to the × close button if the screen has one
-    // (e.g. L1); otherwise (e.g. L0 home) rubberband.
-    if (r === 0) {
-      if (focusSurfaceClose()) return null;
-      bumpEdge(grid, 'up'); return null;
-    }
+    // (e.g. L1); otherwise (e.g. L0 home) do nothing — no rubberband.
+    if (r === 0) { focusSurfaceClose(); return null; }
     return (r - 1) * cols + c;
   }
   // Left/Right traverse in reading order: off the end of a row flows to the
@@ -4373,7 +4370,7 @@ gp.addEventListener('press', (e) => {
         else ring.paint();
         return;
       }
-      if (b === 'up' || b === 'left' || b === 'right') { bumpEdge(closeBtn, b, 5); return; }
+      if (b === 'up' || b === 'left' || b === 'right') return;  // no rubberband on the × close
       closeBtn.blur(); ring.paint(); return;
     }
   }
@@ -4384,7 +4381,7 @@ gp.addEventListener('press', (e) => {
     if (b === 'left')   { moveShortcutFocus(-1); return; }
     if (b === 'right')  { moveShortcutFocus(+1); return; }
     if (b === 'up')     { leaveFooterUpward(); return; }
-    if (b === 'down')   { bumpEdge(document.getElementById('footer-rail'), 'down', 6); return; }
+    if (b === 'down')   { return; }   // already the bottom row — no rubberband
     if (b === 'cross')  { activateFocusedShortcut(); return; }
     if (b === 'circle') { leaveShortcuts(); ring.paint(); return; }
     return;
@@ -5234,9 +5231,7 @@ window.addEventListener('keydown', (e) => {
         else ring.paint();
         return;
       }
-      if (e.key === 'ArrowUp')    { e.preventDefault(); bumpEdge(closeBtn, 'up', 5); return; }
-      if (e.key === 'ArrowLeft')  { e.preventDefault(); bumpEdge(closeBtn, 'left', 5); return; }
-      if (e.key === 'ArrowRight') { e.preventDefault(); bumpEdge(closeBtn, 'right', 5); return; }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); return; }  // no rubberband on the × close
     }
   }
 
@@ -5321,7 +5316,7 @@ window.addEventListener('keydown', (e) => {
   if (isShortcutsFocused()) {
     if (e.key === 'ArrowLeft')  { e.preventDefault(); moveShortcutFocus(-1); return; }
     if (e.key === 'ArrowRight') { e.preventDefault(); moveShortcutFocus(+1); return; }
-    if (e.key === 'ArrowDown')  { e.preventDefault(); bumpEdge(document.getElementById('footer-rail'), 'down', 6); return; }
+    if (e.key === 'ArrowDown')  { e.preventDefault(); return; }   // already the bottom row — no rubberband
     if (e.key === 'ArrowUp')    {
       e.preventDefault();
       leaveShortcuts();
