@@ -46,6 +46,9 @@ export function subscribe(projectId, write) {
 export function emitStatus(projectId, agentId, verb) {
   publish({ type: 'status', projectId, agentId, verb });
 }
+export function emitToken(projectId, agentId, delta) {
+  publish({ type: 'token', projectId, agentId, delta });
+}
 export function emitActivity(projectId, summary, agentId) {
   publish({ type: 'activity', projectId, agentId, summary });
 }

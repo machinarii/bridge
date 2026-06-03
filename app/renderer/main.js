@@ -2877,6 +2877,35 @@ function startEventStream() {
   }
 }
 
+/* Live token streaming into the agent view. submitIntent sets the expected
+ * agent; the first token lazily creates a bubble; renderZoom (after the reply
+ * resolves) re-renders the chat from history and supersedes it. */
+let streamingAgentId = null;
+let streamingBubbleEl = null;
+let streamingText = '';
+function resetStreaming() { streamingAgentId = null; streamingBubbleEl = null; streamingText = ''; }
+function appendStreamToken(agentId, delta) {
+  if (!streamingAgentId || agentId !== streamingAgentId) return;
+  if (mode !== MODE_ZOOM || currentAgent()?.id !== agentId) return;
+  const chat = surfaceEl.querySelector('.chat-scroll');
+  if (!chat) return;
+  if (!streamingBubbleEl) {
+    const b = document.createElement('div');
+    b.className = 'bubble agent streaming';
+    const c = document.createElement('div');
+    c.className = 'bubble-content';
+    b.appendChild(c);
+    chat.appendChild(b);
+    streamingBubbleEl = c;
+  }
+  streamingText += delta;
+  streamingBubbleEl.textContent = streamingText;   // plain while streaming; renderZoom finalizes as markdown
+  const prev = chat.style.scrollBehavior;
+  chat.style.scrollBehavior = 'auto';
+  chat.scrollTop = chat.scrollHeight;
+  chat.style.scrollBehavior = prev;
+}
+
 function handleBridgeEvent(ev) {
   if (!ev || !ev.type) return;
   switch (ev.type) {
@@ -2885,6 +2914,10 @@ function handleBridgeEvent(ev) {
       agentStatus[ev.agentId] = ev.verb || 'idle';
       agentBusy[ev.agentId] = (ev.verb && ev.verb !== 'idle');
       paintAgentStatus(ev.agentId);
+      break;
+    }
+    case 'token': {
+      if (ev.agentId && ev.delta) appendStreamToken(ev.agentId, ev.delta);
       break;
     }
     // Other event types are unused at the moment but kept here so
@@ -5069,6 +5102,8 @@ async function submitIntent(text) {
 
   agentBusy[targetId] = true;
   setIndicator('thinking', `${agent.name} is thinking…`);
+  resetStreaming();
+  streamingAgentId = targetId;   // accept streamed tokens for this reply
   try {
     const r = await fetch(`/projects/${activeProject.id}/agents/${targetId}/interpret`, {
       method: 'POST',
@@ -5091,6 +5126,7 @@ async function submitIntent(text) {
   } finally {
     agentBusy[targetId] = false;
     if (myCtl === inflightController) inflightController = null;
+    resetStreaming();
   }
 }
 async function submitTeamIntent(text) {

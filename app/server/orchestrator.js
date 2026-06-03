@@ -3,8 +3,8 @@ import { appendTurn, getContext } from './scratchpad.js';
 import { getProject } from './projects.js';
 import { readProjectCharter } from './charters.js';
 import { getRole } from './roles.js';
-import { getModelForRole } from './models.js';
-import { emitStatus, emitActivity } from './events.js';
+import { getModelForRole, getRouterModel } from './models.js';
+import { emitStatus, emitActivity, emitToken } from './events.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -86,6 +86,16 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom }) 
     emitStatus(projectId, agentId, 'idle');
     return hydrateSpec(spec, { project, agent, text });
   }
+  // Try streaming a prose answer (tokens pushed live over the event bus).
+  // Anything unexpected falls through to the structured JSON tile path below,
+  // so the worst case is exactly today's behavior.
+  try {
+    const streamed = await tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom });
+    if (streamed) { emitStatus(projectId, agentId, 'idle'); return streamed; }
+  } catch (err) {
+    console.warn('[stream] falling back to JSON tile path:', err?.message);
+  }
+
   const model = getModelForRole(agent.role);
 
   const history = getContext(agentId).messages.slice(0, -1);
@@ -132,6 +142,113 @@ function parseSpec(raw) {
     if (m) return JSON.parse(m[0]);
     throw new Error('model did not return JSON');
   }
+}
+
+/* ---------- streamed prose answers ----------
+ * For plain "answer the question" intents we stream a prose reply token-by-token
+ * (pushed over the event bus) instead of waiting on a full JSON tile. Action
+ * intents (note/list/compose/…) still use the structured path. */
+
+/* Role + charter, but instruct a direct prose reply (no JSON tile spec). */
+function proseSystemPrompt({ project, agent, sharedFrom }) {
+  const role = getRole(agent.role);
+  const charter = readProjectCharter(project.id, agent.role);
+  const sharedBlock = (Array.isArray(sharedFrom) && sharedFrom.length)
+    ? `\nContext shared with you by teammates:\n` +
+      sharedFrom.map(s => `- ${s.fromAgentName} (${s.fromRole}): "${String(s.snippet).slice(0, 240)}"`).join('\n') + '\n'
+    : '';
+  return `You are ${agent.name}, the ${role.label} on project "${project.name}". Project goal: "${project.goal}".
+
+Your charter for this project:
+---
+${charter}
+---
+${sharedBlock}
+Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.`;
+}
+
+/* Cheap router-model classification: ANSWER (prose) vs ACTION (tile). Defaults
+ * to 'action' on any doubt, so action intents always get the structured path. */
+async function classifyIntent({ apiKey, text }) {
+  try {
+    const r = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: getRouterModel(),
+        max_tokens: 4,
+        messages: [
+          { role: 'system', content: 'Classify the user message. Reply with ONE word only: ANSWER if they want a prose answer or explanation, or ACTION if they want to save a note, list things, compose/edit content, or perform an action.' },
+          { role: 'user', content: String(text).slice(0, 600) },
+        ],
+      }),
+    });
+    if (!r.ok) return 'action';
+    const d = await r.json();
+    const w = (d?.choices?.[0]?.message?.content || '').trim().toLowerCase();
+    return w.startsWith('answer') ? 'answer' : 'action';
+  } catch { return 'action'; }
+}
+
+/* Stream a chat completion, invoking onDelta(text) per content chunk. Returns
+ * the full accumulated text. Throws on a non-OK / bodyless response. */
+async function streamOpenRouter({ apiKey, model, messages, onDelta }) {
+  const resp = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'http://localhost/bridge',
+      'X-Title': 'Bridge',
+    },
+    body: JSON.stringify({ model, stream: true, messages }),
+  });
+  if (!resp.ok || !resp.body) throw new Error(`stream ${resp.status}`);
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '', full = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t.startsWith('data:')) continue;
+      const payload = t.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      try {
+        const delta = JSON.parse(payload)?.choices?.[0]?.delta?.content || '';
+        if (delta) { full += delta; onDelta(delta); }
+      } catch { /* keepalive / partial line */ }
+    }
+  }
+  return full;
+}
+
+/* Returns a hydrated 'reader' spec on success, or null to defer to the JSON
+ * tile path (action intents, empty output, or classify failure). */
+async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom }) {
+  if (await classifyIntent({ apiKey, text }) !== 'answer') return null;
+  emitStatus(projectId, agentId, 'drafting');
+  const history = getContext(agentId).messages.slice(0, -1);
+  const messages = [
+    { role: 'system', content: proseSystemPrompt({ project, agent, sharedFrom }) },
+    ...history,
+    { role: 'user', content: text },
+  ];
+  const full = await streamOpenRouter({
+    apiKey,
+    model: getModelForRole(agent.role),
+    messages,
+    onDelta: (d) => emitToken(projectId, agentId, d),
+  });
+  if (!full || !full.trim()) return null;
+  appendTurn(agentId, 'assistant', full);
+  emitActivity(projectId, `${agent.name}: replied`, agentId);
+  return hydrateSpec({ intent: 'answer', template: 'reader', context: '', title: '', body: full, streamed: true },
+    { project, agent, text });
 }
 
 function hydrateSpec(spec, { project, text }) {
