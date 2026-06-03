@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyApproval, topologyGuidance, DOC_TITLES, buildPlanPrompt } from './kickoff.js';
+import { classifyApproval, topologyGuidance, DOC_TITLES, buildPlanPrompt, startKickoff } from './kickoff.js';
+import { createProject, getKickoff, deleteProject } from './projects.js';
+import { getContext } from './scratchpad.js';
 
 test('classifyApproval recognizes clear yes/no', () => {
   assert.equal(classifyApproval('yes'), 'approve');
@@ -35,4 +37,27 @@ test('buildPlanPrompt includes goal, topology rule, and roster names', () => {
   assert.match(prompt, /urban sim/);
   assert.match(prompt, /Iris/);
   assert.match(prompt, /Designer/i);
+});
+
+test('startKickoff posts a plan turn and sets awaiting_approval', async () => {
+  const p = await createProject({ name: 'Start KO', goal: 'do X', roleIds: ['pm', 'designer'], topology: 'mesh-mob' });
+  try {
+    await startKickoff(p.id, { callText: async () => 'Here is my plan: draft a PRD then assign tasks.' });
+    const k = getKickoff(p.id);
+    assert.equal(k.status, 'awaiting_approval');
+    const lead = getContext(p.leadAgentId).messages;
+    const planTurn = lead[k.planTurnIndex];
+    assert.equal(planTurn.role, 'assistant');
+    const spec = JSON.parse(planTurn.content);
+    assert.match(spec.body, /plan/i);
+    assert.ok(spec.actions.some(a => a.action?.type === 'approve_kickoff'));
+  } finally { deleteProject(p.id); }
+});
+
+test('startKickoff with no api key skips and marks skipped_no_key', async () => {
+  const p = await createProject({ name: 'NoKey KO', goal: 'do Y', roleIds: ['pm'], topology: null });
+  try {
+    await startKickoff(p.id, { apiKey: '', callText: async () => 'should not be called' });
+    assert.equal(getKickoff(p.id).status, 'skipped_no_key');
+  } finally { deleteProject(p.id); }
 });
