@@ -1,5 +1,7 @@
 # Bridge
 
+> An AI-first command center for running teams of AI agents — by voice, gamepad, or keyboard.
+
 Bridge is an **AI-first command center for managing multi-agent work** — a productivity surface for running teams of role-typed AI agents across multiple projects. You describe intent; the orchestrator routes it to the right agents, combines cloud and local models, and composes a consistent, navigable surface that's read back to you. The goal is to make *coordinating a team of agents* — assigning, steering, and tracking their work — fast and low-friction.
 
 It's built around **diverse input modalities**, so you can drive it however suits you (and however you're able to):
