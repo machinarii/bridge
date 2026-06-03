@@ -2465,6 +2465,8 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   border-left: 3px solid transparent;
 }
 .file-entry .who { opacity: 0.5; font-size: 0.85rem; }
+/* Files that live inside a folder are indented so the nesting reads clearly. */
+.file-entry.in-folder { padding-left: 2rem; }
 .file-entry.focused {
   background: rgba(110,168,255,0.22);
   border-left-color: var(--focus, #ffffff);
@@ -2712,6 +2714,14 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   font-size: 1rem;
   line-height: 1.55;
   color: var(--fg);
+  border: 2px solid transparent;
+  border-radius: 8px;
+}
+/* When the viewer body holds focus (after selecting a file): highlight the
+ * container so it's clear the right stick will scroll it. */
+#file-viewer .file-viewer-body.focused {
+  border-color: var(--focus, #ffffff);
+  background: rgba(110,168,255,0.08);
 }
 /* (See translateX rule above — kept here as anchor for legacy layout
  * comments.) */

@@ -24,11 +24,41 @@ export const FALLBACK_REASON = {
   EXCEPTION:'exception',
 };
 
-/* Base charter files are named role-<label-in-kebab-case>.md
- * (e.g. the 'sw_engineer' role, label "Software Engineer" → role-software-engineer.md). */
+/* A handful of roles use a short charter slug instead of the full kebab label
+ * (keyed by role id). Everything else derives from the label. */
+const CHARTER_SLUG_OVERRIDE = {
+  hw_engineer: 'hw-eng',
+  pm: 'pm',
+  sw_engineer: 'sw-eng',
+};
+
+function kebab(s) {
+  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+/* Charter files are named role-<slug>.md — never with underscores. The slug is
+ * the role's short override if it has one, else the kebab-cased label (e.g. the
+ * 'designer' role → role-designer.md). This is the single naming convention for
+ * both the base templates and each project's customized copies. */
 function charterFileName(role) {
-  const slug = String(role.label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const slug = CHARTER_SLUG_OVERRIDE[role.id] || kebab(role.label);
   return `role-${slug}.md`;
+}
+
+/** The charter filename for a role id (e.g. 'sw_engineer' → role-sw-eng.md). */
+export function charterFileNameFor(roleId) {
+  const role = getRole(roleId);
+  if (!role) throw new Error(`unknown role: ${roleId}`);
+  return charterFileName(role);
+}
+
+/** Charter filenames a role may have used on disk historically (for migration
+ * to the current canonical name): the legacy <roleId>.md and the full kebab
+ * role-<label>.md, in addition to any current override. */
+export function legacyCharterFileNames(roleId) {
+  const role = getRole(roleId);
+  if (!role) return [];
+  return [`${roleId}.md`, `role-${kebab(role.label)}.md`];
 }
 
 export function loadBaseCharter(roleId) {
@@ -112,7 +142,7 @@ export async function generateProjectCharters(project, { concurrency = 5, agents
       agentName: a.name,
       roleId: a.role,
     });
-    const path = resolve(STATE_DIR, project.id, 'roles', `${a.role}.md`);
+    const path = resolve(STATE_DIR, project.id, 'roles', charterFileName(getRole(a.role)));
     writeFileSync(path, r.markdown, 'utf8');
     return { agentId: a.id, roleId: a.role, customized: r.customized, reason: r.reason };
   });
@@ -130,7 +160,7 @@ export async function generateProjectCharters(project, { concurrency = 5, agents
 
 /** Read a project's customized charter (or base if not yet written). */
 export function readProjectCharter(projectId, roleId) {
-  const path = resolve(STATE_DIR, projectId, 'roles', `${roleId}.md`);
+  const path = resolve(STATE_DIR, projectId, 'roles', charterFileNameFor(roleId));
   if (existsSync(path)) return readFileSync(path, 'utf8');
   return loadBaseCharter(roleId);
 }
