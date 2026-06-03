@@ -2367,7 +2367,10 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .capture-tile .hint { opacity: 0.6; margin: 0; text-align: center; }
 .capture-tile .capture-value {
   font-size: 1.4rem;
-  min-height: 2.5em;
+  /* Fixed height so the box doesn't resize as the content changes
+     (hold hint → live wave → recognized text). Long text scrolls. */
+  height: 8.5rem;
+  overflow-y: auto;
   padding: 1.5rem;
   background: rgba(255,255,255,0.06);
   border-radius: var(--steam-radius);
