@@ -1692,6 +1692,36 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   color: var(--fg);
   border-bottom-left-radius: 4px;
 }
+/* iOS-group-chat sender label sitting on top of an agent bubble. */
+.agent-view .bubble.agent .bubble-author {
+  display: flex;
+  gap: 0.45rem;
+  align-items: baseline;
+  margin: 0 0 0.35rem;
+  line-height: 1.1;
+}
+.agent-view .bubble.agent .bubble-author-name {
+  font-size: 0.58rem;
+  font-weight: 500;
+  color: var(--agent-color, #6ea8ff);
+}
+.agent-view .bubble.agent .bubble-author-role {
+  font-size: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg);
+  opacity: 0.5;
+}
+/* A delegate's reply surfaced into another agent's chat: tint + accent
+   border so it reads as a different speaker in the group thread. */
+.agent-view .bubble.agent.foreign {
+  background: rgba(255,255,255,0.055);
+  border-left: 2px solid color-mix(in oklab, var(--agent-color, #6ea8ff) 60%, transparent);
+}
+.agent-view .bubble.agent.foreign .bubble-author-name {
+  color: color-mix(in oklab, var(--agent-color, #6ea8ff) 70%, #ffd9a0);
+}
 
 .agent-view .tile-surface {
   flex: 0 0 auto;

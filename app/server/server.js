@@ -12,7 +12,7 @@ import { charterFileNameFor } from './charters.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, getContext, lastActivityAt, truncateFrom } from './scratchpad.js';
-import { runTeamVoice } from './team.js';
+import { runTeamVoice, resolveDelegateSpec } from './team.js';
 import {
   notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
 } from './autosave.js';
@@ -472,7 +472,12 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
   const regenerate = Number(req.body?.regenerate) || 0;
   const effort = String(req.body?.effort || 'medium');
   try {
-    const spec = await interpretIntent({ projectId: pid, agentId: aid, text, regenerate, effort });
+    let spec = await interpretIntent({ projectId: pid, agentId: aid, text, regenerate, effort });
+    // If the agent chose to delegate, actually route it to the teammate and
+    // return their answer (otherwise the delegate intent dead-ends here).
+    if (spec?.intent === 'delegate') {
+      spec = await resolveDelegateSpec({ projectId: pid, fromAgentId: aid, spec, effort });
+    }
     setLastSpec(aid, spec);
     res.json(spec);
   } catch (err) {

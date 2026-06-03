@@ -5,7 +5,8 @@
  *
  * API:
  *   getContext(agentId)             → record (creates empty if absent)
- *   appendTurn(agentId, role, text) → record (history-trimmed)
+ *   appendTurn(agentId, role, text, extra?) → record (history-trimmed; extra
+ *                                     fields like { author } merge onto the turn)
  *   setLastSpec(agentId, spec)      → record
  *   writeNotes(agentId, patch)      → record (shallow-merge into notes)
  *   reset(agentId)                  → record
@@ -63,9 +64,9 @@ export function lastActivityAt(agentIds) {
   return max || null;
 }
 
-export function appendTurn(agentId, role, content) {
+export function appendTurn(agentId, role, content, extra = {}) {
   const r = record(agentId);
-  r.messages.push({ role, content, at: Date.now() });
+  r.messages.push({ role, content, at: Date.now(), ...extra });
   if (r.messages.length > HISTORY_TURN_LIMIT) {
     r.messages = r.messages.slice(-HISTORY_TURN_LIMIT);
   }
