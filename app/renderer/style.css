@@ -1783,10 +1783,12 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   background: var(--bg-elev-2);
   border: 1.5px solid currentColor;
 }
-.glyph[data-glyph="cross"]    { color: #6ea8ff; }
-.glyph[data-glyph="circle"]   { color: #ff7b86; }
-.glyph[data-glyph="square"]   { color: #c08bff; }
-.glyph[data-glyph="triangle"] { color: #9cf2c1; }
+/* Face-button glyphs use the default foreground color (no PlayStation-style
+   per-button tint) so they read uniform with the rest of the UI. */
+.glyph[data-glyph="cross"],
+.glyph[data-glyph="circle"],
+.glyph[data-glyph="square"],
+.glyph[data-glyph="triangle"] { color: var(--fg); }
 
 /* PlayStation SVG glyphs (mono outline, from the Figma controller set).
  * Drop the keycap circle/border so the icon's own artwork shows, and follow
