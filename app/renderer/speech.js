@@ -93,21 +93,13 @@ if (typeof window !== 'undefined' && window.speechSynthesis) {
 class SpeechBus extends EventTarget {}
 export const speechBus = new SpeechBus();
 
-export function speak(text, { interrupt = true, agentId = null } = {}) {
-  if (!('speechSynthesis' in window) || !text) return;
-  if (interrupt) {
-    window.speechSynthesis.cancel();
-    speechBus.dispatchEvent(new CustomEvent('end'));
-  }
-  const utt = new SpeechSynthesisUtterance(text);
-  const v = pickVoice();
-  if (v) utt.voice = v;
-  utt.rate = 1.02;
-  utt.pitch = 1.0;
-  utt.onstart = () => speechBus.dispatchEvent(new CustomEvent('start', { detail: { agentId } }));
-  utt.onend   = () => speechBus.dispatchEvent(new CustomEvent('end',   { detail: { agentId } }));
-  utt.onerror = () => speechBus.dispatchEvent(new CustomEvent('end',   { detail: { agentId } }));
-  window.speechSynthesis.speak(utt);
+// Text-to-speech is disabled app-wide — no OS voice output anywhere. Kept as a
+// no-op so every call site and the speechBus contract stay intact; any pending
+// utterance is still cancelled so nothing lingers. Re-enable by restoring the
+// SpeechSynthesis body from git history.
+export function speak(_text, { interrupt = true } = {}) {
+  if (interrupt && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  speechBus.dispatchEvent(new CustomEvent('end'));
 }
 
 export function stopSpeaking() {
