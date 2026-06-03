@@ -476,7 +476,8 @@ kbd {
 #edit-bubble-text:focus { border-color: var(--focus); }
 
 /* While dictating: hide the textarea's text and show a centered "…" overlay. */
-.edit-bubble-textwrap { position: relative; }
+.edit-bubble-textwrap { position: relative; width: 100%; }
+.edit-bubble-textwrap #edit-bubble-text { width: 100%; box-sizing: border-box; display: block; }
 .edit-bubble-dots {
   position: absolute; inset: 0; display: none;
   align-items: center; justify-content: center; pointer-events: none;
