@@ -2281,7 +2281,6 @@ function renderZoom(specOverride) {
 async function surfaceKickoffActions(agent) {
   if (!activeProject || !agent) return;
   if (agent.id !== activeProject.leadAgentId) return;
-  if (activeProject.kickoff?.status !== 'awaiting_approval') return;
   let messages;
   try {
     const r = await fetch(`/projects/${activeProject.id}/agents/${agent.id}/history`);
@@ -2291,16 +2290,24 @@ async function surfaceKickoffActions(agent) {
   // Bail if the user navigated away (or into a tile spec) while we awaited.
   if (mode !== MODE_ZOOM || currentAgent()?.id !== agent.id) return;
   if (currentAgent()?.lastSpec) return;
+  // Find the LATEST assistant turn (the cached kickoff.status is captured at
+  // project-create time, before the fire-and-forget startKickoff finishes, so
+  // it's stale in-session — gate on live history instead). Only surface the
+  // plan's actions when that newest assistant turn actually offers approval.
+  // After approval the kickoff REPORT becomes the latest assistant turn (its
+  // only action is `cancel`), so Approve correctly stops appearing.
   let planSpec = null;
   for (let i = (messages || []).length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m.role !== 'assistant') continue;
     try {
-      const parsed = JSON.parse(String(m.content || '').replace(/^```(?:json)?/i, '').replace(/```$/, '').trim());
-      if (Array.isArray(parsed?.actions) && parsed.actions.length) { planSpec = parsed; break; }
+      planSpec = JSON.parse(String(m.content || '').replace(/^```(?:json)?/i, '').replace(/```$/, '').trim());
     } catch { /* not a spec turn */ }
+    break; // only inspect the most-recent assistant turn
   }
-  if (!planSpec) return;
+  const hasApprove = Array.isArray(planSpec?.actions)
+    && planSpec.actions.some(a => (a.action?.type || a.type) === 'approve_kickoff');
+  if (!hasApprove) return;
   const actionButtons = renderActionBar(planSpec.actions);
   ring.set(actionButtons);
   for (const btn of actionButtons) {
