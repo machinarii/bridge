@@ -87,9 +87,10 @@ npm install
 cd app/server && npm install && cd ../..
 
 # 2. add your OpenRouter key (or set it later in the in-app Settings)
-#    app/server/.env:
+#    cp app/server/.env.example app/server/.env   # then edit:
 #      OPENROUTER_API_KEY=sk-or-...
 #      OPENROUTER_MODEL=anthropic/claude-sonnet-4.6
+#    (.env is git-ignored — never commit personal credentials)
 
 # 3. run the app
 npm run dev          # launches Electron → server on :4317 → window
