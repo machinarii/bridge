@@ -1970,6 +1970,7 @@ async function openAddAgentPicker() {
   ]);
   setPrimaryShortcut({ gamepad: 'triangle', keyboard: 'Enter', label: 'Done',
                        action: () => commitAddAgentSelections() });
+  syncAddAgentConfirm();   // Continue starts disabled until a role is picked
   // Tiles render after the async /roles fetch, so the morph's own stagger ran
   // before they existed — stagger them in here instead.
   staggerInCards();
@@ -1986,10 +1987,19 @@ function toggleFocusedAddAgentRole() {
   else addAgentSelected.add(id);
   const toggle = cur.querySelector('.role-toggle');
   if (toggle) toggle.dataset.checked = String(addAgentSelected.has(id));
+  syncAddAgentConfirm();
+}
+
+/* Continue is enabled only once at least one new role is picked; grayed out
+ * (disabled) otherwise. */
+function syncAddAgentConfirm() {
+  if (mode !== MODE_ADD_AGENT) return;
+  const btn = surfaceEl.querySelector('.role-confirm');
+  if (btn) btn.disabled = addAgentSelected.size === 0;
 }
 
 async function commitAddAgentSelections() {
-  if (!activeProject || addAgentSelected.size === 0) { renderGrid(); return; }
+  if (!activeProject || addAgentSelected.size === 0) return;  // Continue is disabled with no selection
   const pid = activeProject.id;
   setIndicator('thinking', `Adding ${addAgentSelected.size} agent${addAgentSelected.size > 1 ? 's' : ''}…`);
   let updated = null;
@@ -4508,7 +4518,13 @@ gp.addEventListener('press', (e) => {
     if (b === 'down') { if (advanceDownFromRolePicker()) return; roleGridMove('down'); return; }
     if (b === 'up' || b === 'left' || b === 'right') {
       roleGridMove(b);
-    } else if (b === 'cross')    toggleFocusedRole();
+    } else if (b === 'cross') {
+      // On a role tile → toggle it; on Cancel/Continue → activate it (Cancel
+      // runs the "really cancel?" confirm when the selection's been revised).
+      const cur = ring.current();
+      if (cur && !cur.classList?.contains('role-tile') && typeof cur.click === 'function') cur.click();
+      else toggleFocusedRole();
+    }
     else if (b === 'triangle')   advanceFromRolePicker();
     else if (b === 'circle')     renderProjects();
     return;
@@ -4523,7 +4539,12 @@ gp.addEventListener('press', (e) => {
       roleGridMove('down');
     } else if (b === 'up' || b === 'left' || b === 'right') {
       roleGridMove(b);
-    } else if (b === 'cross')    toggleFocusedAddAgentRole();
+    } else if (b === 'cross') {
+      // On a role tile → toggle it; on the Cancel/Continue button → activate it.
+      const cur = ring.current();
+      if (cur && !cur.classList?.contains('role-tile') && typeof cur.click === 'function') cur.click();
+      else toggleFocusedAddAgentRole();
+    }
     else if (b === 'square')     toggleFileExplorer();
     else if (b === 'triangle')   commitAddAgentSelections();
     else if (b === 'circle')     renderGrid();
