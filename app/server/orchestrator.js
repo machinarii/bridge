@@ -69,7 +69,21 @@ There are four intent kinds:
 Rules: single JSON object. No markdown, no commentary. "body" is read aloud — keep speakable. Allowed glyphs: cross | circle | square | triangle.`;
 }
 
-export async function interpretIntent({ projectId, agentId, text, sharedFrom }) {
+/* Redo escalation: each redo of a prompt nudges the sampling toward a better,
+ * more divergent answer. Temperature climbs for variety; reasoning effort climbs
+ * for quality (honored only by reasoning-capable models, ignored otherwise).
+ * top_p and max_tokens are intentionally left at their defaults. Returns null
+ * for a first-time ask (regenerate = 0) so the body is unchanged. */
+function regenSampling(regenerate) {
+  const n = Math.max(0, Number(regenerate) || 0);
+  if (n === 0) return null;
+  return {
+    temperature: Math.min(1.1, 0.7 + 0.2 * n),   // 0.9, 1.1, 1.1 …
+    reasoning: { effort: n >= 2 ? 'high' : 'medium' },
+  };
+}
+
+export async function interpretIntent({ projectId, agentId, text, sharedFrom, regenerate = 0 }) {
   const project = getProject(projectId);
   if (!project) throw new Error(`unknown project: ${projectId}`);
   const agent = project.agents.find(a => a.id === agentId);
@@ -90,7 +104,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom }) 
   // Anything unexpected falls through to the structured JSON tile path below,
   // so the worst case is exactly today's behavior.
   try {
-    const streamed = await tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom });
+    const streamed = await tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate });
     if (streamed) { emitStatus(projectId, agentId, 'idle'); return streamed; }
   } catch (err) {
     console.warn('[stream] falling back to JSON tile path:', err?.message);
@@ -116,7 +130,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom }) 
         'HTTP-Referer': 'http://localhost/aurora-bridge',
         'X-Title': `Bridge - ${agent.name}`,
       },
-      body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages }),
+      body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages, ...(regenSampling(regenerate) || {}) }),
     });
 
     if (!resp.ok) {
@@ -192,7 +206,7 @@ async function classifyIntent({ apiKey, text }) {
 
 /* Stream a chat completion, invoking onDelta(text) per content chunk. Returns
  * the full accumulated text. Throws on a non-OK / bodyless response. */
-async function streamOpenRouter({ apiKey, model, messages, onDelta }) {
+async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
   const resp = await fetch(OPENROUTER_URL, {
     method: 'POST',
     headers: {
@@ -201,7 +215,7 @@ async function streamOpenRouter({ apiKey, model, messages, onDelta }) {
       'HTTP-Referer': 'http://localhost/bridge',
       'X-Title': 'Bridge',
     },
-    body: JSON.stringify({ model, stream: true, messages }),
+    body: JSON.stringify({ model, stream: true, messages, ...(extra || {}) }),
   });
   if (!resp.ok || !resp.body) throw new Error(`stream ${resp.status}`);
   const reader = resp.body.getReader();
@@ -229,7 +243,7 @@ async function streamOpenRouter({ apiKey, model, messages, onDelta }) {
 
 /* Returns a hydrated 'reader' spec on success, or null to defer to the JSON
  * tile path (action intents, empty output, or classify failure). */
-async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom }) {
+async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate = 0 }) {
   if (await classifyIntent({ apiKey, text }) !== 'answer') return null;
   emitStatus(projectId, agentId, 'drafting');
   const history = getContext(agentId).messages.slice(0, -1);
@@ -242,6 +256,7 @@ async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey
     apiKey,
     model: getModelForRole(agent.role),
     messages,
+    extra: regenSampling(regenerate),
     onDelta: (d) => emitToken(projectId, agentId, d),
   });
   if (!full || !full.trim()) return null;

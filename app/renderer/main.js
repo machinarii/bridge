@@ -2059,6 +2059,7 @@ let chatBubbleIdx = -1;    // -1 = not in chat
 let chatMessages = [];     // last-fetched message records
 let pendingUserBubbleEl = null;  // optimistic "you" bubble shown while holding to talk
 let pendingAgentBubbleEl = null; // "…" agent bubble shown the instant a prompt is submitted
+let _redoStreak = { text: null, n: 0 };  // consecutive redos of the same prompt → escalate sampling
 
 function formatBubbleTime(at) {
   if (!at) return '';
@@ -2435,7 +2436,11 @@ async function retryBubble(i) {
       body: JSON.stringify({ index: i }),
     });
   } catch { /* fall through — submitIntent still resubmits */ }
-  submitIntent(text);   // re-appends the prompt + a new response
+  // Escalate sampling per consecutive redo of the same prompt (temperature +
+  // reasoning effort climb) so each retry pushes for a better/different answer.
+  if (_redoStreak.text === text) _redoStreak.n += 1;
+  else _redoStreak = { text, n: 1 };
+  submitIntent(text, _redoStreak.n);   // re-appends the prompt + a fresh, escalated response
 }
 
 /* ---------- Confirm-cancel modal ----------
@@ -5365,9 +5370,10 @@ function submitTypedText(text) {
   if (mode === MODE_GRID) { submitTeamIntent(text); return; }
 }
 
-async function submitIntent(text) {
+async function submitIntent(text, regenerate = 0) {
   const agent = currentAgent();
   if (!agent || mode !== MODE_ZOOM) return;
+  if (regenerate === 0) _redoStreak = { text: null, n: 0 };  // a fresh prompt resets the redo streak
   // Lock the optimistic bubble to the final transcript while the agent thinks
   // (it's replaced by the persisted bubble when history re-renders).
   if (pendingUserBubbleEl) { pendingUserBubbleEl.classList.remove('pending'); updatePendingBubble(text); }
@@ -5387,7 +5393,7 @@ async function submitIntent(text) {
     const r = await fetch(`/projects/${activeProject.id}/agents/${targetId}/interpret`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, regenerate }),
       signal: myCtl.signal,
     });
     if (!r.ok) throw new Error(`server ${r.status}`);
