@@ -122,6 +122,18 @@ function leaveShortcuts() {
   shortcutFocusIdx = -1;
   paintShortcutFocus();
 }
+/* Leave the footer rail going up. On L2 with no surface-ring actions, jump
+ * straight to the last chat bubble so a single Up press from the footer lands
+ * on the last prompt (symmetric with Down-from-last-bubble dropping into the
+ * footer). Otherwise just return focus to the surface ring. */
+function leaveFooterUpward() {
+  leaveShortcuts();
+  if (mode === MODE_ZOOM && ring.elements.length === 0 && chatBubbles.length > 0) {
+    focusLastBubble();
+    return;
+  }
+  ring.paint();
+}
 function moveShortcutFocus(delta) {
   const items = footerFocusables();
   const n = items.length;
@@ -2263,7 +2275,10 @@ function clearPendingBubble() {
 }
 
 function paintBubbleFocus() {
-  chatBubbles.forEach((b, i) => b.classList.toggle('focused', i === chatBubbleIdx));
+  // The bubble shows its selected ring only when the bubble itself holds focus —
+  // not when focus has moved onto one of its action icons (retry / edit).
+  const onAction = document.activeElement?.classList?.contains('bubble-action');
+  chatBubbles.forEach((b, i) => b.classList.toggle('focused', i === chatBubbleIdx && !onAction));
 }
 
 function focusBubble(i) {
@@ -2322,12 +2337,14 @@ function cycleBubbleAction(dir) {
   const idx = arr.indexOf(document.activeElement);
   if (idx === -1) {                       // on the bubble itself → step into the actions
     (dir > 0 ? arr[0] : arr[arr.length - 1]).focus();
+    paintBubbleFocus();                   // drop the bubble's selected ring
     return;
   }
   const next = idx + dir;
   if (next < 0) { bubble.focus(); return; }      // Left off the first action → back to the prompt
   if (next >= arr.length) return;                // Right off the last → stay put
   arr[next].focus();
+  paintBubbleFocus();
 }
 
 async function retryBubble(i) {
@@ -4121,7 +4138,7 @@ gp.addEventListener('press', (e) => {
   if (isShortcutsFocused()) {
     if (b === 'left')   { moveShortcutFocus(-1); return; }
     if (b === 'right')  { moveShortcutFocus(+1); return; }
-    if (b === 'up')     { leaveShortcuts(); ring.paint(); return; }
+    if (b === 'up')     { leaveFooterUpward(); return; }
     if (b === 'down')   { bumpEdge(document.getElementById('footer-rail'), 'down', 6); return; }
     if (b === 'cross')  { activateFocusedShortcut(); return; }
     if (b === 'circle') { leaveShortcuts(); ring.paint(); return; }
