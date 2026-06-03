@@ -1852,7 +1852,11 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .sc.ptt-chip.talking .label { visibility: hidden; }
 .sc.ptt-chip.talking .sc-mic { display: flex; }
 /* Press pulse for the borderless SVG icon — scale only, no background flash. */
-@keyframes gpPress { 0% { transform: scale(1.18); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@keyframes gpPress {
+  0%   { transform: scale(1.18); filter: brightness(2.2); }
+  60%  { transform: scale(1.06); filter: brightness(1.4); }
+  100% { transform: scale(1);    filter: brightness(1); }
+}
 .glyph.for-gamepad.gp-icon.pressed { animation: gpPress 280ms cubic-bezier(.2,.8,.2,1); }
 
 /* ===== Typed fallback ===== */
