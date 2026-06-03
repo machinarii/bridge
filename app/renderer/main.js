@@ -1225,10 +1225,15 @@ function advanceDownFromRolePicker() {
     return false; // there's another tile row below — fall through
   }
   if (firstNonTileIdx >= 0) {
-    // Prefer the primary action (Continue/Create) over Cancel when
-    // dropping out of the tile grid.
+    // Land on the bottom button nearest the focused tile's side: tiles on the
+    // left half drop to Cancel (left), tiles on the right half to Continue
+    // (right). See docs UI behavior — "Vertical drop to side-aligned buttons".
+    const cancelIdx  = items.findIndex(el => el.classList?.contains('role-cancel'));
     const confirmIdx = items.findIndex(el => el.classList?.contains('role-confirm'));
-    ring.index = confirmIdx >= 0 ? confirmIdx : firstNonTileIdx;
+    const wantLeft = c < cols / 2;
+    let targetIdx = wantLeft ? cancelIdx : confirmIdx;
+    if (targetIdx < 0) targetIdx = (confirmIdx >= 0 ? confirmIdx : firstNonTileIdx);
+    ring.index = targetIdx;
     ring.paint();
     return true;
   }
