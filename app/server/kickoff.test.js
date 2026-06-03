@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyApproval, topologyGuidance, DOC_TITLES } from './kickoff.js';
+import { classifyApproval, topologyGuidance, DOC_TITLES, buildPlanPrompt } from './kickoff.js';
 
 test('classifyApproval recognizes clear yes/no', () => {
   assert.equal(classifyApproval('yes'), 'approve');
@@ -19,4 +19,20 @@ test('topologyGuidance returns a non-empty string per known topology and a defau
 
 test('DOC_TITLES has the four kickoff docs', () => {
   assert.deepEqual(Object.keys(DOC_TITLES), ['prd', 'roadmap', 'operating', 'questions']);
+});
+
+test('buildPlanPrompt includes goal, topology rule, and roster names', () => {
+  const project = {
+    name: 'City Builder', goal: 'an urban sim', topology: 'hub-and-spoke',
+    leadAgentId: 'p__pm',
+    agents: [
+      { id: 'p__pm', role: 'pm', name: 'Cassidy', enabled: true },
+      { id: 'p__designer', role: 'designer', name: 'Iris', enabled: true },
+    ],
+  };
+  const prompt = buildPlanPrompt(project);
+  assert.match(prompt, /City Builder/);
+  assert.match(prompt, /urban sim/);
+  assert.match(prompt, /Iris/);
+  assert.match(prompt, /Designer/i);
 });
