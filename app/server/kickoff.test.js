@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyApproval, topologyGuidance, DOC_TITLES, buildPlanPrompt, startKickoff } from './kickoff.js';
+import { classifyApproval, topologyGuidance, DOC_TITLES, buildPlanPrompt, startKickoff, executeKickoff } from './kickoff.js';
 import { createProject, getKickoff, deleteProject } from './projects.js';
 import { getContext } from './scratchpad.js';
 
@@ -90,5 +90,24 @@ test('assignKickoffTasks posts a task into each named agent history', async () =
     assert.equal(assigned.length, 2);
     assert.match(getContext(designer.id).messages.at(-1).content, /wireframe/);
     assert.match(getContext(engineer.id).messages.at(-1).content, /skeleton/);
+  } finally { deleteProject(p.id); }
+});
+
+test('executeKickoff runs once and is idempotent', async () => {
+  const p = await createProject({ name: 'Exec KO', goal: 'do W', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    const designer = p.agents.find(a => a.role === 'designer');
+    const deps = {
+      apiKey: 'k',
+      callText: async () => 'body',
+      callJSON: async () => JSON.stringify({ assignments: [{ agentId: designer.id, task: 'Sketch the UI.' }] }),
+    };
+    const first = await executeKickoff(p.id, deps);
+    assert.equal(first.ran, true);
+    assert.equal(getKickoff(p.id).status, 'done');
+    assert.equal(listNotes(p.id).length, 4);
+    const second = await executeKickoff(p.id, deps);
+    assert.equal(second.ran, false);
+    assert.equal(listNotes(p.id).length, 4);
   } finally { deleteProject(p.id); }
 });
