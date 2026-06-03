@@ -544,6 +544,12 @@ function renderEffortPicker() {
     ? 'Hold touchpad · stick / d-pad Up·Down · release to set'
     : 'Hold R · ↑ ↓ · release to set';
 }
+/* Light the Reasoning chip's R keycap / touchpad glyph while it's held — the
+ * same "held" treatment the Hold-to-talk chip uses. */
+function setEffortHeld(on) {
+  document.querySelectorAll('.glyph.for-gamepad[data-glyph="touchpad"]').forEach(g => g.classList.toggle('held', on));
+  document.querySelectorAll('.glyph.for-keyboard').forEach(g => { if (g.textContent.trim() === 'R') g.classList.toggle('held', on); });
+}
 function openEffortPicker() {
   if (effortPickerOpen) return;
   const scope = effortScope();
@@ -553,13 +559,14 @@ function openEffortPicker() {
   effortPickerIdx = Math.max(0, EFFORT_LEVELS.indexOf(scopeEffort(scope)));
   renderEffortPicker();
   effortPickerEl().hidden = false;
+  setEffortHeld(true);
 }
 function moveEffortPicker(delta) {
   if (!effortPickerOpen) return;
   effortPickerIdx = Math.max(0, Math.min(EFFORT_LEVELS.length - 1, effortPickerIdx + delta));
   renderEffortPicker();
 }
-function closeEffortPicker() { effortPickerOpen = false; effortPickerEl().hidden = true; }
+function closeEffortPicker() { effortPickerOpen = false; effortPickerEl().hidden = true; setEffortHeld(false); }
 function commitEffortPicker() {
   if (!effortPickerOpen) return;
   setScopeEffort(effortPickerScope, EFFORT_LEVELS[effortPickerIdx]);
