@@ -808,22 +808,29 @@ Plus the **create flow** sub-sequence: *roles → topology → name → goal*.
 Each tile shows **name**, **role**, and a **status line** (a colored dot + a
 verb). The dot color is a fixed legend:
 
-| State (`data-status`) | Verb label | Dot color | Extra |
+| State | Verb label | Dot color | Clears when |
 |---|---|---|---|
 | `idle` | Idle | dim grey (`--fg-dim`) | — |
-| `analyzing` | Analyzing | **green** (`--accent-2`) | reading / classifying |
-| `drafting` | Drafting | **green** (`--accent-2`) | + pulse while generating |
-| waiting (`data-unseen="true"`, idle) | **Waiting for response** | **orange** (`--warn`) | tile **glows** (sine pulse) until you reply |
+| `analyzing` | Analyzing | **green** (`--accent-2`) | reading / classifying (busy) |
+| `drafting` | Drafting | **green** (`--accent-2`) + pulse | generating (busy) |
+| `data-unseen` (idle) | **Waiting for response** | **orange** (`--warn`), pulsing tile glow | the user **replies** |
+| `data-complete` (idle) | **Task complete** | **green** (`--accent-2`), steady green tile highlight | the user **opens** the agent |
 
-Rules:
-- **Green = the agent is working** (analyzing or drafting). `data-busy="true"`
-  carries the green dot so it overrides the per-tile color.
-- **Orange = the agent is waiting on you.** `data-unseen="true"` marks when an
-  agent posts a message and **clears only when the user actually responds** (not
-  on mere view). It implies an idle verb, so the tile reads "Waiting for response"
-  and glows.
-- Other flags: `data-lead` (PM tile), `data-disabled` (toggled off),
-  `data-speaking` (soft outline pulse while its TTS plays).
+Which pending state an agent lands in is decided by **what its reply is**, not
+how it was triggered. The server tags the reply's activity event with an
+`awaitKind`:
+- Reply has `choices[]` (it asked a question) → `awaitKind: 'reply'` →
+  **"Waiting for response"**. Stays until the user actually answers (submits) —
+  not on mere view. So an unanswered question bubble always reads "Waiting for
+  response".
+- Reply is a deliverable (no choices) → `awaitKind: 'view'` → **"Task
+  complete"**. Clears the moment the user opens that agent (or immediately if
+  they're already looking at it).
+
+The renderer tracks this in an `agentPending` map (`agentId → 'reply' | 'view'`);
+pending states only show while the verb is idle (the work verb wins while busy).
+Other flags: `data-lead` (PM tile), `data-disabled` (toggled off),
+`data-speaking` (soft outline pulse while its TTS plays).
 
 ### 15.3 Chat bubbles (Layer 2)
 
@@ -850,10 +857,21 @@ Rules:
   while the bubble itself is focused (no button focused yet) activates **Approve**
   directly — so approval never takes two presses. Left then ✕ rejects.
   Approve → run kickoff; Reject → posts a "Reject" turn + a brief PM ack.
-- **In-bubble choices:** when direction is unclear an agent returns `choices[]`
-  (2–4 short options), rendered as a **vertical selectable list**; the pick
-  becomes the user's next message. Navigated with the same bubble model
-  (Left/Right + ✕/Enter), clickable by mouse.
+- **In-bubble choices (multi-select):** when a decision is needed an agent
+  returns `choices[]`; rendered as **one horizontal row** of buttons (never a
+  grid — `nowrap`), each showing its letter (**A / B / C…**) as a heading with
+  the description on the next line, **uniform height** that grows to fit text.
+  - **Multi-select:** toggle one or more with **Enter / ✕** (Space is *not* a
+    toggle). A **"Other — Hold to talk"** button (always appended) starts
+    push-to-talk for a free-form answer, playing the standard mic wave inside
+    itself. A **"Select one or more"** hint sits bottom-left; **Submit** sits
+    bottom-right and is **grayed out until at least one option is selected**.
+    Submitting sends the chosen option(s) as the user's next message.
+  - **Entrance:** buttons stagger in one-by-one (like Layer 1 tiles).
+  - **Memorialized:** once a later user turn answers the question, that bubble
+    re-renders **read-only** with the picked options shown selected — no Submit,
+    Other, or hint (it's a record). Read-only entries are `<div>`s (out of the
+    nav ring).
 
 ### 15.5 Tile-spec contract (deterministic UI)
 
@@ -898,6 +916,15 @@ prompts):
 - **Conduct:** no destructive actions without confirmation; never expose secrets;
   don't fabricate APIs/citations; don't claim untested work is done; correct over
   helpful-seeming; disclaimers on financial/legal/medical.
+- **Grounding (hard):** every agent's only outputs are **markdown documents and
+  code, produced in the conversation**. No external/visual tools (Figma, Sketch),
+  channels, email, tickets, internet, or repos it can't see. Never promise
+  external artifacts ("I'll share a Figma link", "post in the channel", "tag the
+  PM later") or **ETAs/deadlines** ("2 days", "by Friday"). Do the work now or
+  ask a focused question. **Per-role guidance** (`ROLE_GUIDANCE`) layers on top —
+  e.g. the **Designer** sequences: design principles / UI guidelines / creative
+  direction / system design → *confirm with the user* → use cases + user flows →
+  *confirm* → only then build the GUI in code.
 
 ### 15.7 Voice & STT
 
@@ -945,3 +972,43 @@ suffix is only a last resort if both pools are fully exhausted.
   delegate bubbles).
 - Don't make the user press twice — primary actions (Approve) activate on the
   first ✕/Enter from the focused bubble.
+- Don't fabricate external deliverables, tools, or ETAs in agent output (§15.6
+  grounding).
+
+### 15.12 PM kickoff lifecycle (current)
+
+On project create the PM auto-kicks-off (`app/server/kickoff.js`), a
+plan-first state machine on `project.kickoff.status`:
+
+1. **`drafting`** → PM writes a plan-first message; its tile reads **Drafting**.
+2. **`awaiting_approval`** → the plan posts with inline **Reject / Approve**
+   (one-tap ✕/Enter). The plan bubble auto-focuses on open.
+3. On **Approve** → **`running`**: PM writes the 4 starter docs (PRD, roadmap,
+   operating notes, open questions), then assigns work. Assignment is **role-
+   based** via the PM model — it may pick roles **not yet on the team**.
+4. **`asking`** → the PM asks its kickoff questions **one at a time**, numbered
+   **"Q1: …"**, each as a multi-select choice bubble (§15.4). A role the PM
+   couldn't confidently task becomes a **clarify question** whose answer becomes
+   that role's task. Every on-team role is guaranteed a task (gap-filled if
+   needed). The PM reads **Waiting for response** between questions.
+5. **`done`** (kickoff complete) → **fan-out**: each assigned specialist
+   actually runs its task (`startTeamWork` → `interpretIntent`), so its tile
+   lights up (analyzing → drafting) and it produces a first deliverable.
+   - **Missing roles are auto-added** (`addAgent`); the PM posts an "Added
+     teammates" message and a `team_changed` event refreshes the L1 grid.
+   - Each agent follows the **project topology** (injected into its system
+     prompt) and the §15.6 grounding.
+   - A delegated task records as a **PM → agent handoff bubble**, not a "you"
+     bubble (`interpretIntent` `handoff` option).
+   - The closing message is terminal — it does **not** set a pending state.
+
+### 15.13 Chat motion (Layer 2)
+
+- **Thinking:** a "…" bubble shows whenever an agent is working and the user is
+  waiting — across every agent (driven by status events for server-initiated
+  work, optimistically for client requests).
+- **Typed text:** live LLM replies stream token-by-token; *scripted* bubbles
+  (kickoff plan/questions/closing) **typewriter-reveal** then snap to markdown.
+- **Arrival:** new turns rise + fade in at the bottom while older content slides
+  up; only genuinely-new bubbles animate (tracked per agent). The newest agent
+  bubble flashes a highlight; choice buttons stagger in like Layer 1 tiles.
