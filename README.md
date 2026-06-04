@@ -53,7 +53,7 @@ For the full vision and design rationale see the (local, unpublished) `docs/` fo
 - **Deterministic surfaces** — agents emit a small structured spec; a fixed renderer turns it into a stable, navigable UI (fast, cheap, accessible).
 - **Per-role model routing** — different OpenRouter model per role, plus a fast **router model** for team-voice classification.
 - **Agent skills** — toggle the playbooks (discovery, TDD, code review, positioning, …) the team can draw on (Settings → Skills).
-- **Activity feed, memory, and file explorer** drawers; per-project notes with optional **git auto-save**.
+- **Activity feed, memory, and file explorer** drawers. The Activity feed is **cross-project everywhere** — agent responses from all projects as project → agent · role → summary cards. The Explorer's files/folders are mouse-clickable (open / expand). Per-project notes with optional **git auto-save**.
 - **GitHub pairing** — connect your GitHub account from Settings via a **keyboard-free OAuth device flow** (scan a QR on your phone or open a pre-filled authorize link on-device).
 - **Settings** — OpenRouter key, default + per-role + router models, agent skill toggles, git auto-save, GitHub pairing (MCP plugins coming soon).
 

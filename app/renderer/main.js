@@ -1069,8 +1069,6 @@ function updatePickerShortcuts() {
   setShortcuts([
     {                gamepad: 'triangle', keyboard: 'A', label: 'Activity',
       action: () => toggleActivityDrawer() },
-    {                gamepad: 'square', keyboard: 'M', label: 'Memory',
-      action: () => toggleMemoryDrawer() },
   ]);
 }
 
@@ -4017,10 +4015,9 @@ function openActivityDrawer() {
   // Mutually exclusive with the other left drawers.
   if (fileExplorerOpen) closeFileExplorer();
   if (memoryDrawerOpen) closeMemoryDrawer();
-  // Update the header to reflect the scope (project vs cross-project).
+  // Activity is always the cross-project feed now, anywhere (L0/L1/L2).
   const headerEl = el.querySelector('header span');
-  const crossProject = mode === MODE_PROJECTS || !activeProject;
-  if (headerEl) headerEl.textContent = crossProject ? 'Activity · All projects' : 'Activity';
+  if (headerEl) headerEl.textContent = 'Activity';
   repaintActivityList();
 }
 function closeActivityDrawer() {
@@ -4037,16 +4034,15 @@ function repaintActivityList() {
   // On L0 (the projects landing) show the cross-project feed with a
   // project-name crumb; inside a project filter to it. Keyed on mode, not
   // just activeProject — that record lingers after backing out to L0.
-  const crossProject = mode === MODE_PROJECTS || !activeProject;
-  const entries = crossProject
-    ? allActivity.slice()
-    : projectActivityForId(activeProject.id);
+  // Always the cross-project feed (every agent, every project), regardless of
+  // where the drawer is opened: agent responses, grouped project → agent · role
+  // → summary, most-recent first.
+  const crossProject = true;
+  const entries = allActivity.filter(e => e.kind === 'activity' && e.agentId);
   if (entries.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'activity-empty';
-    empty.textContent = crossProject
-      ? 'No activity across any project yet.'
-      : 'No team activity yet.';
+    empty.textContent = 'No agent responses yet.';
     list.appendChild(empty);
     return;
   }
@@ -4055,32 +4051,44 @@ function repaintActivityList() {
     row.className = `activity-entry activity-${entry.kind}`;
     row.tabIndex = 0;
     row.dataset.projectId = entry.projectId || '';
+    const meta = document.createElement('div');
+    meta.className = 'activity-meta';
+    meta.textContent = formatBubbleTime(entry.at) || '';
+
     if (crossProject) {
-      // Open the project (and the agent, if known) on click / Enter
-      // when this entry is selected from the cross-project feed.
+      // Open the project (and the agent, if known) on click / Enter.
       const open = () => openProjectFromActivityEntry(entry);
       row.addEventListener('click', open);
       row.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); open(); }
       });
-    }
-    const line = document.createElement('div');
-    line.className = 'activity-line';
-    if (crossProject) {
-      const projName = projects.find(p => p.id === entry.projectId)?.name || '';
-      if (projName) {
-        const crumb = document.createElement('span');
-        crumb.className = 'activity-project';
-        crumb.textContent = projName;
-        line.appendChild(crumb);
-        line.appendChild(document.createTextNode(' · '));
+
+      const proj = projects.find(p => p.id === entry.projectId);
+      const agent = proj?.agents?.find(a => a.id === entry.agentId);
+      const agentName = agent?.name || agentNameForProjectAgent(entry.projectId, entry.agentId);
+      const role = agent ? roleLabel(agent.role) : '';
+      // Strip a leading "<Name>: " prefix — the name is shown separately.
+      let summary = String(entry.text || '');
+      if (agentName && summary.startsWith(agentName)) {
+        summary = summary.slice(agentName.length).replace(/^\s*[:\-–—]\s*/, '');
       }
+
+      const projEl = document.createElement('div');
+      projEl.className = 'activity-project-head';
+      projEl.textContent = proj?.name || 'Project';
+      const authorEl = document.createElement('div');
+      authorEl.className = 'activity-author';
+      authorEl.textContent = agentName + (role ? ` · ${role}` : '');
+      const sumEl = document.createElement('div');
+      sumEl.className = 'activity-summary';
+      sumEl.textContent = summary;
+      row.append(projEl, authorEl, sumEl, meta);
+    } else {
+      const line = document.createElement('div');
+      line.className = 'activity-line';
+      line.textContent = entry.text;
+      row.append(line, meta);
     }
-    line.appendChild(document.createTextNode(entry.text));
-    const meta = document.createElement('div');
-    meta.className = 'activity-meta';
-    meta.textContent = formatBubbleTime(entry.at) || '';
-    row.append(line, meta);
     list.appendChild(row);
   }
 }
@@ -4920,6 +4928,20 @@ function rebuildFileEntries() {
   pm.dataset.path = 'project.md';
   fileTreeEl.appendChild(pm);
   fileEntries.push(pm);
+
+  // Mouse: clicking an entry focuses it then runs the same open/toggle path as
+  // Enter/✕ — a file opens in the viewer, a folder header expands/collapses.
+  for (const el of fileEntries) {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => {
+      explorerFocused = true;
+      const idx = fileEntries.indexOf(el);
+      if (idx < 0) return;
+      fileFocus = idx;
+      paintFileFocus();
+      openFocusedFile();
+    });
+  }
 }
 
 async function openFocusedFile() {
