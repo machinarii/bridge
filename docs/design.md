@@ -948,8 +948,8 @@ chip — no duplicate action-bar Back. Entrance animates on screen transitions
 
 ### 15.9 Drawers
 
-Left drawers, mutually exclusive: **Explorer**, **Activity**, **Memory**. Headers
-share one style (drawer label, weight 400).
+Left drawers, mutually exclusive: **Explorer**, **Activity**, **Memory**. They
+share a common **width** (320px) and **header style** (drawer label, weight 400).
 
 - **Explorer** — project `.md` files (the code/build folder is hidden), grouped
   into collapsible folders (Roles, Notes, …). Keyboard/gamepad **and mouse**:
