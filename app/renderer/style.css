@@ -2922,7 +2922,7 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   flex: 0 0 auto;
   min-width: 0;
   font-size: 0.66rem;
-  padding: 0.4rem 1.1rem;
+  padding: 0.4rem 1.32rem;   /* ~20% wider than before */
 }
 
 /* "Other" choice — hold to dictate. Inherits the choice-btn look but stacks a

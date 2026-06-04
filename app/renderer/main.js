@@ -509,8 +509,8 @@ let _effortStore = (() => {
 })();
 function _saveEffortStore() { try { localStorage.setItem('bridge.effort.v2', JSON.stringify(_effortStore)); } catch {} }
 const _lvl = (l) => (EFFORT_LEVELS.includes(l) ? l : null);
-function effortForAgent(pid, aid) { return _lvl(_effortStore.agent?.[aid]) || _lvl(_effortStore.proj?.[pid]) || 'medium'; }
-function effortForProject(pid)    { return _lvl(_effortStore.proj?.[pid]) || 'medium'; }
+function effortForAgent(pid, aid) { return _lvl(_effortStore.agent?.[aid]) || _lvl(_effortStore.proj?.[pid]) || 'high'; }
+function effortForProject(pid)    { return _lvl(_effortStore.proj?.[pid]) || 'high'; }
 /* Which scope the picker edits, by screen: L2 → this agent, L1 → this project. */
 function effortScope() {
   if (mode === MODE_ZOOM && currentAgent()) return { kind: 'agent', id: currentAgent().id };
@@ -518,8 +518,8 @@ function effortScope() {
   return null;
 }
 function scopeEffort(scope) {
-  if (!scope) return 'medium';
-  return _lvl((scope.kind === 'agent' ? _effortStore.agent : _effortStore.proj)?.[scope.id]) || 'medium';
+  if (!scope) return 'high';
+  return _lvl((scope.kind === 'agent' ? _effortStore.agent : _effortStore.proj)?.[scope.id]) || 'high';
 }
 function setScopeEffort(scope, lvl) {
   if (!scope) return;
@@ -738,7 +738,9 @@ function readNavState() {
 /* ---------- Bootstrap ---------- */
 async function loadProjects() {
   const [pj, rj] = await Promise.all([fetch('/projects'), fetch('/roles')]);
-  projects = (await pj.json()).projects || [];
+  // L0 lists projects most-recently-created first.
+  projects = ((await pj.json()).projects || [])
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   window._roles = (await rj.json()).roles || [];
 }
 
@@ -1025,6 +1027,7 @@ function handleProjectEditGamepad(b) {
 gp.addEventListener('release', (e) => {
   if (e.detail.button === 'touchpad') { commitEffortPicker(); return; }
   if (editBubbleOpen && e.detail.button === 'cross' && editDictating) { endEditDictate(); return; }  // release stops dictation
+  if (e.detail.button === 'cross' && _otherDictateBtn) { endOtherDictate(); return; }  // release stops "Other" dictation
   if (e.detail.button !== 'cross') return;
   if (projectEditOpen) { resetRemoveHold(); return; }
   if (mode === MODE_PROJECTS) endProjectHold(true);
@@ -5106,6 +5109,9 @@ gp.addEventListener('press', (e) => {
       if (b === 'right')  { cycleBubbleAction(+1); return; }
       if (b === 'cross')  {
         const a = document.activeElement;
+        // Hold ✕ on the "Other" option → dictate; the gp 'release' listener
+        // stops it. (Don't treat it as a click-toggle.)
+        if (a?.classList?.contains('choice-other')) { startOtherDictate(a); return; }
         if (a?.classList?.contains('bubble-action') || a?.closest?.('.bubble-kickoff-actions, .bubble-choices')) { a.click(); return; }
         // On the bubble itself (no action focused yet) → activate the primary
         // kickoff action so Approve takes a single press, not two.
@@ -6181,6 +6187,14 @@ window.addEventListener('keydown', (e) => {
         cycleBubbleAction(e.key === 'ArrowRight' ? +1 : -1);
         return;
       }
+      // Hold Space / Enter on the "Other" option → dictate (start on press,
+      // stop on the matching keyup, handled by the global keyup listener).
+      if ((e.code === 'Space' || e.key === 'Enter') &&
+          document.activeElement?.classList?.contains('choice-other')) {
+        e.preventDefault();
+        if (!e.repeat) startOtherDictate(document.activeElement);
+        return;
+      }
       // Space toggles the focused multi-select choice option (Enter / ✕ do too).
       if (e.code === 'Space' && document.activeElement?.classList?.contains('choice-btn')) {
         e.preventDefault(); document.activeElement.click(); return;
@@ -6377,6 +6391,8 @@ async function finalizeNewProject() {
 }
 window.addEventListener('keyup', (e) => {
   if (e.key === 'v') { e.preventDefault(); endPTT(); }
+  // Releasing Space / Enter ends a hold-to-talk started on an "Other" option.
+  if ((e.code === 'Space' || e.key === 'Enter') && _otherDictateBtn) { e.preventDefault(); endOtherDictate(); }
 });
 
 /* ---------- Boot ---------- */
