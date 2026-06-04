@@ -3,13 +3,13 @@
  * supporting docs and assigns topology-shaped starting tasks to the team.
  * See docs/superpowers/specs/2026-06-03-pm-kickoff-design.md. */
 
-import { getRole } from './roles.js';
-import { getProject, setKickoff, getKickoff, TOPOLOGIES } from './projects.js';
-import { appendTurn, getContext } from './scratchpad.js';
+import { getRole, listRoles } from './roles.js';
+import { getProject, setKickoff, getKickoff, TOPOLOGIES, addAgent } from './projects.js';
+import { appendTurn, getContext, setLastSpec } from './scratchpad.js';
 import { getModelForRole, getRouterModel } from './models.js';
 import { emitNotification, emitActivity, emitDelegate, emitStatus, publish as publishEvent } from './events.js';
 import { writeNote } from './backends/notes.js';
-import { RESPONSE_STYLE } from './orchestrator.js';
+import { RESPONSE_STYLE, interpretIntent } from './orchestrator.js';
 
 export const DOC_TITLES = {
   prd:       'PRD',
@@ -207,33 +207,84 @@ async function callOpenRouterJSON({ apiKey, model, prompt, timeoutMs = 20_000 })
   finally { clearTimeout(timer); }
 }
 
+/* Decide who builds what. Returns role-based assignments [{ role, task }] — the
+ * PM may pick roles that aren't on the team yet; startTeamWork adds them. Uses
+ * the capable PM model (the cheap router was returning empty assignments). */
 export async function assignKickoffTasks(projectId, opts = {}) {
   const project = getProject(projectId);
   if (!project) return [];
   const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
   const callJSON = opts.callJSON || callOpenRouterJSON;
-  const others = project.agents.filter(a => a.enabled && a.id !== project.leadAgentId);
-  const rosterLines = others.map(a => `- ${a.name} (${getRole(a.role).label}) [id:${a.id}]`).join('\n') || '(none)';
+  const present = new Set(project.agents.filter(a => a.enabled).map(a => a.role));
+  const catalog = listRoles().filter(r => r.id !== 'pm')
+    .map(r => `- ${r.id}: ${r.label}${present.has(r.id) ? ' (already on team)' : ''}`).join('\n');
   const prompt =
     `You are the PM of project "${project.name}". Goal: "${project.goal}".\n` +
-    `Operating model: ${topologyGuidance(project.topology)}\n` +
-    `Team:\n${rosterLines}\n\n` +
-    `Return JSON {"assignments":[{"agentId":"<id from roster>","task":"<one concrete starting task>"}]}. ` +
-    `Use exact agent ids. Assign only roles that apply. Max ${FANOUT_CAP} assignments.`;
+    `Operating model (every assignment must fit this): ${topologyGuidance(project.topology)}\n` +
+    `Available roles — assign the best-fit role to each task. You MAY use roles not yet on the team; they will be added:\n${catalog}\n\n` +
+    `Return JSON {"assignments":[{"role":"<roleId>","task":"<one concrete starting task that follows the operating model>"}]}. ` +
+    `Use exact role ids. One task each, only roles that genuinely apply. Max ${FANOUT_CAP} assignments.`;
   let parsed;
-  try { parsed = JSON.parse(await callJSON({ apiKey, model: getRouterModel(), prompt })); }
+  try { parsed = JSON.parse(await callJSON({ apiKey, model: getModelForRole('pm'), prompt })); }
   catch { parsed = { assignments: [] }; }
-  const assignments = (parsed.assignments || []).slice(0, FANOUT_CAP);
   const out = [];
-  for (const a of assignments) {
-    const target = others.find(o => o.id === a.agentId);
-    if (!target || !a.task) continue;
-    const task = String(a.task).slice(0, 400);
-    appendTurn(target.id, 'user', task);
-    emitDelegate(projectId, project.leadAgentId, target.id, task);
-    out.push({ agentId: target.id, name: target.name, role: getRole(target.role).label, task });
+  const seen = new Set();
+  for (const a of (parsed.assignments || []).slice(0, FANOUT_CAP)) {
+    if (!a?.task || !getRole(a.role) || a.role === 'pm' || seen.has(a.role)) continue;
+    seen.add(a.role);
+    out.push({ role: a.role, task: String(a.task).slice(0, 400) });
   }
   return out;
+}
+
+/* When kickoff completes, the assigned specialists actually start building. For
+ * each role-based assignment we resolve (or auto-add) the agent, announce any
+ * additions, then fan out — each agent runs its task so its tile lights up and
+ * it produces a first deliverable, all shaped by the project topology. */
+async function startTeamWork(projectId, opts = {}) {
+  if (opts.callText) return;   // injected/unit-test mode — don't hit the network
+  const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+  if (!apiKey || apiKey.includes('replace-me')) return;
+  let project = getProject(projectId);
+  if (!project) return;
+  const assignments = getKickoff(projectId).assignments || [];
+  if (!assignments.length) return;
+
+  const resolved = [];
+  const added = [];
+  for (const a of assignments) {
+    let agent = project.agents.find(o => o.enabled && o.role === a.role);
+    if (!agent) {
+      // Needed specialist isn't on the team — add it automatically.
+      try {
+        project = await addAgent(projectId, a.role);
+        agent = project.agents.find(o => o.role === a.role);
+        if (agent) added.push({ agent, task: a.task });
+      } catch (err) { console.warn(`[kickoff] could not add ${a.role}:`, err?.message); continue; }
+    }
+    if (agent) resolved.push({ agentId: agent.id, name: agent.name, roleLabel: getRole(a.role).label, task: a.task });
+  }
+
+  // Announce auto-added teammates so the user knows who joined and why.
+  if (added.length) {
+    publishEvent({ type: 'team_changed', projectId });
+    const lines = added.map(x => `- **${x.agent.name}** (${getRole(x.agent.role).label}) — ${x.task}`).join('\n');
+    appendTurn(project.leadAgentId, 'assistant', JSON.stringify({
+      intent: 'answer', template: 'reader', context: 'Team', title: 'Added teammates',
+      body: `I didn't have the right specialist for ${added.length === 1 ? 'one task' : 'some tasks'}, so I added ${added.length === 1 ? 'a teammate' : 'teammates'} to the team:\n\n${lines}`,
+      actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+    }));
+    emitActivity(projectId, `PM: added ${added.length} teammate${added.length === 1 ? '' : 's'}`, project.leadAgentId);
+  }
+
+  // Fan out: each agent starts on its task. Fire-and-forget so completion isn't
+  // blocked; interpretIntent emits status (analyzing/drafting) on its own.
+  for (const r of resolved) {
+    emitDelegate(projectId, project.leadAgentId, r.agentId, r.task);
+    interpretIntent({ projectId, agentId: r.agentId, text: r.task, effort: 'high' })
+      .then(spec => setLastSpec(r.agentId, spec))
+      .catch(err => console.warn(`[kickoff] ${r.name} failed to start:`, err?.message));
+  }
 }
 
 function reportSpec(docCount, assigned, project) {
@@ -328,7 +379,8 @@ export async function executeKickoff(projectId, opts = {}) {
     const questions = await generateQuestions(project, opts);
     if (questions.length && getProject(projectId)) {
       appendTurn(project.leadAgentId, 'assistant', questionSpec(questions[0], 1, questions.length));
-      setKickoff(projectId, { status: 'asking', questions, qIdx: 0, finishedAt: Date.now() });
+      // Stash the assignments so the team starts building once Q&A wraps up.
+      setKickoff(projectId, { status: 'asking', questions, qIdx: 0, assignments: assigned, finishedAt: Date.now() });
       // A question is pending → the PM is waiting on the user. Kickoff is NOT
       // complete yet — it's complete only once the questions are answered.
       emitStatus(projectId, project.leadAgentId, 'idle');
@@ -336,12 +388,13 @@ export async function executeKickoff(projectId, opts = {}) {
                          body: `${project.name}: starter docs created. The PM has a few questions for you.` });
       emitActivity(projectId, 'PM: first question ready', project.leadAgentId);
     } else {
-      // No key / no questions — nothing left to ask, so it's done.
-      setKickoff(projectId, { status: 'done', finishedAt: Date.now() });
+      // No questions — kickoff is done now, so the team starts building.
+      setKickoff(projectId, { status: 'done', assignments: assigned, finishedAt: Date.now() });
       emitStatus(projectId, project.leadAgentId, 'idle');
-      emitNotification({ kind: 'info', projectId, title: 'Kickoff started',
-                         body: `${project.name}: starter docs created and ${assigned.length} task${assigned.length === 1 ? '' : 's'} assigned.` });
-      emitActivity(projectId, 'PM: kickoff started', project.leadAgentId);
+      emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
+                         body: `${project.name}: starter docs created; the team is starting on its tasks.` });
+      emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId, { noWait: true });
+      startTeamWork(projectId, opts);   // fire-and-forget
     }
   }
   return { ran: true, assigned };
@@ -371,7 +424,11 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     setKickoff(projectId, { status: 'done', qIdx: nextIdx });
     emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
                        body: `${project.name}: questions answered and the team is moving.` });
-    emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId);
+    // Terminal message — the PM isn't awaiting a reply, so don't glow "Waiting".
+    emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId, { noWait: true });
+    // Kickoff is complete → the specialists start building (auto-adding any
+    // missing roles). Fire-and-forget so the closing returns promptly.
+    startTeamWork(projectId, opts);
     return { handled: true, intent: 'questions_done', spec };
   }
 

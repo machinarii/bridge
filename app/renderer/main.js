@@ -3797,8 +3797,12 @@ function handleBridgeEvent(ev) {
       // feed shows everything.
       pushActivityEntry(ev);
       // Glow the agent's L1 tile when it produces something the user hasn't
-      // opened (a reply, a kickoff plan, an assigned task).
-      if (ev.type === 'activity' && ev.agentId) markUnseen(ev.agentId);
+      // opened (a reply, a kickoff plan, an assigned task). Terminal messages
+      // flagged noWait don't await a reply — clear any stale "Waiting" instead.
+      if (ev.type === 'activity' && ev.agentId) {
+        if (ev.noWait) clearUnseen(ev.agentId);
+        else markUnseen(ev.agentId);
+      }
       else if (ev.type === 'delegate' && ev.toAgentId) markUnseen(ev.toAgentId);
       // A server-posted turn (kickoff plan / question) for the agent we're
       // viewing → pull it into the open chat and clear the "…" bubble.
@@ -3820,12 +3824,31 @@ function handleBridgeEvent(ev) {
       }
       break;
     }
+    case 'team_changed': {
+      // The PM auto-added teammates during kickoff — pull the new roster in so
+      // the L1 grid shows the fresh tiles.
+      if (activeProject && ev.projectId === activeProject.id) reloadActiveProject();
+      break;
+    }
     case 'notification':
     case 'token':
     case 'tool':
     default:
       break;
   }
+}
+
+/* Re-fetch projects and refresh the active one in place (used when the server
+ * changes the team, e.g. kickoff auto-adds a specialist). Re-renders the grid
+ * so new agent tiles appear without losing the user's place. */
+async function reloadActiveProject() {
+  if (!activeProject) return;
+  const id = activeProject.id;
+  await loadProjects();
+  const fresh = projects.find(p => p.id === id);
+  if (!fresh) return;
+  activeProject = withLeadFirst(fresh);
+  if (mode === MODE_GRID) renderGrid();
 }
 
 /* Refetch /projects/:pid/files and re-render entries while keeping
