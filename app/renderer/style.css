@@ -1269,7 +1269,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   display: flex; flex-direction: column;
   min-height: 0;
   position: relative;
-  padding: 1.25rem 1.5rem;
+  padding: 1.25rem 1.5rem 0;   /* no bottom padding */
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.06);
   overflow: hidden;
@@ -2911,13 +2911,10 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   position: relative;     /* anchors the corner checkbox when selected */
   appearance: none;
   cursor: pointer;
-  flex: 1 1 0;            /* equal share of the one row; basis 0 so widths match */
   min-width: 0;          /* allow shrinking so all buttons fit one horizontal row */
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;   /* content hugs the top while heights match */
-  gap: 0.2rem;
+  /* Block flow (not flex): a <button> mis-reports its wrapped-content height as
+     a flex/grid item, which clipped long option text. Block sizes reliably. */
+  display: block;
   text-align: left;
   font: inherit;
   line-height: 1.35;
@@ -2929,12 +2926,15 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   transition: background 120ms, border-color 120ms;
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn .choice-letter {
+  display: block;
   font-size: 0.72rem;
   font-weight: 600;
   line-height: 1.1;
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn .choice-desc {
   /* Same treatment as the "Hold to talk" subtext under Other. */
+  display: block;
+  margin-top: 0.2rem;
   font-size: 0.54rem;
   font-weight: 400;
   line-height: 1.3;
