@@ -2891,10 +2891,11 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   line-height: 1.1;
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn .choice-desc {
-  font-size: 0.6rem;
+  /* Same treatment as the "Hold to talk" subtext under Other. */
+  font-size: 0.54rem;
   font-weight: 400;
   line-height: 1.3;
-  color: var(--fg);
+  color: var(--fg-dim);
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn:hover {
   background: rgba(255,255,255,0.1);
@@ -2907,24 +2908,10 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   border-color: rgba(255,255,255,0.55);
   box-shadow: 0 0 0 2px var(--focus, #ffffff), 0 0 12px 2px rgba(255,255,255,0.22);
 }
-/* Selected (toggled-on) option — white emphasis + a corner checkbox, matching
-   the role-selection screen's scheme (no color wash, no inline glyph). */
+/* Selected (toggled-on) option — white emphasis (fill + border), no checkbox. */
 .agent-view .bubble.agent .bubble-choices .choice-btn[aria-pressed="true"] {
   background: rgba(255,255,255,0.14);
   border-color: rgba(255,255,255,0.6);
-}
-.agent-view .bubble.agent .bubble-choices .choice-btn[aria-pressed="true"]::before {
-  content: '';
-  position: absolute; top: 0.3rem; right: 0.3rem;
-  width: 0.95rem; height: 0.95rem; border-radius: 4px;
-  background: var(--focus, #ffffff);
-}
-.agent-view .bubble.agent .bubble-choices .choice-btn[aria-pressed="true"]::after {
-  content: '';
-  position: absolute; top: 0.44rem; right: 0.66rem;
-  width: 0.22rem; height: 0.45rem;
-  border-right: 2.5px solid #0b0f14; border-bottom: 2.5px solid #0b0f14;
-  transform: rotate(45deg);
 }
 /* Submit sits below the options, bottom-right; compact primary button. */
 .agent-view .bubble.agent .bubble-choices-submit {
