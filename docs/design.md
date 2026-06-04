@@ -858,9 +858,17 @@ Other flags: `data-lead` (PM tile), `data-disabled` (toggled off),
   directly — so approval never takes two presses. Left then ✕ rejects.
   Approve → run kickoff; Reject → posts a "Reject" turn + a brief PM ack.
 - **In-bubble choices (multi-select):** when a decision is needed an agent
-  returns `choices[]`; rendered as **one horizontal row** of buttons (never a
-  grid — `nowrap`), each showing its letter (**A / B / C…**) as a heading with
-  the description on the next line, **uniform height** that grows to fit text.
+  returns `choices[]`; rendered as **one horizontal row** of options, each
+  showing its letter (**A / B / C…**) as a heading with the description on the
+  next line, **uniform height** that grows to fit the wrapped text.
+  - **Layout (no clipping):** the options row is a **single-row CSS grid**
+    (`grid-auto-flow: column; grid-auto-columns: minmax(0,1fr)`); the option
+    elements are **block-flow `<div role="button">`** (NOT `<button>`, which
+    mis-reports wrapped-content height to grid track sizing). Grid auto-row
+    sizes to the tallest option's full block height and stretches every cell to
+    it — so long descriptions never clip and all options match height, and it
+    reflows correctly when the web font loads. Do **not** JS-measure heights:
+    a `scrollHeight` pass runs before the font swaps in and locks a stale height.
   - **Multi-select:** toggle one or more with **Enter / ✕** (Space is *not* a
     toggle). A **"Other — Hold to talk"** button (always appended) starts
     push-to-talk for a free-form answer, playing the standard mic wave inside
@@ -870,8 +878,8 @@ Other flags: `data-lead` (PM tile), `data-disabled` (toggled off),
   - **Entrance:** buttons stagger in one-by-one (like Layer 1 tiles).
   - **Memorialized:** once a later user turn answers the question, that bubble
     re-renders **read-only** with the picked options shown selected — no Submit,
-    Other, or hint (it's a record). Read-only entries are `<div>`s (out of the
-    nav ring).
+    Other, or hint (it's a record). Read-only entries drop `role`/`tabindex`
+    (out of the nav ring).
 
 ### 15.5 Tile-spec contract (deterministic UI)
 

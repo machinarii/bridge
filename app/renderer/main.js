@@ -2397,20 +2397,26 @@ function buildChoiceList(choices, agent, picked) {
     // Strip any existing "A — " / "A. " / "A) " prefix; show the letter as a
     // heading and the description on the next line.
     const desc = text.replace(/^[A-Za-z]\s*[—\-.):]\s*/, '').trim() || text;
-    // Read-only entries are <div> (not in the nav ring); interactive are <button>.
-    const el = document.createElement(memorial ? 'div' : 'button');
-    if (!memorial) el.type = 'button';
+    // Use <div role=button>, not <button>: a <button> doesn't report its
+    // wrapped-content height to the parent grid, so long option text clipped.
+    const el = document.createElement('div');
     el.className = 'choice-btn';
     el.dataset.choice = text;                      // original choice text (submitted/matched)
     const isSel = memorial && picked.some(p => p === text || p === desc);
     el.setAttribute('aria-pressed', isSel ? 'true' : 'false');
     if (isSel) el.classList.add('selected');
+    if (!memorial) { el.setAttribute('role', 'button'); el.tabIndex = 0; }
     el.innerHTML =
       `<span class="choice-letter">${escapeHtml(letter)}</span>` +
       `<span class="choice-desc">${escapeHtml(desc)}</span>`;
     if (!memorial) el.addEventListener('click', (e) => { e.stopPropagation(); toggleChoice(el); });
     opts.appendChild(el);
   });
+
+  // Heights are handled entirely by the CSS grid (single auto row + block
+  // buttons stretch to the tallest content) — which reflows correctly when the
+  // web font swaps in. A JS scrollHeight pass would measure the fallback font
+  // pre-swap and lock a stale min-height, re-introducing clipping; don't.
 
   // A memorialized (answered) list is a record — no Other / Submit / hint.
   if (memorial) { wrap.appendChild(opts); return wrap; }
@@ -2999,7 +3005,7 @@ function cycleBubbleAction(dir) {
   const bubble = chatBubbles[chatBubbleIdx];
   if (!bubble) return;
   // Retry/edit icons on user bubbles, plus the kickoff Approve/Reject buttons.
-  const arr = [...bubble.querySelectorAll('.bubble-action, .bubble-kickoff-actions button, .bubble-choices button')];
+  const arr = [...bubble.querySelectorAll('.bubble-action, .bubble-kickoff-actions button, .bubble-choices button, .bubble-choices:not(.memorial) .choice-btn')];
   if (arr.length === 0) return;
   const idx = arr.indexOf(document.activeElement);
   if (idx === -1) {                       // on the bubble itself → step into the actions

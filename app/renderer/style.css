@@ -1405,6 +1405,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   outline: none;
   transition: box-shadow 120ms, transform 180ms cubic-bezier(.2,.8,.2,1);
 }
+.agent-view .bubble.agent { margin-bottom: 1.4rem; }
 .agent-view .bubble.focused {
   box-shadow: 0 0 0 2px var(--focus, #ffffff), 0 0 16px 2px rgba(255,255,255,0.25);
 }
@@ -2518,7 +2519,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 #file-drawer.drawer.left {
   position: fixed;
   top: var(--surface-top, 1.5rem);
-  left: 1.5rem;
+  left: 1.1rem;
   bottom: var(--surface-bottom, 5rem);
   width: 320px;   /* match the Activity drawer width */
   background: var(--bg-elev);
@@ -2640,7 +2641,7 @@ body[data-memory-drawer="open"] #surface { margin-left: calc(320px + 1rem); }
 #activity-drawer.drawer.left {
   position: fixed;
   top: var(--surface-top, 1.5rem);
-  left: 1.5rem;
+  left: 1.1rem;
   bottom: var(--surface-bottom, 5rem);
   width: 320px;
   background: var(--bg-elev);
@@ -2911,8 +2912,11 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   margin-top: 0.7rem;
 }
 .agent-view .bubble.agent .bubble-choices-options {
-  /* Single-row grid: equal columns, all cells stretch to the tallest one's
-     content height (reliable uniform height — flex basis:0 mis-measures it). */
+  /* Single-row grid: equal columns (minmax 0 1fr), one row. Grid auto-row
+     sizing measures a BLOCK child's wrapped height correctly and stretches all
+     cells to the tallest — so long option text is never clipped and every
+     button is the same height. (The buttons must be block flow, not nested
+     grid/flex, for this to measure right.) */
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
@@ -2931,14 +2935,12 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   position: relative;     /* anchors the corner checkbox when selected */
   appearance: none;
   cursor: pointer;
+  user-select: none;     /* <div role=button> would otherwise select text on click */
   min-width: 0;          /* allow shrinking so all buttons fit one horizontal row */
-  /* Grid (not flex): a <button> flex item mis-reports its wrapped-content height,
-     which clipped long option text. Grid measures it correctly; align-content
-     pins the letter + description to the TOP of the (stretched) button. */
-  display: grid;
-  align-content: start;
-  justify-items: start;
-  gap: 0.2rem;
+  /* Plain BLOCK flow (not grid/flex): block reliably wraps the description and
+     reports its full height to the parent grid, so nothing clips. As a grid
+     item it stretches to the tallest cell; content stays top-aligned. */
+  display: block;
   text-align: left;
   font: inherit;
   line-height: 1.35;
@@ -2950,12 +2952,15 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   transition: background 120ms, border-color 120ms;
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn .choice-letter {
+  display: block;
   font-size: 0.72rem;
   font-weight: 600;
   line-height: 1.1;
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn .choice-desc {
   /* Same treatment as the "Hold to talk" subtext under Other. */
+  display: block;
+  margin-top: 0.2rem;
   font-size: 0.54rem;
   font-weight: 400;
   line-height: 1.3;
