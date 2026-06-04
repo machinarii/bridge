@@ -237,29 +237,32 @@ export async function assignKickoffTasks(projectId, opts = {}) {
 }
 
 function reportSpec(docCount, assigned, project) {
-  const lines = assigned.length
-    ? assigned.map(a => `- **${a.name}** (${a.role}): ${a.task}`).join('\n')
-    : '_No specialist tasks assigned (no matching enabled roles)._';
+  const taskLine = assigned.length ? ` I've also seeded each teammate a starting task.` : '';
   const body =
-    `Kickoff complete. I created ${docCount} project docs (see the file explorer): PRD, roadmap, operating notes, and open questions.\n\n` +
-    `**Starting assignments**\n${lines}\n\n` +
-    `Open the Open Questions doc and let me know your calls on anything there.`;
+    `Kickoff has started. I created ${docCount} starter project docs in the explorer: PRD, roadmap, operating notes, and open questions. I'll update them as I get more info.${taskLine}\n\n` +
+    `Let's start with a series of questions so I can capture more details.`;
   return JSON.stringify({
-    intent: 'answer', template: 'reader', context: 'Kickoff', title: 'Kickoff report', body,
+    intent: 'answer', template: 'reader', context: 'Kickoff', title: 'Kickoff started', body,
     actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
   });
 }
 
-/* A single kickoff question, asked one at a time. `lead` is an optional short
- * acknowledgement of the previous answer that prefixes the question. */
+/* A single kickoff question, asked one at a time. Accepts either a plain string
+ * or a { q, options } object; options render as a selectable choice list (the
+ * user picks one or more, or uses Other to free-form). `lead` is an optional
+ * short acknowledgement of the previous answer that prefixes the question. */
 function questionSpec(question, n, total, lead) {
   const counter = total > 1 ? `Question ${n} of ${total}` : 'A question';
-  const body = `${lead ? lead.trim() + '\n\n' : ''}${String(question).trim()}`;
-  return JSON.stringify({
+  const q = typeof question === 'string' ? question : (question?.q || '');
+  const options = (question && Array.isArray(question.options)) ? question.options.filter(Boolean) : [];
+  const body = `${lead ? lead.trim() + '\n\n' : ''}${String(q).trim()}`;
+  const spec = {
     intent: 'answer', template: 'reader', context: counter, title: 'Kickoff',
     body,
     actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
-  });
+  };
+  if (options.length) spec.choices = options.slice(0, 4);
+  return JSON.stringify(spec);
 }
 
 function closingSpec(body) {
@@ -270,8 +273,13 @@ function closingSpec(body) {
   });
 }
 
-/* Generate the kickoff follow-up questions as a clean list (one per line).
- * Returns [] when no key / call fails so the caller degrades gracefully. */
+/* Generate the kickoff follow-up questions, each with 2-4 short answer options
+ * the user can pick from (Other lets them free-form). Returns an array of
+ * { q, options }. Empty on no key / failure so the caller degrades gracefully.
+ *
+ * Wire format: one question per line, fields separated by " | ":
+ *   Who is the target user? | Solo travelers | Families | Business
+ * The first field is the question; the rest are options (may be absent). */
 async function generateQuestions(project, opts = {}) {
   const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
   if (!apiKey || apiKey.includes('replace-me')) return [];
@@ -282,11 +290,20 @@ async function generateQuestions(project, opts = {}) {
     prompt: `You are ${who}, PM of project "${project.name}". Goal: "${project.goal}". ` +
       `The kickoff is approved. List the 3-5 most important questions you genuinely need answered ` +
       `to move forward (scope, priorities, constraints, unknowns), ordered most-important first. ` +
-      `Output ONLY the questions, one per line, no numbering, no bullets, no preamble.` + RESPONSE_STYLE,
+      `For each question, give 2-4 short, distinct answer options the user can choose from. ` +
+      `Output ONLY one question per line as "Question? | option one | option two | option three" ` +
+      `— pipe-separated, the question first then its options, no numbering, no bullets, no preamble.` + RESPONSE_STYLE,
   });
   return String(raw || '')
     .split('\n')
-    .map(s => s.replace(/^\s*(?:[-*\d.)]+\s*)/, '').trim())
+    .map(line => {
+      const parts = line.split('|')
+        .map(s => s.replace(/^\s*(?:[-*\d.)]+\s*)/, '').trim())
+        .filter(Boolean);
+      if (!parts.length) return null;
+      const [q, ...options] = parts;
+      return { q, options: options.slice(0, 4) };
+    })
     .filter(Boolean)
     .slice(0, 5);
 }
@@ -312,18 +329,19 @@ export async function executeKickoff(projectId, opts = {}) {
     if (questions.length && getProject(projectId)) {
       appendTurn(project.leadAgentId, 'assistant', questionSpec(questions[0], 1, questions.length));
       setKickoff(projectId, { status: 'asking', questions, qIdx: 0, finishedAt: Date.now() });
-      // A question is pending → the PM is waiting on the user.
+      // A question is pending → the PM is waiting on the user. Kickoff is NOT
+      // complete yet — it's complete only once the questions are answered.
       emitStatus(projectId, project.leadAgentId, 'idle');
-      emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
-                         body: `${project.name}: docs created, ${assigned.length} task${assigned.length === 1 ? '' : 's'} assigned. The PM has a few questions.` });
+      emitNotification({ kind: 'info', projectId, title: 'Kickoff started',
+                         body: `${project.name}: starter docs created. The PM has a few questions for you.` });
       emitActivity(projectId, 'PM: first question ready', project.leadAgentId);
     } else {
-      // No key / no questions — just finish.
+      // No key / no questions — nothing left to ask, so it's done.
       setKickoff(projectId, { status: 'done', finishedAt: Date.now() });
       emitStatus(projectId, project.leadAgentId, 'idle');
-      emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
-                         body: `${project.name}: docs created and ${assigned.length} task${assigned.length === 1 ? '' : 's'} assigned.` });
-      emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId);
+      emitNotification({ kind: 'info', projectId, title: 'Kickoff started',
+                         body: `${project.name}: starter docs created and ${assigned.length} task${assigned.length === 1 ? '' : 's'} assigned.` });
+      emitActivity(projectId, 'PM: kickoff started', project.leadAgentId);
     }
   }
   return { ran: true, assigned };
@@ -347,11 +365,13 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
       emitActivity(projectId, `PM: question ${nextIdx + 1} ready`, project.leadAgentId);
       return { handled: true, intent: 'next_question', spec };
     }
-    // Out of questions — wrap up and let normal conversation take over.
-    const spec = closingSpec("Thanks — that's everything I needed to get us moving. The team's on it; ask me anything from here.");
+    // Out of questions — kickoff is now genuinely complete.
+    const spec = closingSpec("Thanks — that's everything I needed. Kickoff is complete: docs are up to date and the team has its starting tasks. Ask me anything from here.");
     appendTurn(project.leadAgentId, 'assistant', spec);
     setKickoff(projectId, { status: 'done', qIdx: nextIdx });
-    emitActivity(projectId, 'PM: kickoff Q&A complete', project.leadAgentId);
+    emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
+                       body: `${project.name}: questions answered and the team is moving.` });
+    emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId);
     return { handled: true, intent: 'questions_done', spec };
   }
 
