@@ -1046,8 +1046,6 @@ function updatePickerShortcuts() {
   // Hold V / R2 to talk still works on L0; we just don't surface it as a footer
   // chip here.
   setShortcuts([
-    {                keyboard: '/', label: 'Type prompt',
-      action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     {                gamepad: 'triangle', keyboard: 'A', label: 'Activity',
       action: () => toggleActivityDrawer() },
     {                gamepad: 'square', keyboard: 'M', label: 'Memory',
@@ -2755,6 +2753,11 @@ async function renderChatHistory(container, agent) {
     // bubble so the user sees it's working — across every agent.
     if (agentBusy[agent.id] && !inflightController) showPendingAgentBubble();
 
+    // Highlight the whole bubble of the most recent agent message so a new
+    // reply is easy to spot the moment it lands.
+    const newest = chatBubbles[chatBubbles.length - 1];
+    if (newest && newest.classList.contains('agent')) newest.classList.add('highlight-new');
+
     // Kickoff plan awaiting approval → auto-focus the plan bubble so a single
     // Cross/Enter approves (no need to press Up first). The approval buttons
     // only render while the plan is pending, so their presence is the signal.
@@ -3444,7 +3447,14 @@ function setPttHeld(on) {
   // Swap the Hold-to-talk label for a live mic visualizer while holding.
   const chips = document.querySelectorAll('.sc.ptt-chip');
   chips.forEach(c => c.classList.toggle('talking', on));
-  if (on && chips.length) startChipMic(); else stopChipMic();
+  // An "Other" choice button — pointer-held, or focused while holding V/R2 —
+  // plays the same mic-reactive wave inside itself (its label hides).
+  const otherBtn = _otherDictateBtn ||
+    (document.activeElement?.classList?.contains('choice-other') ? document.activeElement : null);
+  if (otherBtn) otherBtn.classList.toggle('talking', on);
+  // The chip visualizer drives both the footer chip bars and the Other-button
+  // bars — start it whenever either is talking.
+  if (on && (chips.length || otherBtn)) startChipMic(); else stopChipMic();
   // Capture screens (name/goal): show the live wave (and hide the "Hold V/R2
   // to talk" hint) only while holding; revert on release.
   const stack = document.querySelector('.capture-tile .mic-stack');
@@ -3452,11 +3462,6 @@ function setPttHeld(on) {
     stack.classList.toggle('talking', on);
     if (on) startMicVisualizer(); else stopMicVisualizer();
   }
-  // An "Other" choice button — pointer-held, or focused while holding V/R2 —
-  // plays a wave inside itself (its label hides) for the duration of the hold.
-  const otherBtn = _otherDictateBtn ||
-    (document.activeElement?.classList?.contains('choice-other') ? document.activeElement : null);
-  if (otherBtn) otherBtn.classList.toggle('talking', on);
 }
 
 /* ---------- Hold-to-talk chip mic visualizer ----------
@@ -3491,7 +3496,8 @@ function stopChipMic() {
 }
 function animateChipBars() {
   if (!chipViz) return;
-  const bars = document.querySelectorAll('.sc.ptt-chip.talking .sc-mic .bar');
+  // Drives the footer Hold-to-talk chip AND any "Other" choice button mid-hold.
+  const bars = document.querySelectorAll('.sc.ptt-chip.talking .sc-mic .bar, .choice-other.talking .choice-other-wave i');
   if (bars.length === 0) { chipVizFrame = requestAnimationFrame(animateChipBars); return; }
   chipViz.an.getByteFrequencyData(chipViz.data);
   const usable = Math.min(chipViz.data.length, 16);
