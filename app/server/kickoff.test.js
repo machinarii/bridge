@@ -77,19 +77,18 @@ test('generateKickoffDocs writes four titled notes', async () => {
   } finally { deleteProject(p.id); }
 });
 
-test('assignKickoffTasks posts a task into each named agent history', async () => {
-  const p = await createProject({ name: 'Assign KO', goal: 'build a hub', roleIds: ['pm', 'designer', 'sw_engineer'], topology: 'hub-and-spoke' });
+test('assignKickoffTasks returns role-based assignments, including roles not on the team', async () => {
+  const p = await createProject({ name: 'Assign KO', goal: 'build a hub', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
   try {
-    const designer = p.agents.find(a => a.role === 'designer');
-    const engineer = p.agents.find(a => a.role === 'sw_engineer');
     const stub = async () => JSON.stringify({ assignments: [
-      { agentId: designer.id, task: 'Draft the main screen wireframe.' },
-      { agentId: engineer.id, task: 'Stand up the project skeleton.' },
+      { role: 'designer', task: 'Draft the main screen wireframe.' },
+      { role: 'sw_engineer', task: 'Stand up the project skeleton.' },  // not yet on the team
     ] });
     const assigned = await assignKickoffTasks(p.id, { apiKey: 'k', callJSON: stub });
     assert.equal(assigned.length, 2);
-    assert.match(getContext(designer.id).messages.at(-1).content, /wireframe/);
-    assert.match(getContext(engineer.id).messages.at(-1).content, /skeleton/);
+    assert.deepEqual(assigned.map(a => a.role).sort(), ['designer', 'sw_engineer']);
+    assert.match(assigned.find(a => a.role === 'designer').task, /wireframe/);
+    assert.match(assigned.find(a => a.role === 'sw_engineer').task, /skeleton/);
   } finally { deleteProject(p.id); }
 });
 
