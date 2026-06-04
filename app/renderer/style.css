@@ -2854,12 +2854,20 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
 .agent-view .bubble.agent .bubble-choices {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
   margin-top: 0.7rem;
+}
+.agent-view .bubble.agent .bubble-choices-options {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn {
   appearance: none;
   cursor: pointer;
+  flex: 1 1 0;            /* share the row evenly; wrap when too narrow */
+  min-width: 7.5rem;
   text-align: left;
   font: inherit;
   font-size: 0.62rem;
@@ -2881,4 +2889,25 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   outline: none;
   border-color: var(--agent-color, #6ea8ff);
   box-shadow: 0 0 0 2px var(--focus, #ffffff), 0 0 12px 2px rgba(255,255,255,0.22);
+}
+/* Selected (toggled-on) option — green wash + accent border, with a check. */
+.agent-view .bubble.agent .bubble-choices .choice-btn[aria-pressed="true"] {
+  background: color-mix(in oklab, var(--accent-2, #9cf2c1) 20%, transparent);
+  border-color: var(--accent-2, #9cf2c1);
+}
+.agent-view .bubble.agent .bubble-choices .choice-btn[aria-pressed="true"]::after {
+  content: " ✓";
+  color: var(--accent-2, #9cf2c1);
+  font-weight: 700;
+}
+/* Submit sits below the options, bottom-right; compact primary button. */
+.agent-view .bubble.agent .bubble-choices-submit {
+  display: flex;
+  justify-content: flex-end;
+}
+.agent-view .bubble.agent .bubble-choices-submit .choice-submit {
+  flex: 0 0 auto;
+  min-width: 0;
+  font-size: 0.66rem;
+  padding: 0.4rem 1.1rem;
 }
