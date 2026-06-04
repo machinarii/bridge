@@ -2912,9 +2912,13 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   appearance: none;
   cursor: pointer;
   min-width: 0;          /* allow shrinking so all buttons fit one horizontal row */
-  /* Block flow (not flex): a <button> mis-reports its wrapped-content height as
-     a flex/grid item, which clipped long option text. Block sizes reliably. */
-  display: block;
+  /* Grid (not flex): a <button> flex item mis-reports its wrapped-content height,
+     which clipped long option text. Grid measures it correctly; align-content
+     pins the letter + description to the TOP of the (stretched) button. */
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 0.2rem;
   text-align: left;
   font: inherit;
   line-height: 1.35;
@@ -2926,15 +2930,12 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   transition: background 120ms, border-color 120ms;
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn .choice-letter {
-  display: block;
   font-size: 0.72rem;
   font-weight: 600;
   line-height: 1.1;
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn .choice-desc {
   /* Same treatment as the "Hold to talk" subtext under Other. */
-  display: block;
-  margin-top: 0.2rem;
   font-size: 0.54rem;
   font-weight: 400;
   line-height: 1.3;
