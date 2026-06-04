@@ -2365,17 +2365,24 @@ function buildChoiceList(choices, agent) {
 
   const opts = document.createElement('div');
   opts.className = 'bubble-choices-options';
-  for (const c of choices) {
+  choices.forEach((c, i) => {
     const text = String(c).trim();
-    if (!text) continue;
+    if (!text) return;
+    const letter = String.fromCharCode(65 + i);   // A, B, C, …
+    // Strip any existing "A — " / "A. " / "A) " prefix; show the letter as a
+    // heading and the description on the next line.
+    const desc = text.replace(/^[A-Za-z]\s*[—\-.):]\s*/, '').trim() || text;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'choice-btn';
     btn.setAttribute('aria-pressed', 'false');
-    btn.textContent = text;
+    btn.dataset.choice = text;                     // submit the original choice text
+    btn.innerHTML =
+      `<span class="choice-letter">${escapeHtml(letter)}</span>` +
+      `<span class="choice-desc">${escapeHtml(desc)}</span>`;
     btn.addEventListener('click', (e) => { e.stopPropagation(); toggleChoice(btn); });
     opts.appendChild(btn);
-  }
+  });
   // Always offer an "Other" escape hatch — hold it to dictate a free-form
   // answer. Holding (pointer, or the global V / R2 while it's focused) plays a
   // wave inside the button and hides its label; release transcribes + submits.
@@ -2430,7 +2437,7 @@ function toggleChoice(btn) {
 function submitChoices(wrap, agent) {
   if (currentAgent()?.id !== agent.id) return;
   const picked = [...wrap.querySelectorAll('.choice-btn[aria-pressed="true"]')]
-    .map(b => b.textContent.trim()).filter(Boolean);
+    .map(b => (b.dataset.choice || b.textContent).trim()).filter(Boolean);
   if (!picked.length) return;          // nothing selected → no-op
   leaveBubbleFocus();
   submitIntent(picked.join('; '));     // the chosen option(s) become the next message
