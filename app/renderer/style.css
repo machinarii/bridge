@@ -1269,7 +1269,14 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   display: flex; flex-direction: column;
   min-height: 0;
   position: relative;
-  padding: 1.25rem 1.5rem 0;   /* no bottom padding */
+  /* Top padding moves onto the absolute header (which restores 1.25rem
+     itself) and onto --header-h for the chat's scroll clearance. */
+  padding: 0 1.5rem 0;
+  /* Single source of truth for the header overlay height = the gradient/
+     dissolve depth AND the chat's top clearance (they must match so the
+     first bubble lands fully visible just below the fade). Bigger = a
+     wider, softer fade. */
+  --header-h: 8.5rem;
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.06);
   overflow: hidden;
@@ -1303,31 +1310,34 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   to   { transform: scale(1);    opacity: 1; }
 }
 
+/* Header floats over the scrolling chat as an absolute overlay that
+ * carries its own opaque->transparent gradient. The chat scrolls UNDER
+ * it and dissolves (see .chat-scroll top mask), so there is no hard edge
+ * at any scroll position and the name/role never compete with a bubble. */
 .agent-view .agent-header {
-  display: flex; align-items: center; gap: 14px;
-  margin-bottom: 18px;
-  /* Faded mask layer behind the heading — chat content scrolling up
-   * dissolves into the heading via a downward fade rather than a
-   * hard cutoff at the top of the chat-scroll. */
-  position: relative;
-  z-index: 2;
-}
-.agent-view .agent-header::after {
-  content: '';
   position: absolute;
-  left: -1.5rem; right: -1.5rem;
-  top: -1.25rem;            /* extend up over .agent-view padding */
-  bottom: -1.25rem;          /* extend down across into chat-scroll */
-  z-index: -1;               /* sit behind heading content but in front of bubbles */
-  pointer-events: none;
+  top: 0;
+  left: 0; right: 0;                      /* full-width gradient band */
+  height: var(--header-h);
+  display: flex; align-items: flex-start;
+  gap: 14px;
+  margin: 0;
+  padding-top: 1.25rem;                  /* restores the prior top breathing room */
+  z-index: 3;                            /* above bubbles, below .surface-close (z5) */
+  pointer-events: none;                  /* never intercept the close-x or the scrollbar gutter */
+  /* Opaque at the very top (name fully legible) fading to transparent so
+     content dissolves into it; color-mix with transparent (not solid)
+     lets the agent-color glow tint the band. */
   background: linear-gradient(to bottom,
-    color-mix(in oklab, var(--bg-elev) 92%, transparent) 0%,
-    color-mix(in oklab, var(--bg-elev) 88%, transparent) 55%,
+    color-mix(in oklab, var(--bg-elev) 94%, transparent) 0%,
+    color-mix(in oklab, var(--bg-elev) 90%, transparent) 45%,
+    color-mix(in oklab, var(--bg-elev) 70%, transparent) 72%,
     transparent 100%);
 }
+.agent-view .agent-header::after { content: none; }   /* old opaque band removed */
 .agent-view .agent-header .agent-title {
   display: flex; flex-direction: column;
-  padding: 0.25rem 0.5rem 0.75rem;
+  padding: 0.25rem 0.5rem 0.75rem 2em;
 }
 .agent-view .agent-header .name-large {
   font-size: 1.5rem;
@@ -1365,26 +1375,30 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* Same 0.5rem on all sides as before. The right padding of 1.5rem
-   * carves a gutter for the scrollbar; the matching -1.25rem margin
-   * extends the chat-scroll past its old right edge so bubbles stay
-   * in their original position relative to the surface — the
-   * scrollbar slides outward instead of pushing the bubbles in. */
-  padding: 0.5rem 1.5rem 0.5rem 0.5rem;
+  /* Top padding = header clearance (real padding INSIDE the scroll box,
+     so the container rect used by autoscroll/bubble nav is unchanged;
+     content scrolled up simply passes under the overlay). Right 1.5rem
+     gutter + the -1.25rem margin carve the scrollbar out as before. */
+  padding: var(--header-h) 1.5rem 0.5rem 0.5rem;
   margin-right: -1.25rem;
+  /* Settle native/smooth scrolls below the heading so a focused or
+     first bubble is never parked under the name/role. */
+  scroll-padding-top: var(--header-h);
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
   scroll-behavior: smooth;
-  /* The top fade now lives on .agent-header::after (behind the
-   * heading); the chat-scroll only needs the bottom dissolve so the
-   * tile-surface / hint area below feels seamless. */
+  /* TOP fade: transparent across the header zone then ramping to opaque
+     so a bubble dissolves as it slides under the name/role (no hard line
+     at any scroll position). BOTTOM fade: the original 8px dissolve. */
   -webkit-mask-image: linear-gradient(to bottom,
-      rgba(0,0,0,1) 0%,
+      transparent 0,
+      rgba(0,0,0,1) var(--header-h),
       rgba(0,0,0,1) calc(100% - 8px),
       transparent 100%);
           mask-image: linear-gradient(to bottom,
-      rgba(0,0,0,1) 0%,
+      transparent 0,
+      rgba(0,0,0,1) var(--header-h),
       rgba(0,0,0,1) calc(100% - 8px),
       transparent 100%);
 }

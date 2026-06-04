@@ -2971,16 +2971,20 @@ function scrollBubbleIntoView(el) {
   const container = el.closest('.chat-scroll');
   if (!container) return;
   const pad = 8;
+  // The agent header floats over the top of the scroll viewport; its clearance
+  // equals .chat-scroll's padding-top (--header-h). Reveal focused bubbles
+  // BELOW it so they're never parked under the name/role overlay.
+  const headTop = parseFloat(getComputedStyle(container).paddingTop) || 0;
   const cr = container.getBoundingClientRect();
   const er = el.getBoundingClientRect();
-  const fits = er.height <= cr.height - pad * 2;
-  if (er.top < cr.top + pad) {
-    // Top is cut → reveal the top.
-    container.scrollBy({ top: er.top - cr.top - pad, behavior: 'smooth' });
+  const fits = er.height <= cr.height - headTop - pad * 2;
+  if (er.top < cr.top + headTop + pad) {
+    // Top is under the header → reveal it below the heading.
+    container.scrollBy({ top: er.top - cr.top - headTop - pad, behavior: 'smooth' });
   } else if (er.bottom > cr.bottom - pad) {
-    // Bottom is cut. If the whole bubble fits, bring the bottom fully in (the
-    // top stays visible because it fits); otherwise align the top instead.
-    const delta = fits ? (er.bottom - cr.bottom + pad) : (er.top - cr.top - pad);
+    // Bottom is cut. If the whole bubble fits, bring the bottom fully in;
+    // otherwise align the top (below the header) instead.
+    const delta = fits ? (er.bottom - cr.bottom + pad) : (er.top - cr.top - headTop - pad);
     container.scrollBy({ top: delta, behavior: 'smooth' });
   }
 }
