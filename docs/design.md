@@ -294,9 +294,20 @@ transcript:
 
 - `.chat-scroll` contains alternating `.bubble.user` and `.bubble.agent`
   bubbles, newest at the bottom, scrollable.
-- The top edge of `.chat-scroll` uses a CSS **mask-image gradient** that
-  fades the oldest content into the surface bg — content vanishes into
-  the upper edge as it scrolls past, no hard cut.
+- **Header overlay + dissolve (no hard cut).** The `.agent-header`
+  (agent name + role) is an **absolute, full-width overlay** with
+  `pointer-events: none`, carrying its own opaque→transparent gradient
+  (opaque behind the name/role so they stay legible; `color-mix(... transparent)`
+  lets the agent-color glow tint through). The chat **fills the whole column
+  and scrolls *under*** it; a `.chat-scroll` **top mask-image** fades each
+  bubble to transparent before it reaches the heading, so content dissolves at
+  every scroll position rather than meeting a hard edge. One CSS variable —
+  **`--header-h`** (currently `8.5rem`) — drives the overlay height, the
+  gradient/mask depth, *and* the chat's top clearance (`padding-top` +
+  `scroll-padding-top`), so they stay in lockstep; bigger = a wider, softer
+  fade. `scrollBubbleIntoView()` reads `--header-h` (the chat's `padding-top`)
+  so keyboard/gamepad-focused bubbles settle **below** the overlay, never under
+  it. The bottom 8px keeps its own dissolve into the tile-surface/hint region.
 - A centered "Hold v to speak" hint sits in the surface center when the
   chat is empty. It vanishes the instant any bubble appears via
   `.agent-view:has(.chat-scroll > .bubble) .agent-view-hint { display: none; }`.
