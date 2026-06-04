@@ -1043,12 +1043,9 @@ window.addEventListener('keyup', (e) => {
  *  Hidden when "+ New" is focused. */
 function updatePickerShortcuts() {
   if (mode !== MODE_PROJECTS) return;
-  // Always show the Hold-to-talk chip on L0; it just no-ops on the
-  // + New project tile (talkToFocusedLead bails when there's no
-  // project to address).
+  // Hold V / R2 to talk still works on L0; we just don't surface it as a footer
+  // chip here.
   setShortcuts([
-    { gamepad: 'r2', keyboard: 'V', label: `Hold to talk`,
-      action: () => talkToFocusedLead() },
     {                keyboard: '/', label: 'Type prompt',
       action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     {                gamepad: 'triangle', keyboard: 'A', label: 'Activity',
@@ -1333,13 +1330,12 @@ async function renderNewProjectRoles() {
 
   renderActionBar([]); // Back shown once via setShortcuts' Esc chip below
   setShortcuts([
-    { gamepad: 'cross',  keyboard: 'Space', label: 'Toggle', action: () => toggleFocusedRole() },
-    { gamepad: 'circle', keyboard: 'Esc',   label: 'Back',   action: () => renderProjects() },
+    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderProjects() },
   ]);
-  // Continue is the gamepad △ quick-advance; on keyboard you advance via the
-  // on-screen Continue button (Enter/Space toggle the focused role instead).
-  setPrimaryShortcut({ gamepad: 'triangle', label: 'Continue',
-                       action: () => advanceFromRolePicker() });
+  // Select = toggle the focused role's checkbox (Enter / ✕). Space is no longer
+  // a toggle. Advance via the on-screen Continue button (or △ on a gamepad).
+  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
+                       action: () => toggleFocusedRole() });
   // Tiles render after the async /roles fetch, so stagger them in here (the
   // morph's own stagger ran before they existed).
   staggerInCards();
@@ -1534,7 +1530,7 @@ function renderNewProjectTopology() {
   setShortcuts([
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderNewProjectRoles() },
   ]);
-  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Choose',
+  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => { const c = ring.current(); if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId); else c?.click?.(); } });
   staggerInCards();
   staggerInFooter();
@@ -6046,13 +6042,11 @@ window.addEventListener('keydown', (e) => {
       if (advanceDownFromRolePicker()) return;
       roleGridMove('down');
     } else if (dir) { e.preventDefault(); roleGridMove(dir); }
-    else if (e.code === 'Space')  { e.preventDefault(); toggleFocusedRole(); }
     else if (e.key === 'Enter') {
       e.preventDefault();
       const cur = ring.current();
-      // Enter activates the focused item: on a role tile it toggles the
-      // checkbox (like Space); on the Cancel/Continue button it presses it.
-      // Advancing therefore only happens via the Continue button.
+      // Enter = Select: on the Cancel/Back/Continue buttons it presses them; on
+      // a role tile it toggles the checkbox. Advance via the Continue button.
       if (cur && !cur.classList?.contains('role-tile') && typeof cur.click === 'function') {
         cur.click();
       } else {
@@ -6194,10 +6188,6 @@ window.addEventListener('keydown', (e) => {
         e.preventDefault();
         if (!e.repeat) startOtherDictate(document.activeElement);
         return;
-      }
-      // Space toggles the focused multi-select choice option (Enter / ✕ do too).
-      if (e.code === 'Space' && document.activeElement?.classList?.contains('choice-btn')) {
-        e.preventDefault(); document.activeElement.click(); return;
       }
       if (e.key === 'Enter' && (document.activeElement?.classList?.contains('bubble-action')
           || document.activeElement?.closest?.('.bubble-kickoff-actions, .bubble-choices'))) {
