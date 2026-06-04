@@ -8,7 +8,7 @@ import { getProject, setKickoff, getKickoff, TOPOLOGIES } from './projects.js';
 import { appendTurn, getContext } from './scratchpad.js';
 import { getModelForRole, getRouterModel } from './models.js';
 import { emitNotification, emitActivity, emitDelegate, publish as publishEvent } from './events.js';
-import { appendNote } from './backends/notes.js';
+import { writeNote } from './backends/notes.js';
 import { RESPONSE_STYLE } from './orchestrator.js';
 
 export const DOC_TITLES = {
@@ -16,6 +16,14 @@ export const DOC_TITLES = {
   roadmap:   'Roadmap & Milestones',
   operating: 'Team Operating Notes',
   questions: 'Open Questions',
+};
+
+// Human-readable filenames so docs land as PRD.md, milestones.md, etc.
+const DOC_FILENAMES = {
+  prd:       'PRD',
+  roadmap:   'milestones',
+  operating: 'op-notes',
+  questions: 'open-questions',
 };
 
 const AFFIRM = /\b(yes|yep|yeah|yup|sure|ok|okay|go|proceed|approve[d]?|do it|sounds good|looks good|lgtm|ship it|let'?s go)\b/i;
@@ -168,7 +176,7 @@ export async function generateKickoffDocs(projectId, opts = {}) {
     // Deterministic first line so the explorer label is always the doc title
     // (don't trust the model's own heading).
     const body = `# ${title}\n\n${md.replace(/^#+\s.*\n+/, '')}`;
-    const note = appendNote(projectId, body);
+    const note = writeNote(projectId, DOC_FILENAMES[kind], body);
     publishEvent({ type: 'note_added', projectId, noteId: note.id });
   }
 }
@@ -247,9 +255,27 @@ export async function executeKickoff(projectId, opts = {}) {
   const assigned = await assignKickoffTasks(projectId, opts);
   if (getProject(projectId)) {
     appendTurn(project.leadAgentId, 'assistant', reportSpec(Object.keys(DOC_TITLES).length, assigned, project));
+    // Follow-up: the PM asks the user the questions it needs answered to move
+    // forward, so approval leads straight into a working conversation.
+    const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+    const callText = opts.callText || callOpenRouterText;
+    if (apiKey && !apiKey.includes('replace-me')) {
+      const fu = await callText({
+        apiKey, model: getModelForRole('pm'), timeoutMs: 30_000,
+        prompt: `You are ${project.agents.find(a => a.id === project.leadAgentId)?.name || 'the PM'}, PM of project "${project.name}". Goal: "${project.goal}". The kickoff is approved and docs are drafted. Now ask the user 2-4 specific follow-up questions you genuinely need answered to move forward (scope, priorities, constraints, unknowns). One short intro line, then a bullet list of questions. First person.` + RESPONSE_STYLE,
+      });
+      if (fu && getProject(projectId)) {
+        appendTurn(project.leadAgentId, 'assistant', JSON.stringify({
+          intent: 'answer', template: 'reader', context: 'Kickoff', title: 'A few questions',
+          body: fu,
+          actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+        }));
+      }
+    }
     setKickoff(projectId, { status: 'done', finishedAt: Date.now() });
     emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
                        body: `${project.name}: docs created and ${assigned.length} task${assigned.length === 1 ? '' : 's'} assigned.` });
+    emitActivity(projectId, 'PM: follow-up questions ready', project.leadAgentId);
   }
   return { ran: true, assigned };
 }
@@ -272,6 +298,15 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
  * can still drive the team conversationally afterward. */
 export function declineKickoff(projectId) {
   if (getKickoff(projectId).status !== 'awaiting_approval') return { ok: false };
+  const project = getProject(projectId);
+  if (project) {
+    appendTurn(project.leadAgentId, 'user', 'Reject');
+    appendTurn(project.leadAgentId, 'assistant', JSON.stringify({
+      intent: 'answer', template: 'reader', context: 'Kickoff', title: 'Kickoff held',
+      body: "Okay — I'll hold off on the kickoff. Tell me what to change and I'll re-plan.",
+      actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+    }));
+  }
   setKickoff(projectId, { status: 'declined' });
   return { ok: true };
 }

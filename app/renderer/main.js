@@ -628,9 +628,12 @@ function verbLabel(v) { return VERB_LABELS[v] || 'Idle'; }
 /* Agents that produced a new message the user hasn't opened yet. Their L1 tile
  * glows and reads "Waiting for response" (once the agent is idle). */
 const unseenAgents = new Set();
+// Mark an agent as awaiting the user's response (it just produced a message).
+// Stays set — and the L1 tile glows + reads "Waiting for response" — until the
+// user actually responds (sends a message / approves a kickoff), not merely
+// looks at it.
 function markUnseen(agentId) {
   if (!agentId) return;
-  if (mode === MODE_ZOOM && currentAgent()?.id === agentId) return; // currently viewing it
   if (!unseenAgents.has(agentId)) { unseenAgents.add(agentId); paintAgentStatus(agentId); }
 }
 function clearUnseen(agentId) {
@@ -2227,7 +2230,6 @@ async function enterZoom(specOverride) {
 function renderZoom(specOverride) {
   const agent = currentAgent();
   if (!agent) return renderGrid();
-  clearUnseen(agent.id);   // opening the agent marks its messages seen
   // Own the mode so direct callers (e.g. the boot-time restore) don't render
   // the agent view while `mode` is still MODE_PROJECTS — which would mis-size
   // the surface (no body[data-mode="zoom"]) and break all the zoom keybinds.
@@ -2332,6 +2334,7 @@ function buildKickoffApproval(agent, bubble) {
 }
 
 async function kickoffDecide(which, agent) {
+  clearUnseen(agent.id);   // the user acted → no longer awaiting them
   const path = which === 'approve' ? 'kickoff/approve' : 'kickoff/decline';
   setIndicator('thinking', which === 'approve' ? 'Starting kickoff…' : 'Dismissing…');
   try {
@@ -6110,6 +6113,7 @@ function submitTypedText(text) {
 async function submitIntent(text, regenerate = 0) {
   const agent = currentAgent();
   if (!agent || mode !== MODE_ZOOM) return;
+  clearUnseen(agent.id);   // the user is responding → no longer awaiting them
   if (regenerate === 0) _redoStreak = { text: null, n: 0 };  // a fresh prompt resets the redo streak
   // Lock the optimistic bubble to the final transcript while the agent thinks
   // (it's replaced by the persisted bubble when history re-renders).

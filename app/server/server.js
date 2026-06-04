@@ -470,7 +470,7 @@ app.post('/projects/:pid/notes', (req, res) => {
 
 app.post('/projects/:pid/kickoff/approve', async (req, res) => {
   try {
-    const result = await handleLeadMessageDuringKickoff(req.params.pid, 'yes');
+    const result = await handleLeadMessageDuringKickoff(req.params.pid, 'Approve');
     res.json({ ok: true, ...result });
   } catch (err) {
     res.status(500).json({ error: String(err?.message || err) });
