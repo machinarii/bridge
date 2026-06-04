@@ -2,7 +2,7 @@
 
 ## Command center for multi-agentic orchestration using Speech to Text (STT) + gamepad for increased productivity.
 
-Bridge is an **AI-first command center for managing multi-agent work** — a productivity surface for running teams of role-typed AI agents across multiple projects. You describe intent; the orchestrator routes it to the right agents, and composes a consistent, navigable surface that's read back to you. Agents work **in parallel** — many run at once across your projects — and can **spawn subagents** to fan a large task out into smaller pieces, then roll the results back up. The goal is to make *coordinating a team of agents* — assigning, steering, and tracking their work — fast and low-friction.
+Bridge is an **Command center for managing multi-agent work** — a productivity surface for running teams of role-based AI agents across multiple projects. You describe intent; the orchestrator routes it to the right agents, and composes a consistent, navigable surface. Agents work **in parallel** — many run at once across your projects — and can define work topology so that agents can work dynamically. The goal is to make *coordinating a team of agents* — assigning, steering, and tracking their work — fast, low-friction and goal-oriented.
 
 It's built around **diverse input modalities**, so you can drive it however suits you (and however you're able to):
 
@@ -22,8 +22,10 @@ Agents are powered by **any model on OpenRouter** (choose a default and override
   - **L0 — Projects:** pick a project (or create one) and talk to its lead.
   - **L1 — Team grid:** the project's agents as tiles.
   - **L2 — Agent view:** zoom into one agent and converse.
-- **Parallel agents & subagents.** Agents run *concurrently* rather than one-at-a-time — you can have several projects' teams working at once — and any agent can **delegate to subagents**, splitting a big task into parallel pieces and synthesizing their results back into one answer.
-- **Topology-shaped teams.** Creating a project walks you through *roles → topology → name → goal*. The **work topology** — Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, or Async pull / queue — defines how the team coordinates, and is written into the project's `project.md` as its operating rule.
+- **Parallel agents & subagents.** Agents run *concurrently* rather than one-at-a-time — you can have several projects' teams working at once — and any agent can **delegate to a teammate**, splitting a big task into pieces and synthesizing the results back into one answer. A delegate's reply surfaces in the chat as a labeled bubble (group-chat style), with a `From → To` handoff marker so you can follow who did what.
+- **Plan-first PM kickoff.** Create a project and the PM immediately drafts a **kickoff plan** in the lead chat — *Approve* (button or just say so) and it generates a PRD plus a roadmap, team operating notes, and an open-questions doc (saved as project files), assigns each teammate a topology-shaped starting task, then comes back with follow-up questions. *Reject* holds it off.
+- **Topology-shaped teams.** Creating a project walks you through *roles → topology → name → goal*. The **work topology** — Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, or Async pull / queue — is written into `project.md` *and* injected into the PM's routing prompt, so it actually shapes how work is assigned and whether teammates report back or coordinate.
+- **Agents ask, not guess.** When direction is unclear an agent offers **2–4 choices** as a selectable list right in the bubble; your pick becomes your next message. Agents follow a shared house style (legible reasoning, telegraphic bullets, banned clichés).
 - **Voice-first, controller-navigable.** Hold to talk; every on-screen action shows its controller glyph (✕ select, ○ back, L1/R1 switch, R2 push-to-talk). Keyboard mirrors all of it.
 - **The model assembles, it doesn't author.** Agents return a small structured spec; a deterministic renderer turns it into a consistent surface — fast, cheap, and visually stable (which matters for spatial memory and accessibility).
 - **Live, optimistic UI.** Your prompt shows up as a bubble the instant you speak (typing animation → live transcript), an agent "…" bubble appears immediately on submit, and the reply streams in token-by-token — no dead air.
@@ -37,9 +39,12 @@ For the full vision and design rationale see the (local, unpublished) `docs/` fo
 
 - **Multi-project command center** — run many projects, each with its own agent team and state.
 - **Role-typed agent teams** — PM lead + specialists (Software/Hardware Engineer, Designer, QA, Data Scientist, Security, Researcher, Copywriter, Marketing, Legal); every agent has a globally unique name and a persistent identity.
-- **Work topologies** — pick how a team coordinates (Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, Async pull / queue); the rule is written into the project's `project.md`.
+- **Work topologies** — pick how a team coordinates (Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, Async pull / queue); the rule is written into `project.md` and drives the PM's routing.
+- **PM auto-kickoff** — on project creation the PM proposes a plan-first kickoff; on approval it drafts PRD + roadmap + operating-notes + open-questions docs, assigns topology-shaped tasks, and asks follow-up questions.
+- **In-bubble choices** — agents offer 2–4 selectable options when a decision is needed; pick one to continue.
+- **"Waiting for response" tiles** — an agent's L1 tile glows and reads *Waiting for response* once it's produced a message that's awaiting your reply.
 - **Three-level navigation** — projects → team grid → agent view, consistent for spatial/motor memory.
-- **Voice input with live transcript** — push-to-talk capture (local **Parakeet** STT or the browser's Web Speech); your words stream into the chat as you speak. *(Text-to-speech is off in this build.)*
+- **Voice input with live transcript** — hold **V** / **R2** to talk; transcription runs **locally via Parakeet** and streams word-by-word into the box. *(STT is local-only — never the browser engine; text-to-speech is off in this build.)*
 - **Controller + keyboard parity** — every action shows its PlayStation glyph; arrows and the d-pad share one navigation model (rubberband at list edges, Down into the footer rail, Up to the × close, reading-order Left/Right); type-prompt fallback (`/`).
 - **Steerable reasoning effort** — hold the touchpad / `T` and nudge Up/Down to pick Low · Medium · High · Extra · Max; the orchestrator maps it to a per-request reasoning budget (reasoning-capable models only).
 - **Redo / regenerate** — re-roll a prompt's answer in place; each consecutive redo escalates temperature (variety) and reasoning effort (quality).
@@ -72,13 +77,13 @@ For the full vision and design rationale see the (local, unpublished) `docs/` fo
 ┌───────────────▼────────────────────────────────────────────┐
 │  Renderer — vanilla-JS web app (app/renderer/)              │
 │   • Gamepad API + keyboard input, push-to-talk              │
-│   • STT (browser Web Speech *or* local Parakeet)            │
+│   • STT via the local Parakeet sidecar (/transcribe)        │
 │   • deterministic tile/surface renderer                     │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 - **AI** is via **OpenRouter** (one integration, many models, per-role model overrides).
-- **Speech-to-text** is either the browser's Web Speech API or a bundled local **Parakeet** (MLX) Python sidecar — set `LOCAL_STT_URL` to use the latter. **Text-to-speech** is disabled in this build (no OS voice output).
+- **Speech-to-text** runs **only** on the bundled local **Parakeet** (MLX) Python sidecar (`LOCAL_STT_URL`, default `127.0.0.1:8123`) — it never falls back to the browser engine; a failure surfaces on the capture screen instead. **Text-to-speech** is disabled in this build (no OS voice output).
 - **State** for each project (notes, conversation, optional git auto-save) lives under `app/state/<projectId>/` (git-ignored).
 
 ---
@@ -110,13 +115,18 @@ Run just the web server (drive it in Chrome at `http://localhost:4317`):
 npm run server
 ```
 
-### Optional: local speech-to-text (Parakeet)
+### Local speech-to-text (Parakeet) — required for voice
+
+Voice always uses the local Parakeet sidecar (never the browser engine), so it must be running:
 
 ```bash
-# create app/stt/.venv and install parakeet-mlx, then:
-npm run stt          # starts the Parakeet sidecar on :8123
+python3 -m venv app/stt/.venv
+app/stt/.venv/bin/pip install -r app/stt/requirements.txt
+# the ~600MB model is cached under build/hf-cache from a prior packaging run;
+# point HF_HOME there to skip re-downloading it:
+HF_HOME="$PWD/build/hf-cache" npm run stt     # serves Parakeet on :8123
 ```
-Set `LOCAL_STT_URL=http://127.0.0.1:8123/transcribe` (Settings → General) to route voice through it instead of the browser engine. Leave blank to use the browser's built-in recognition.
+The server defaults `LOCAL_STT_URL` to `http://127.0.0.1:8123/transcribe`. Requires **ffmpeg** on PATH (Parakeet decodes the browser's webm/opus through it). Without the sidecar, voice fails with a visible STT error rather than falling back.
 
 ### Fonts
 
