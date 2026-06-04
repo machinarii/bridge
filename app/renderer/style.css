@@ -1197,17 +1197,19 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
     0 0 24px 6px color-mix(in oklab, var(--accent, #6ea8ff) 25%, transparent);
 }
 
-/* Live verb states drive dot + label affordance. */
+/* Status dot color legend: GREEN while working (analyzing / drafting),
+ * ORANGE when the agent is waiting for the user's response, dim grey idle. */
+.agent-tile[data-status="analyzing"] .status .dot,
 .agent-tile[data-status="drafting"]  .status .dot {
-  background: var(--accent, #6ea8ff);
-  box-shadow: 0 0 8px 1px color-mix(in oklab, var(--accent, #6ea8ff) 80%, transparent);
+  background: var(--accent-2, #9cf2c1);
+  box-shadow: 0 0 8px 1px color-mix(in oklab, var(--accent-2, #9cf2c1) 80%, transparent);
+}
+.agent-tile[data-status="drafting"]  .status .dot {
   animation: agentPulse 1.4s ease-in-out infinite;
 }
-.agent-tile[data-status="analyzing"] .status .dot {
-  background: color-mix(in oklab, var(--accent, #6ea8ff) 70%, transparent);
-}
-.agent-tile[data-status="waiting"]   .status .dot {
+.agent-tile[data-unseen="true"] .status .dot {
   background: var(--warn, #ffb86b);
+  box-shadow: 0 0 8px 1px color-mix(in oklab, var(--warn, #ffb86b) 80%, transparent);
 }
 @keyframes agentPulse {
   0%, 100% { opacity: 1; }
@@ -1251,7 +1253,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   line-height: 1.4;
 }
 .agent-tile[data-busy="true"] .status .dot {
-  background: var(--tile-color);
+  background: var(--accent-2, #9cf2c1);   /* green while working — overrides the per-tile color */
   animation: pulse 1.2s ease-out infinite;
 }
 
