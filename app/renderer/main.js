@@ -2400,12 +2400,15 @@ function buildChoiceList(choices, agent) {
 
   const submitRow = document.createElement('div');
   submitRow.className = 'bubble-choices-submit';
+  const hint = document.createElement('span');
+  hint.className = 'bubble-choices-hint';
+  hint.textContent = 'Select one or more';
   const submit = document.createElement('button');
   submit.type = 'button';
   submit.className = 'choice-submit role-confirm';
   submit.textContent = 'Submit';
   submit.addEventListener('click', (e) => { e.stopPropagation(); submitChoices(wrap, agent); });
-  submitRow.appendChild(submit);
+  submitRow.append(hint, submit);
   wrap.appendChild(submitRow);
 
   return wrap;
@@ -2447,6 +2450,7 @@ function submitChoices(wrap, agent) {
 let chatBubbles = [];      // DOM nodes in order
 let chatBubbleIdx = -1;    // -1 = not in chat
 let chatMessages = [];     // last-fetched message records
+let _prevTurnCount = {};   // per-agent: message count at last render, to animate only NEW bubbles
 let pendingUserBubbleEl = null;  // optimistic "you" bubble shown while holding to talk
 let pendingAgentBubbleEl = null; // "…" agent bubble shown the instant a prompt is submitted
 let _redoStreak = { text: null, n: 0 };  // consecutive redos of the same prompt → escalate sampling
@@ -2569,6 +2573,9 @@ async function maybeRefreshZoomFor(agentId) {
 }
 
 async function renderChatHistory(container, agent) {
+  // How many turns we had rendered for this agent before — anything beyond it is
+  // new and gets the rise-in transition. `undefined` on first view (no animation).
+  const prevCount = _prevTurnCount[agent.id];
   container.innerHTML = '';
   chatBubbles = [];
   chatBubbleIdx = -1;
@@ -2741,8 +2748,20 @@ async function renderChatHistory(container, agent) {
       container.appendChild(bubble);
       chatBubbles.push(bubble);
     });
-    // Jump to the latest bubble on load, instantly. Force scroll-behavior to
-    // auto first so the .chat-scroll's CSS smooth-scroll doesn't animate it.
+    // Turns added since the last render get the rise-in transition: the older
+    // content scrolls up while each new bubble fades up at the bottom. The newest
+    // agent bubble also highlights so a fresh reply is easy to spot.
+    const hasNew = prevCount != null && chatMessages.length > prevCount;
+    _prevTurnCount[agent.id] = chatMessages.length;
+    if (hasNew) {
+      for (const b of chatBubbles) {
+        if (Number(b.dataset.idx) >= prevCount) b.classList.add('bubble-rise');
+      }
+      const newest = chatBubbles[chatBubbles.length - 1];
+      if (newest && newest.classList.contains('agent')) newest.classList.add('highlight-new');
+    }
+    // Land at the bottom instantly; the rise keyframe starts each new bubble
+    // translated down, so the scroll target is already its final position.
     const prevBehavior = container.style.scrollBehavior;
     container.style.scrollBehavior = 'auto';
     container.scrollTop = container.scrollHeight;
@@ -2752,11 +2771,6 @@ async function renderChatHistory(container, agent) {
     // post-approval) and no client request owns the view, show the "…" thinking
     // bubble so the user sees it's working — across every agent.
     if (agentBusy[agent.id] && !inflightController) showPendingAgentBubble();
-
-    // Highlight the whole bubble of the most recent agent message so a new
-    // reply is easy to spot the moment it lands.
-    const newest = chatBubbles[chatBubbles.length - 1];
-    if (newest && newest.classList.contains('agent')) newest.classList.add('highlight-new');
 
     // Kickoff plan awaiting approval → auto-focus the plan bubble so a single
     // Cross/Enter approves (no need to press Up first). The approval buttons

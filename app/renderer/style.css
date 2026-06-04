@@ -1413,6 +1413,18 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   0%   { box-shadow: 0 0 0 2px rgba(255,255,255,0.9), 0 0 26px 6px rgba(255,255,255,0.32); }
   100% { box-shadow: 0 0 0 1.5px rgba(255,255,255,0.5), 0 0 18px 3px rgba(255,255,255,0.14); }
 }
+/* Newly-arrived bubbles rise up + fade in at the bottom (older content scrolls
+   up). The newest agent bubble also runs the highlight flash — compose both. */
+.agent-view .bubble.bubble-rise {
+  animation: bubbleRise 320ms cubic-bezier(.2,.8,.2,1) both;
+}
+.agent-view .bubble.agent.highlight-new.bubble-rise:not(.focused) {
+  animation: bubbleRise 320ms cubic-bezier(.2,.8,.2,1) both, bubbleArrive 0.5s ease-out;
+}
+@keyframes bubbleRise {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
 .agent-view .bubble .bubble-content {
   display: block;
 }
@@ -2923,10 +2935,15 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   background: rgba(255,255,255,0.14);
   border-color: rgba(255,255,255,0.6);
 }
-/* Submit sits below the options, bottom-right; compact primary button. */
+/* Below the options: "Select one or more" hint at bottom-left, Submit at right. */
 .agent-view .bubble.agent .bubble-choices-submit {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+}
+.agent-view .bubble.agent .bubble-choices-hint {
+  font-size: 0.54rem;
+  color: var(--fg-dim);
 }
 .agent-view .bubble.agent .bubble-choices-submit .choice-submit {
   flex: 0 0 auto;

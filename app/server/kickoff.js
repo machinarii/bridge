@@ -250,12 +250,12 @@ function reportSpec(docCount, assigned, project) {
 /* A single kickoff question, asked one at a time. Accepts either a plain string
  * or a { q, options } object; options render as a selectable choice list (the
  * user picks one or more, or uses Other to free-form). `lead` is an optional
- * short acknowledgement of the previous answer that prefixes the question. */
-function questionSpec(question, n, total, lead) {
+ * The body is numbered "Q1: …", "Q2: …". */
+function questionSpec(question, n, total) {
   const counter = total > 1 ? `Question ${n} of ${total}` : 'A question';
   const q = typeof question === 'string' ? question : (question?.q || '');
   const options = (question && Array.isArray(question.options)) ? question.options.filter(Boolean) : [];
-  const body = `${lead ? lead.trim() + '\n\n' : ''}${String(q).trim()}`;
+  const body = `Q${n}: ${String(q).trim()}`;
   const spec = {
     intent: 'answer', template: 'reader', context: counter, title: 'Kickoff',
     body,
@@ -359,7 +359,7 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     const questions = k.questions || [];
     const nextIdx = (k.qIdx ?? 0) + 1;
     if (nextIdx < questions.length) {
-      const spec = questionSpec(questions[nextIdx], nextIdx + 1, questions.length, 'Got it.');
+      const spec = questionSpec(questions[nextIdx], nextIdx + 1, questions.length);
       appendTurn(project.leadAgentId, 'assistant', spec);
       setKickoff(projectId, { qIdx: nextIdx });
       emitActivity(projectId, `PM: question ${nextIdx + 1} ready`, project.leadAgentId);
