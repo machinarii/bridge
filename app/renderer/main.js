@@ -2344,6 +2344,31 @@ async function kickoffDecide(which, agent) {
   }
 }
 
+/* Agent-offered choices: a vertical list of selectable options inside the
+ * bubble. Picking one sends it back to the agent as the user's next message.
+ * Reachable via the bubble's keyboard/gamepad model (cycleBubbleAction). */
+function buildChoiceList(choices, agent) {
+  const wrap = document.createElement('div');
+  wrap.className = 'bubble-choices';
+  for (const c of choices) {
+    const text = String(c).trim();
+    if (!text) continue;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'choice-btn';
+    btn.textContent = text;
+    btn.addEventListener('click', (e) => { e.stopPropagation(); selectChoice(text, agent); });
+    wrap.appendChild(btn);
+  }
+  return wrap;
+}
+
+function selectChoice(text, agent) {
+  if (currentAgent()?.id !== agent.id) return;
+  leaveBubbleFocus();
+  submitIntent(text);   // the pick becomes the user's next message
+}
+
 /* Selectable chat bubbles: each prompt / response is a tabbable
  * element with a hover-state action row (timestamp + retry + edit on
  * user turns, timestamp on agent turns). chatBubbles holds the live
@@ -2527,6 +2552,7 @@ async function renderChatHistory(container, agent) {
       let body = String(m.content || '').trim();
       let actionsTaken = null;
       let isKickoffPlan = false;
+      let choices = null;
       if (!isUser) {
         try {
           const parsed = JSON.parse(body.replace(/^```(?:json)?/i,'').replace(/```$/, '').trim());
@@ -2534,6 +2560,7 @@ async function renderChatHistory(container, agent) {
           else if (parsed?.title) body = parsed.title;
           if (Array.isArray(parsed?.actions_taken)) actionsTaken = parsed.actions_taken;
           if (Array.isArray(parsed?.actions) && parsed.actions.some(a => (a.action?.type || a.type) === 'approve_kickoff')) isKickoffPlan = true;
+          if (Array.isArray(parsed?.choices) && parsed.choices.length) choices = parsed.choices.slice(0, 4);
         } catch { /* leave body as-is */ }
       }
       // Strip the "[team-voice] " prefix added by the team driver so the
@@ -2565,6 +2592,11 @@ async function renderChatHistory(container, agent) {
       if (!isUser && isKickoffPlan && i === lastAssistantIdx &&
           !['running', 'done', 'declined', 'skipped_no_key'].includes(activeProject?.kickoff?.status)) {
         bubble.appendChild(buildKickoffApproval(agent, bubble));
+      }
+
+      // Agent-offered choices → a vertical selectable list inside the bubble.
+      if (!isUser && choices) {
+        bubble.appendChild(buildChoiceList(choices, agent));
       }
 
       // Timestamp + retry / edit only render on user-authored bubbles.
@@ -2698,7 +2730,7 @@ function paintBubbleFocus() {
   // keep the action row visible via .actions-open (the icons live in a panel
   // that only renders for .focused / .actions-open).
   const onAction = !!(document.activeElement?.classList?.contains('bubble-action')
-    || document.activeElement?.closest?.('.bubble-kickoff-actions'));
+    || document.activeElement?.closest?.('.bubble-kickoff-actions, .bubble-choices'));
   chatBubbles.forEach((b, i) => {
     const cur = i === chatBubbleIdx;
     b.classList.toggle('focused', cur && !onAction);
@@ -2753,7 +2785,7 @@ function isBubbleFocused() {
   const a = document.activeElement;
   if (!a) return false;
   return a.classList?.contains('bubble') || a.classList?.contains('bubble-action')
-    || !!a.closest?.('.bubble-kickoff-actions');
+    || !!a.closest?.('.bubble-kickoff-actions, .bubble-choices');
 }
 function leaveBubbleFocus()    { chatBubbleIdx = -1; paintBubbleFocus(); }
 /* Move focus across the action icons (retry / edit / copy …) inside the
@@ -2762,7 +2794,7 @@ function cycleBubbleAction(dir) {
   const bubble = chatBubbles[chatBubbleIdx];
   if (!bubble) return;
   // Retry/edit icons on user bubbles, plus the kickoff Approve/Reject buttons.
-  const arr = [...bubble.querySelectorAll('.bubble-action, .bubble-kickoff-actions button')];
+  const arr = [...bubble.querySelectorAll('.bubble-action, .bubble-kickoff-actions button, .bubble-choices button')];
   if (arr.length === 0) return;
   const idx = arr.indexOf(document.activeElement);
   if (idx === -1) {                       // on the bubble itself → step into the actions
@@ -4955,7 +4987,7 @@ gp.addEventListener('press', (e) => {
       }
       if (b === 'left')   { cycleBubbleAction(-1); return; }
       if (b === 'right')  { cycleBubbleAction(+1); return; }
-      if (b === 'cross')  { const a = document.activeElement; if (a?.classList?.contains('bubble-action') || a?.closest?.('.bubble-kickoff-actions')) a.click(); return; }
+      if (b === 'cross')  { const a = document.activeElement; if (a?.classList?.contains('bubble-action') || a?.closest?.('.bubble-kickoff-actions, .bubble-choices')) a.click(); return; }
       if (b === 'circle') { leaveBubbleFocus(); ring.paint(); return; }
       if (b === 'l1')     { cycleAgent(-1); return; }
       if (b === 'r1')     { cycleAgent(+1); return; }
@@ -6025,7 +6057,7 @@ window.addEventListener('keydown', (e) => {
         return;
       }
       if (e.key === 'Enter' && (document.activeElement?.classList?.contains('bubble-action')
-          || document.activeElement?.closest?.('.bubble-kickoff-actions'))) {
+          || document.activeElement?.closest?.('.bubble-kickoff-actions, .bubble-choices'))) {
         // Activate the focused action icon or kickoff Approve/Reject button.
         e.preventDefault(); document.activeElement.click(); return;
       }
