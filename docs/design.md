@@ -948,9 +948,18 @@ chip — no duplicate action-bar Back. Entrance animates on screen transitions
 
 ### 15.9 Drawers
 
-Left drawers, mutually exclusive: **Explorer** (project `.md` files; the code/build
-folder is hidden), **Activity feed**, **Memory**. Header label + list. The file
-drawer header reads **"Explorer"**.
+Left drawers, mutually exclusive: **Explorer**, **Activity**, **Memory**. Headers
+share one style (drawer label, weight 400).
+
+- **Explorer** — project `.md` files (the code/build folder is hidden), grouped
+  into collapsible folders (Roles, Notes, …). Keyboard/gamepad **and mouse**:
+  clicking a file opens it in the viewer; clicking a folder header toggles it.
+- **Activity** — always the **cross-project** feed, the same from Layer 0/1/2
+  (header reads just "Activity"). Lists **agent responses across every project**,
+  most-recent first, each as a card: **project name** (heading) → **agent name ·
+  role** → a **quick summary** of the response (clamped to ~3 lines). Click /
+  Enter opens that project and agent.
+- **Memory** — global notes (Layer 0).
 
 ### 15.10 Name library
 

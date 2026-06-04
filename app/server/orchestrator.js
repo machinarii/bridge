@@ -373,8 +373,10 @@ async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey
   if (!full || !full.trim()) return null;
   appendTurn(agentId, 'assistant', full);
   // Prose answer (no choices) → a finished deliverable: "Task complete" (clears
-  // when the user views it; immediate no-op if they're already looking).
-  emitActivity(projectId, `${agent.name}: replied`, agentId, { awaitKind: 'view' });
+  // when the user views it; immediate no-op if they're already looking). The
+  // activity summary carries a short snippet so the L0 feed reads usefully.
+  const snippet = String(full).replace(/[#*_`>\-]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  emitActivity(projectId, `${agent.name}: ${snippet}`, agentId, { awaitKind: 'view' });
   return hydrateSpec({ intent: 'answer', template: 'reader', context: '', title: '', body: full, streamed: true },
     { project, agent, text });
 }
