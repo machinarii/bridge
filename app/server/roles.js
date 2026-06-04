@@ -43,3 +43,23 @@ const BY_ID = Object.fromEntries(ROLES.map(r => [r.id, r]));
 
 export function listRoles() { return ROLES.slice(); }
 export function getRole(id) { return BY_ID[id] || null; }
+
+/* Large shared fallback pool. When a role's short namePool is exhausted (lots
+ * of projects), pickName draws a fresh, distinct name from here instead of
+ * suffixing a number ("Cassidy 2"). */
+export const FALLBACK_NAMES = [
+  'Avery','Riley','Jordan','Sawyer','Emerson','Rowan','Finley','Hayden','Parker','Reagan',
+  'Tatum','Blake','Drew','Elliot','Skyler','Phoenix','River','Sterling','Ellis','Camden',
+  'Lennon','Monroe','Beckett','Sloane','Arlo','Bodhi','Dakota','Easton','Frankie','Greer',
+  'Harlow','Indie','Jules','Lane','Oakley','Paxton','Quincy','Remy','Shay','Teagan',
+  'Vesper','Weston','Zane','Ari','Bex','Cleo','Esme','Flynn','Gray','Hale',
+  'Joss','Knox','Lux','Mace','Nyx','Orin','Reed','Sol','Tate','Uma',
+  'Vale','Wynn','Zev','Anders','Bram','Coral','Dane','Eden','Gio','Hana',
+  'Ivo','Juna','Keo','Liv','Nico','Orla','Piers','Suri','Tomas','Una',
+  'Vivi','Wade','Yara','Zola','Alba','Cass','Dex','Eira','Faye','Gil',
+  'Hugo','Isa','Kit','Lior','Maxine','Nell','Odin','Pia','Rune','Thea',
+  'Vero','Wells','Yuki','Zara','Adair','Bay','Cy','Dove','Ezra','Fable',
+  'Gem','Hollis','Ines','Jae','Kira','Loy','Marlo','Nova','Otis','Perry',
+  'Rory','Soren','Tova','Umi','Vance','Wilder','Xander','Yves','Zinnia','Bellamy',
+  'Calla','Dashiell','Emery','Fox','Grover','Halcyon','Isadora','Jorah','Keaton','Lumen',
+];

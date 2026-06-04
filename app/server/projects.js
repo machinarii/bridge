@@ -12,7 +12,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, renameSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getRole, listRoles } from './roles.js';
+import { getRole, listRoles, FALLBACK_NAMES } from './roles.js';
 import { generateProjectCharters, charterFileNameFor, legacyCharterFileNames } from './charters.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -88,22 +88,18 @@ function pickName(roleId, usedLocal, usedGlobal) {
   const role = getRole(roleId);
   const used = usedLocal.get(roleId) || new Set();
   const taken = (n) => used.has(n) || (usedGlobal && usedGlobal.has(n));
-  for (const n of role.namePool) {
-    if (!taken(n)) {
-      used.add(n); usedLocal.set(roleId, used);
-      if (usedGlobal) usedGlobal.add(n);
-      return n;
-    }
+  const claim = (n) => { used.add(n); usedLocal.set(roleId, used); if (usedGlobal) usedGlobal.add(n); return n; };
+  // Prefer the role's curated names, then draw a fresh, distinct name from the
+  // large shared library — never "Cassidy 2".
+  for (const n of [...role.namePool, ...FALLBACK_NAMES]) {
+    if (!taken(n)) return claim(n);
   }
-  // Pool exhausted — suffix with the lowest free integer.
+  // Both pools exhausted (140+ live projects with this role) — only then a
+  // last-resort numeric suffix so name-assignment can't fail.
   const base = role.namePool[0];
   for (let i = 2; i < 9999; i++) {
     const cand = `${base} ${i}`;
-    if (!taken(cand)) {
-      used.add(cand); usedLocal.set(roleId, used);
-      if (usedGlobal) usedGlobal.add(cand);
-      return cand;
-    }
+    if (!taken(cand)) return claim(cand);
   }
   return base;
 }
