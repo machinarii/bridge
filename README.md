@@ -19,9 +19,11 @@ Agents are powered by **any model on OpenRouter** (choose a default and override
 ## Core ideas
 
 - **Projects → agents → conversation.** Work is organized into *projects*, each staffed by a small team of *role-typed agents* (Product Manager, Software & Hardware Engineer, Designer, QA, Data Scientist, Security, Researcher, Copywriter, Marketing, Legal). Each agent has a globally unique name and a persistent identity. You navigate three levels:
-  - **L0 — Projects:** pick a project (or create one) and talk to its lead.
-  - **L1 — Team grid:** the project's agents as tiles.
-  - **L2 — Agent view:** zoom into one agent and converse.
+  - **Layer 0 — Projects:** pick a project (or create one) and talk to its lead.
+  - **Layer 1 — Team grid:** the project's agents as tiles.
+  - **Layer 2 — Agent view:** zoom into one agent and converse.
+
+  (These screen *layers* are written "Layer 0/1/2" throughout — distinct from the gamepad **L1 / R1** shoulder buttons.)
 - **Parallel agents & subagents.** Agents run *concurrently* rather than one-at-a-time — you can have several projects' teams working at once — and any agent can **delegate to a teammate**, splitting a big task into pieces and synthesizing the results back into one answer. A delegate's reply surfaces in the chat as a labeled bubble (group-chat style), with a `From → To` handoff marker so you can follow who did what.
 - **Plan-first PM kickoff.** Create a project and the PM immediately drafts a **kickoff plan** in the lead chat — *Approve* (button or just say so) and it generates a PRD plus a roadmap, team operating notes, and an open-questions doc (saved as project files), assigns each teammate a topology-shaped starting task, then comes back with follow-up questions. *Reject* holds it off.
 - **Topology-shaped teams.** Creating a project walks you through *roles → topology → name → goal*. The **work topology** — Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, or Async pull / queue — is written into `project.md` *and* injected into the PM's routing prompt, so it actually shapes how work is assigned and whether teammates report back or coordinate.
@@ -42,7 +44,7 @@ For the full vision and design rationale see the (local, unpublished) `docs/` fo
 - **Work topologies** — pick how a team coordinates (Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, Async pull / queue); the rule is written into `project.md` and drives the PM's routing.
 - **PM auto-kickoff** — on project creation the PM proposes a plan-first kickoff; on approval it drafts PRD + roadmap + operating-notes + open-questions docs, assigns topology-shaped tasks, and asks follow-up questions.
 - **In-bubble choices** — agents offer 2–4 selectable options when a decision is needed; pick one to continue.
-- **"Waiting for response" tiles** — an agent's L1 tile glows and reads *Waiting for response* once it's produced a message that's awaiting your reply.
+- **"Waiting for response" tiles** — an agent's Layer 1 tile glows and reads *Waiting for response* once it's produced a message that's awaiting your reply.
 - **Three-level navigation** — projects → team grid → agent view, consistent for spatial/motor memory.
 - **Voice input with live transcript** — hold **V** / **R2** to talk; transcription runs **locally via Parakeet** and streams word-by-word into the box. *(STT is local-only — never the browser engine; text-to-speech is off in this build.)*
 - **Controller + keyboard parity** — every action shows its PlayStation glyph; arrows and the d-pad share one navigation model (rubberband at list edges, Down into the footer rail, Up to the × close, reading-order Left/Right); type-prompt fallback (`/`).
@@ -151,13 +153,13 @@ back to system fonts.
 | Navigate | arrows / **Tab** (into footer) | D-pad / left stick |
 | Select / confirm | **Enter** | **✕ / A** |
 | Back / cancel | **Esc** | **○ / B** |
-| Switch agent (L2) / project (L1) | **[** / **]** | **L1 / R1** |
-| Scroll chat history (L2) | arrows | **right stick** |
+| Switch agent (Layer 2) / project (Layer 1) | **[** / **]** | **L1 / R1** |
+| Scroll chat history (Layer 2) | arrows | **right stick** |
 | Reasoning effort | hold **T** + ↑/↓ | hold **touchpad** + stick/d-pad ↑/↓ |
 | Activity feed | **A** | **△** |
 | Explorer (files) | **E** | **□** |
-| Agent on / off (L1) | **Space** | **Menu / Options** |
-| Memory (L0) | **M** | **□** |
+| Agent on / off (Layer 1) | **Space** | **Menu / Options** |
+| Memory (Layer 0) | **M** | **□** |
 | Type instead of speak | **/** | — |
 | Full screen | **⌘F** | — |
 
@@ -208,7 +210,7 @@ app/server/
 
 app/renderer/
 ├── index.html · style.css
-├── main.js          # nav modes (L0/L1/L2 + create flow), dispatch, action exec
+├── main.js          # nav modes (Layer 0/1/2 + create flow), dispatch, action exec
 ├── gamepad.js       # Gamepad API → semantic events
 ├── speech.js        # Web Speech STT (TTS disabled)
 ├── tiles.js         # deterministic tile/surface renderer
