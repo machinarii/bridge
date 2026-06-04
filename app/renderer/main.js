@@ -2376,6 +2376,22 @@ function buildChoiceList(choices, agent) {
     btn.addEventListener('click', (e) => { e.stopPropagation(); toggleChoice(btn); });
     opts.appendChild(btn);
   }
+  // Always offer an "Other" escape hatch — hold it to dictate a free-form
+  // answer. Holding (pointer, or the global V / R2 while it's focused) plays a
+  // wave inside the button and hides its label; release transcribes + submits.
+  const other = document.createElement('button');
+  other.type = 'button';
+  other.className = 'choice-other';
+  other.innerHTML =
+    `<span class="choice-other-label">Other</span>` +
+    `<span class="choice-other-sub">Hold to talk</span>` +
+    `<span class="choice-other-wave" aria-hidden="true">${'<i></i>'.repeat(9)}</span>`;
+  other.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); startOtherDictate(other); });
+  other.addEventListener('pointerup',     () => endOtherDictate());
+  other.addEventListener('pointercancel', () => endOtherDictate());
+  other.addEventListener('pointerleave',  () => endOtherDictate());
+  opts.appendChild(other);
+
   wrap.appendChild(opts);
 
   const submitRow = document.createElement('div');
@@ -2389,6 +2405,22 @@ function buildChoiceList(choices, agent) {
   wrap.appendChild(submitRow);
 
   return wrap;
+}
+
+/* Hold-to-talk on an "Other" choice button: start/stop push-to-talk. The wave
+ * inside the button is driven by setPttHeld (so the global V/R2 hold lights it
+ * too); the transcript flows through the normal PTT path and submits. */
+let _otherDictateBtn = null;
+function startOtherDictate(btn) {
+  if (_otherDictateBtn || pttActive) return;
+  _otherDictateBtn = btn;        // set before startPTT so setPttHeld lights it
+  startPTT();
+}
+function endOtherDictate() {
+  if (!_otherDictateBtn) return;
+  _otherDictateBtn.classList.remove('talking');
+  _otherDictateBtn = null;
+  endPTT();
 }
 function toggleChoice(btn) {
   const on = btn.getAttribute('aria-pressed') === 'true';
@@ -3414,6 +3446,11 @@ function setPttHeld(on) {
     stack.classList.toggle('talking', on);
     if (on) startMicVisualizer(); else stopMicVisualizer();
   }
+  // An "Other" choice button — pointer-held, or focused while holding V/R2 —
+  // plays a wave inside itself (its label hides) for the duration of the hold.
+  const otherBtn = _otherDictateBtn ||
+    (document.activeElement?.classList?.contains('choice-other') ? document.activeElement : null);
+  if (otherBtn) otherBtn.classList.toggle('talking', on);
 }
 
 /* ---------- Hold-to-talk chip mic visualizer ----------

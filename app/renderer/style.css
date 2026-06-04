@@ -2864,6 +2864,7 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   gap: 0.4rem;
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn {
+  position: relative;     /* anchors the corner checkbox when selected */
   appearance: none;
   cursor: pointer;
   flex: 1 1 0;            /* share the row evenly; wrap when too narrow */
@@ -2877,7 +2878,7 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   background: rgba(255,255,255,0.06);
   border: 1.5px solid rgba(255,255,255,0.16);
   border-radius: 10px;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 1.55rem 0.5rem 0.75rem;   /* right room for the checkbox */
   transition: background 120ms, border-color 120ms;
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn:hover {
@@ -2887,18 +2888,28 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
 .agent-view .bubble.agent .bubble-choices .choice-btn:focus,
 .agent-view .bubble.agent .bubble-choices .choice-btn:focus-visible {
   outline: none;
-  border-color: var(--agent-color, #6ea8ff);
+  /* Neutral white focus ring — no colored/agent-tinted border. */
+  border-color: rgba(255,255,255,0.55);
   box-shadow: 0 0 0 2px var(--focus, #ffffff), 0 0 12px 2px rgba(255,255,255,0.22);
 }
-/* Selected (toggled-on) option — green wash + accent border, with a check. */
+/* Selected (toggled-on) option — white emphasis + a corner checkbox, matching
+   the role-selection screen's scheme (no color wash, no inline glyph). */
 .agent-view .bubble.agent .bubble-choices .choice-btn[aria-pressed="true"] {
-  background: color-mix(in oklab, var(--accent-2, #9cf2c1) 20%, transparent);
-  border-color: var(--accent-2, #9cf2c1);
+  background: rgba(255,255,255,0.14);
+  border-color: rgba(255,255,255,0.6);
+}
+.agent-view .bubble.agent .bubble-choices .choice-btn[aria-pressed="true"]::before {
+  content: '';
+  position: absolute; top: 0.3rem; right: 0.3rem;
+  width: 0.95rem; height: 0.95rem; border-radius: 4px;
+  background: var(--focus, #ffffff);
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn[aria-pressed="true"]::after {
-  content: " ✓";
-  color: var(--accent-2, #9cf2c1);
-  font-weight: 700;
+  content: '';
+  position: absolute; top: 0.44rem; right: 0.66rem;
+  width: 0.22rem; height: 0.45rem;
+  border-right: 2.5px solid #0b0f14; border-bottom: 2.5px solid #0b0f14;
+  transform: rotate(45deg);
 }
 /* Submit sits below the options, bottom-right; compact primary button. */
 .agent-view .bubble.agent .bubble-choices-submit {
@@ -2910,4 +2921,77 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   min-width: 0;
   font-size: 0.66rem;
   padding: 0.4rem 1.1rem;
+}
+
+/* "Other" choice — hold to dictate. Inherits the choice-btn look but stacks a
+   label over a "Hold to talk" subtext, and swaps both for a wave while held. */
+.agent-view .bubble.agent .bubble-choices .choice-other {
+  position: relative;
+  appearance: none;
+  cursor: pointer;
+  flex: 1 1 0;
+  min-width: 7.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  font: inherit;
+  color: var(--fg);
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,255,255,0.16);
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  transition: background 120ms, border-color 120ms;
+}
+.agent-view .bubble.agent .bubble-choices .choice-other:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.32);
+}
+.agent-view .bubble.agent .bubble-choices .choice-other:focus,
+.agent-view .bubble.agent .bubble-choices .choice-other:focus-visible {
+  outline: none;
+  border-color: rgba(255,255,255,0.55);
+  box-shadow: 0 0 0 2px var(--focus, #ffffff), 0 0 12px 2px rgba(255,255,255,0.22);
+}
+.agent-view .bubble.agent .bubble-choices .choice-other .choice-other-label {
+  font-size: 0.62rem; font-weight: 500; line-height: 1.2;
+}
+.agent-view .bubble.agent .bubble-choices .choice-other .choice-other-sub {
+  font-size: 0.54rem; font-weight: 400; color: var(--fg-dim);
+}
+/* Wave: hidden until held; then label/sub hide and the bars animate. */
+.agent-view .bubble.agent .bubble-choices .choice-other .choice-other-wave {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  height: 1.1rem;
+}
+.agent-view .bubble.agent .bubble-choices .choice-other .choice-other-wave i {
+  width: 2px; height: 30%;
+  background: var(--fg);
+  border-radius: 1px;
+  animation: choiceWave 0.9s ease-in-out infinite;
+}
+.choice-other .choice-other-wave i:nth-child(1) { animation-delay: 0s; }
+.choice-other .choice-other-wave i:nth-child(2) { animation-delay: 0.08s; }
+.choice-other .choice-other-wave i:nth-child(3) { animation-delay: 0.16s; }
+.choice-other .choice-other-wave i:nth-child(4) { animation-delay: 0.24s; }
+.choice-other .choice-other-wave i:nth-child(5) { animation-delay: 0.32s; }
+.choice-other .choice-other-wave i:nth-child(6) { animation-delay: 0.40s; }
+.choice-other .choice-other-wave i:nth-child(7) { animation-delay: 0.48s; }
+.choice-other .choice-other-wave i:nth-child(8) { animation-delay: 0.56s; }
+.choice-other .choice-other-wave i:nth-child(9) { animation-delay: 0.64s; }
+.agent-view .bubble.agent .bubble-choices .choice-other.talking {
+  align-items: center;
+}
+.agent-view .bubble.agent .bubble-choices .choice-other.talking .choice-other-label,
+.agent-view .bubble.agent .bubble-choices .choice-other.talking .choice-other-sub {
+  display: none;
+}
+.agent-view .bubble.agent .bubble-choices .choice-other.talking .choice-other-wave {
+  display: inline-flex;
+}
+@keyframes choiceWave {
+  0%, 100% { height: 22%; }
+  50%      { height: 92%; }
 }
