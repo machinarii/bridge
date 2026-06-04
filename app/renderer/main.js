@@ -625,20 +625,34 @@ let agentStatus = {}; // { [agentId]: 'idle'|'drafting'|'analyzing'|'waiting' }
 const VERB_LABELS = { idle: 'Idle', drafting: 'Drafting', analyzing: 'Analyzing', waiting: 'Waiting' };
 function verbLabel(v) { return VERB_LABELS[v] || 'Idle'; }
 
-/* Agents that produced a new message the user hasn't opened yet. Their L1 tile
- * glows and reads "Waiting for response" (once the agent is idle). */
-const unseenAgents = new Set();
-// Mark an agent as awaiting the user's response (it just produced a message).
-// Stays set — and the L1 tile glows + reads "Waiting for response" — until the
-// user actually responds (sends a message / approves a kickoff), not merely
-// looks at it.
-function markUnseen(agentId) {
+/* Per-agent pending state after it produces output, shown (while idle) on the
+ * L1 tile:
+ *   'reply' → it asked the user something → "Waiting for response" (orange);
+ *             clears only when the user actually replies.
+ *   'view'  → it finished a task → "Task complete" (green); clears as soon as
+ *             the user opens that agent / sees the bubble. */
+const agentPending = new Map();   // agentId → 'reply' | 'view'
+function setAgentPending(agentId, kind) {
   if (!agentId) return;
-  if (!unseenAgents.has(agentId)) { unseenAgents.add(agentId); paintAgentStatus(agentId); }
+  if (kind === 'view') {
+    // Don't downgrade a pending question to a task-complete, and don't flag a
+    // task-complete for an agent the user is already looking at.
+    if (agentPending.get(agentId) === 'reply') return;
+    if (mode === MODE_ZOOM && currentAgent()?.id === agentId) kind = null;
+  }
+  if (kind == null) { clearAgentPending(agentId); return; }
+  if (agentPending.get(agentId) !== kind) { agentPending.set(agentId, kind); paintAgentStatus(agentId); }
 }
-function clearUnseen(agentId) {
-  if (agentId && unseenAgents.delete(agentId)) paintAgentStatus(agentId);
+function clearAgentPending(agentId) {
+  if (agentId && agentPending.delete(agentId)) paintAgentStatus(agentId);
 }
+// Clear only the "task complete" (view) state — used when the user opens an agent.
+function clearTaskComplete(agentId) {
+  if (agentId && agentPending.get(agentId) === 'view' && agentPending.delete(agentId)) paintAgentStatus(agentId);
+}
+// Back-compat shims. markUnseen = a question awaiting reply; clearUnseen = clear all.
+function markUnseen(agentId) { setAgentPending(agentId, 'reply'); }
+function clearUnseen(agentId) { clearAgentPending(agentId); }
 
 /* v2 — activity feed buffer. Holds events across ALL projects so
  * both the L0 cross-project feed (§2) and the L1/L2 in-project feed
@@ -1859,14 +1873,17 @@ function renderGrid() {
     tile.style.setProperty('--tile-color', projectColor);
     tile.dataset.agentId = a.id;
     const verb = agentStatus[a.id] || (agentBusy[a.id] ? 'drafting' : 'idle');
-    const waiting = verb === 'idle' && unseenAgents.has(a.id);
+    const pending = verb === 'idle' ? agentPending.get(a.id) : null;
+    const statusLabel = pending === 'reply' ? 'Waiting for response'
+                      : pending === 'view'  ? 'Task complete' : verbLabel(verb);
     tile.dataset.busy = (verb !== 'idle') ? 'true' : 'false';
     tile.dataset.status = verb;
-    tile.dataset.unseen = waiting ? 'true' : 'false';
+    tile.dataset.unseen = pending === 'reply' ? 'true' : 'false';
+    tile.dataset.complete = pending === 'view' ? 'true' : 'false';
     tile.innerHTML = `
       <h2 class="name">${escapeHtml(a.name)}</h2>
       <div class="role">${escapeHtml(roleLabel(a.role))}</div>
-      <div class="status"><span class="dot"></span><span class="status-verb">${waiting ? 'Waiting for response' : verbLabel(verb)}</span></div>`;
+      <div class="status"><span class="dot"></span><span class="status-verb">${statusLabel}</span></div>`;
     tile.addEventListener('click', () => { gridIndex = i; ring.set(tileEls); ring.index = i; ring.paint(); enterZoom(); });
     grid.appendChild(tile);
     return tile;
@@ -2227,6 +2244,9 @@ async function enterZoom(specOverride) {
 function renderZoom(specOverride) {
   const agent = currentAgent();
   if (!agent) return renderGrid();
+  // Opening an agent counts as seeing its output → clear a "Task complete" flag
+  // (but not a pending question, which only clears when the user replies).
+  clearTaskComplete(agent.id);
   // Own the mode so direct callers (e.g. the boot-time restore) don't render
   // the agent view while `mode` is still MODE_PROJECTS — which would mis-size
   // the surface (no body[data-mode="zoom"]) and break all the zoom keybinds.
@@ -2356,9 +2376,12 @@ async function kickoffDecide(which, agent) {
  * bubble. The user toggles one or more (Space / Enter / ✕), then a Submit
  * button below-right sends the chosen set as the next message. Reachable via
  * the bubble's keyboard/gamepad model (cycleBubbleAction). */
-function buildChoiceList(choices, agent) {
+function buildChoiceList(choices, agent, picked) {
+  // `picked` (an array) → memorialized/read-only: a past question whose answer
+  // we replay as the displayed selection. Otherwise the list is interactive.
+  const memorial = Array.isArray(picked);
   const wrap = document.createElement('div');
-  wrap.className = 'bubble-choices';
+  wrap.className = 'bubble-choices' + (memorial ? ' memorial' : '');
 
   const opts = document.createElement('div');
   opts.className = 'bubble-choices-options';
@@ -2369,17 +2392,24 @@ function buildChoiceList(choices, agent) {
     // Strip any existing "A — " / "A. " / "A) " prefix; show the letter as a
     // heading and the description on the next line.
     const desc = text.replace(/^[A-Za-z]\s*[—\-.):]\s*/, '').trim() || text;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'choice-btn';
-    btn.setAttribute('aria-pressed', 'false');
-    btn.dataset.choice = text;                     // submit the original choice text
-    btn.innerHTML =
+    // Read-only entries are <div> (not in the nav ring); interactive are <button>.
+    const el = document.createElement(memorial ? 'div' : 'button');
+    if (!memorial) el.type = 'button';
+    el.className = 'choice-btn';
+    el.dataset.choice = text;                      // original choice text (submitted/matched)
+    const isSel = memorial && picked.some(p => p === text || p === desc);
+    el.setAttribute('aria-pressed', isSel ? 'true' : 'false');
+    if (isSel) el.classList.add('selected');
+    el.innerHTML =
       `<span class="choice-letter">${escapeHtml(letter)}</span>` +
       `<span class="choice-desc">${escapeHtml(desc)}</span>`;
-    btn.addEventListener('click', (e) => { e.stopPropagation(); toggleChoice(btn); });
-    opts.appendChild(btn);
+    if (!memorial) el.addEventListener('click', (e) => { e.stopPropagation(); toggleChoice(el); });
+    opts.appendChild(el);
   });
+
+  // A memorialized (answered) list is a record — no Other / Submit / hint.
+  if (memorial) { wrap.appendChild(opts); return wrap; }
+
   // Always offer an "Other" escape hatch — hold it to dictate a free-form
   // answer. Holding (pointer, or the global V / R2 while it's focused) plays a
   // wave inside the button and hides its label; release transcribes + submits.
@@ -2405,7 +2435,8 @@ function buildChoiceList(choices, agent) {
   hint.textContent = 'Select one or more';
   const submit = document.createElement('button');
   submit.type = 'button';
-  submit.className = 'choice-submit role-confirm';
+  submit.className = 'choice-submit role-confirm is-disabled';   // disabled until a pick
+  submit.setAttribute('aria-disabled', 'true');
   submit.textContent = 'Submit';
   submit.addEventListener('click', (e) => { e.stopPropagation(); submitChoices(wrap, agent); });
   submitRow.append(hint, submit);
@@ -2433,6 +2464,14 @@ function toggleChoice(btn) {
   const on = btn.getAttribute('aria-pressed') === 'true';
   btn.setAttribute('aria-pressed', on ? 'false' : 'true');
   btn.classList.toggle('selected', !on);
+  // Submit is enabled only while at least one option is selected.
+  const wrap = btn.closest('.bubble-choices');
+  const submit = wrap?.querySelector('.choice-submit');
+  if (submit) {
+    const any = !!wrap.querySelector('.choice-btn[aria-pressed="true"]');
+    submit.classList.toggle('is-disabled', !any);
+    submit.setAttribute('aria-disabled', any ? 'false' : 'true');
+  }
 }
 function submitChoices(wrap, agent) {
   if (currentAgent()?.id !== agent.id) return;
@@ -2572,6 +2611,30 @@ async function maybeRefreshZoomFor(agentId) {
   } finally { _zoomRefreshPending = false; }
 }
 
+/* Typewriter-reveal a bubble's text so scripted (non-streamed) agent messages
+ * also look "typed", like the live-streamed replies. Reveals the plain text
+ * progressively, then restores the full markdown HTML. Skips long bodies. */
+function typewriterReveal(contentEl) {
+  if (!contentEl) return;
+  const finalHTML = contentEl.innerHTML;
+  const plain = contentEl.textContent || '';
+  if (plain.length < 2 || plain.length > 700) return;   // too short/long to bother
+  const chat = contentEl.closest('.chat-scroll');
+  const step = Math.max(1, Math.round(plain.length / 110));   // ~110 frames end-to-end
+  let i = 0;
+  contentEl.textContent = '';
+  const token = (contentEl._twToken = (contentEl._twToken || 0) + 1);
+  const tick = () => {
+    if (contentEl._twToken !== token || !contentEl.isConnected) return;   // superseded / detached
+    i += step;
+    contentEl.textContent = plain.slice(0, i);
+    if (chat) chat.scrollTop = chat.scrollHeight;
+    if (i < plain.length) requestAnimationFrame(tick);
+    else contentEl.innerHTML = finalHTML;   // restore bold/lists/links/code
+  };
+  requestAnimationFrame(tick);
+}
+
 async function renderChatHistory(container, agent) {
   // How many turns we had rendered for this agent before — anything beyond it is
   // new and gets the rise-in transition. `undefined` on first view (no animation).
@@ -2689,9 +2752,18 @@ async function renderChatHistory(container, agent) {
         bubble.appendChild(buildKickoffApproval(agent, bubble));
       }
 
-      // Agent-offered choices → a vertical selectable list inside the bubble.
+      // Agent-offered choices → a selectable list in the bubble. If a later
+      // user turn already answered this question, replay their picks as a
+      // read-only record (selected state shown, no Submit/Other/hint).
       if (!isUser && choices) {
-        bubble.appendChild(buildChoiceList(choices, agent));
+        let answer = null;
+        for (let k = i + 1; k < messages.length; k++) {
+          if (messages[k].role === 'user') { answer = String(messages[k].content || ''); break; }
+        }
+        const picked = answer != null
+          ? answer.split(/;\s*/).map(s => s.trim()).filter(Boolean)
+          : undefined;
+        bubble.appendChild(buildChoiceList(choices, agent, picked));
       }
 
       // Timestamp + retry / edit only render on user-authored bubbles.
@@ -2748,19 +2820,30 @@ async function renderChatHistory(container, agent) {
       container.appendChild(bubble);
       chatBubbles.push(bubble);
     });
-    // Turns added since the last render get the rise-in transition: the older
-    // content scrolls up while each new bubble fades up at the bottom. The newest
-    // agent bubble also highlights so a fresh reply is easy to spot.
+    // Turns added since the last render get the slide-up transition. We include
+    // the last prior bubble (e.g. the question just answered) so the CURRENT
+    // bubble and the NEW one slide up together. The newest agent bubble also
+    // highlights, types in (if it wasn't streamed live), and staggers its
+    // selection buttons like the Layer 1 tiles.
     const hasNew = prevCount != null && chatMessages.length > prevCount;
     _prevTurnCount[agent.id] = chatMessages.length;
+    const streamed = _streamedAgentTurn; _streamedAgentTurn = false;
     if (hasNew) {
       for (const b of chatBubbles) {
-        if (Number(b.dataset.idx) >= prevCount) b.classList.add('bubble-rise');
+        if (Number(b.dataset.idx) >= prevCount - 1) b.classList.add('bubble-rise');
       }
       const newest = chatBubbles[chatBubbles.length - 1];
-      if (newest && newest.classList.contains('agent')) newest.classList.add('highlight-new');
+      if (newest && newest.classList.contains('agent')) {
+        newest.classList.add('highlight-new');
+        if (!streamed) typewriterReveal(newest.querySelector('.bubble-content'));
+        const optsEl = newest.querySelector('.bubble-choices:not(.memorial) .bubble-choices-options');
+        if (optsEl) {
+          optsEl.classList.add('stagger');
+          [...optsEl.children].forEach((el, k) => el.style.setProperty('--stagger-i', String(k)));
+        }
+      }
     }
-    // Land at the bottom instantly; the rise keyframe starts each new bubble
+    // Land at the bottom instantly; the rise keyframe starts each bubble
     // translated down, so the scroll target is already its final position.
     const prevBehavior = container.style.scrollBehavior;
     container.style.scrollBehavior = 'auto';
@@ -3731,12 +3814,14 @@ function startEventStream() {
 let streamingAgentId = null;
 let streamingBubbleEl = null;
 let streamingText = '';
+let _streamedAgentTurn = false;   // set when the latest reply streamed → skip the typewriter for it
 function resetStreaming() { streamingAgentId = null; streamingBubbleEl = null; streamingText = ''; }
 function appendStreamToken(agentId, delta) {
   if (!streamingAgentId || agentId !== streamingAgentId) return;
   if (mode !== MODE_ZOOM || currentAgent()?.id !== agentId) return;
   const chat = surfaceEl.querySelector('.chat-scroll');
   if (!chat) return;
+  _streamedAgentTurn = true;   // this reply is streaming live — don't also typewriter it
   if (!streamingBubbleEl) {
     let c;
     if (pendingAgentBubbleEl && chat.contains(pendingAgentBubbleEl)) {
@@ -3796,14 +3881,11 @@ function handleBridgeEvent(ev) {
       // filters by activeProject at render time; the L0 cross-project
       // feed shows everything.
       pushActivityEntry(ev);
-      // Glow the agent's L1 tile when it produces something the user hasn't
-      // opened (a reply, a kickoff plan, an assigned task). Terminal messages
-      // flagged noWait don't await a reply — clear any stale "Waiting" instead.
-      if (ev.type === 'activity' && ev.agentId) {
-        if (ev.noWait) clearUnseen(ev.agentId);
-        else markUnseen(ev.agentId);
-      }
-      else if (ev.type === 'delegate' && ev.toAgentId) markUnseen(ev.toAgentId);
+      // Set the agent's L1 pending state from the event's awaitKind:
+      //   'reply' → "Waiting for response", 'view' → "Task complete",
+      //   anything else → clear. (delegate/assignment carries no awaitKind.)
+      if (ev.type === 'activity' && ev.agentId) setAgentPending(ev.agentId, ev.awaitKind || null);
+      else if (ev.type === 'delegate' && ev.toAgentId) setAgentPending(ev.toAgentId, ev.awaitKind || null);
       // A server-posted turn (kickoff plan / question) for the agent we're
       // viewing → pull it into the open chat and clear the "…" bubble.
       if (ev.type === 'activity' && ev.agentId) maybeRefreshZoomFor(ev.agentId);
@@ -4020,19 +4102,22 @@ async function openProjectFromActivityEntry(entry) {
   }
 }
 
-/* Live-update an individual agent tile's status label + busy state. */
+/* Live-update an individual agent tile's status label + busy state. The pending
+ * states ("Waiting for response" / "Task complete") show only while idle —
+ * during drafting/analyzing the work verb wins. */
 function paintAgentStatus(agentId) {
   const tile = document.querySelector(`.agent-tile[data-agent-id="${agentId}"]`);
   if (!tile) return;
   const verb = agentStatus[agentId] || 'idle';
-  // "Waiting for response" + glow only once the agent is idle with an unseen
-  // message — while it's actively drafting/analyzing, show the work verb.
-  const waiting = verb === 'idle' && unseenAgents.has(agentId);
+  const pending = verb === 'idle' ? agentPending.get(agentId) : null;
   tile.dataset.status = verb;
   tile.dataset.busy = (verb !== 'idle') ? 'true' : 'false';
-  tile.dataset.unseen = waiting ? 'true' : 'false';
+  tile.dataset.unseen = pending === 'reply' ? 'true' : 'false';
+  tile.dataset.complete = pending === 'view' ? 'true' : 'false';
   const verbEl = tile.querySelector('.status .status-verb');
-  if (verbEl) verbEl.textContent = waiting ? 'Waiting for response' : verbLabel(verb);
+  if (verbEl) verbEl.textContent =
+    pending === 'reply' ? 'Waiting for response' :
+    pending === 'view'  ? 'Task complete' : verbLabel(verb);
 }
 
 // Kick the SSE channel off once the renderer is ready.

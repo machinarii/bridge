@@ -146,7 +146,7 @@ export async function startKickoff(projectId, opts = {}) {
   appendTurn(project.leadAgentId, 'assistant', planSpec(body));
   const planTurnIndex = getContext(project.leadAgentId).messages.length - 1;
   setKickoff(projectId, { status: 'awaiting_approval', planTurnIndex });
-  emitActivity(projectId, `${project.agents.find(a => a.id === project.leadAgentId)?.name || 'PM'}: kickoff plan ready`, project.leadAgentId);
+  emitActivity(projectId, `${project.agents.find(a => a.id === project.leadAgentId)?.name || 'PM'}: kickoff plan ready`, project.leadAgentId, { awaitKind: 'reply' });
   // Plan delivered — PM is no longer working; it's now waiting on the user.
   // (idle + the unseen activity above paints the tile "Waiting for response".)
   emitStatus(projectId, project.leadAgentId, 'idle');
@@ -296,9 +296,17 @@ async function startTeamWork(projectId, opts = {}) {
 
   // Fan out: each agent starts on its task. Fire-and-forget so completion isn't
   // blocked; interpretIntent emits status (analyzing/drafting) on its own.
+  const pmName = project.agents.find(a => a.id === project.leadAgentId)?.name || 'PM';
+  const pmRole = getRole('pm').label;
   for (const r of resolved) {
+    // The assignment itself sets no pending state; the agent's reply decides it
+    // ("Task complete" for a deliverable, "Waiting for response" for a question).
+    // The task records as a PM→agent handoff bubble, not a "you" bubble.
     emitDelegate(projectId, project.leadAgentId, r.agentId, r.task);
-    interpretIntent({ projectId, agentId: r.agentId, text: r.task, effort: 'high' })
+    interpretIntent({
+      projectId, agentId: r.agentId, text: r.task, effort: 'high',
+      handoff: { from: pmName, fromRole: pmRole, to: r.name, toRole: r.roleLabel },
+    })
       .then(spec => setLastSpec(r.agentId, spec))
       .catch(err => console.warn(`[kickoff] ${r.name} failed to start:`, err?.message));
   }
@@ -415,14 +423,14 @@ export async function executeKickoff(projectId, opts = {}) {
       emitStatus(projectId, project.leadAgentId, 'idle');
       emitNotification({ kind: 'info', projectId, title: 'Kickoff started',
                          body: `${project.name}: starter docs created. The PM has a few questions for you.` });
-      emitActivity(projectId, 'PM: first question ready', project.leadAgentId);
+      emitActivity(projectId, 'PM: first question ready', project.leadAgentId, { awaitKind: 'reply' });
     } else {
       // No questions — kickoff is done now, so the team starts building.
       setKickoff(projectId, { status: 'done', assignments: assigned, finishedAt: Date.now() });
       emitStatus(projectId, project.leadAgentId, 'idle');
       emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
                          body: `${project.name}: starter docs created; the team is starting on its tasks.` });
-      emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId, { noWait: true });
+      emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId);
       startTeamWork(projectId, opts);   // fire-and-forget
     }
   }
@@ -452,7 +460,7 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
       const spec = questionSpec(questions[nextIdx], nextIdx + 1, questions.length);
       appendTurn(project.leadAgentId, 'assistant', spec);
       setKickoff(projectId, { qIdx: nextIdx });
-      emitActivity(projectId, `PM: question ${nextIdx + 1} ready`, project.leadAgentId);
+      emitActivity(projectId, `PM: question ${nextIdx + 1} ready`, project.leadAgentId, { awaitKind: 'reply' });
       return { handled: true, intent: 'next_question', spec };
     }
     // Out of questions — kickoff is now genuinely complete.
@@ -462,7 +470,7 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
                        body: `${project.name}: questions answered and the team is moving.` });
     // Terminal message — the PM isn't awaiting a reply, so don't glow "Waiting".
-    emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId, { noWait: true });
+    emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId);
     // Kickoff is complete → the specialists start building (auto-adding any
     // missing roles). Fire-and-forget so the closing returns promptly.
     startTeamWork(projectId, opts);

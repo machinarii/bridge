@@ -1200,10 +1200,12 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
     0 0 24px 6px color-mix(in oklab, var(--accent, #6ea8ff) 25%, transparent);
 }
 
-/* Status dot color legend: GREEN while working (analyzing / drafting),
- * ORANGE when the agent is waiting for the user's response, dim grey idle. */
+/* Status dot color legend: GREEN while working (analyzing / drafting) and when
+ * a task is complete-but-unseen, ORANGE when waiting for the user's response,
+ * dim grey idle. */
 .agent-tile[data-status="analyzing"] .status .dot,
-.agent-tile[data-status="drafting"]  .status .dot {
+.agent-tile[data-status="drafting"]  .status .dot,
+.agent-tile[data-complete="true"]    .status .dot {
   background: var(--accent-2, #9cf2c1);
   box-shadow: 0 0 8px 1px color-mix(in oklab, var(--accent-2, #9cf2c1) 80%, transparent);
 }
@@ -2874,6 +2876,12 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
 .agent-tile[data-unseen="true"] {
   animation: tileUnseenGlow 1.8s ease-in-out infinite;
 }
+/* Task complete (unseen deliverable) — a steady green highlight, no pulse. */
+.agent-tile[data-complete="true"] {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--accent-2, #9cf2c1) 45%, transparent),
+    0 0 16px 2px color-mix(in oklab, var(--accent-2, #9cf2c1) 20%, transparent);
+}
 
 /* Agent-offered choices: a vertical selectable list inside the bubble. */
 .agent-view .bubble.agent .bubble-choices {
@@ -2885,16 +2893,25 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
 .agent-view .bubble.agent .bubble-choices-options {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
-  align-items: stretch;      /* all buttons share the tallest one's height */
+  flex-wrap: nowrap;         /* always one horizontal row — never a grid */
+  align-items: stretch;      /* uniform height: all buttons match the tallest */
   gap: 0.4rem;
+}
+/* Selection buttons load in gradually (staggered), like the Layer 1 tiles. */
+.agent-view .bubble.agent .bubble-choices-options.stagger > * {
+  animation: choiceIn 300ms cubic-bezier(.2,.8,.2,1) both;
+  animation-delay: calc(var(--stagger-i, 0) * 60ms);
+}
+@keyframes choiceIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .agent-view .bubble.agent .bubble-choices .choice-btn {
   position: relative;     /* anchors the corner checkbox when selected */
   appearance: none;
   cursor: pointer;
-  flex: 1 1 0;            /* share the row evenly; wrap when too narrow */
-  min-width: 7.5rem;
+  flex: 1 1 0;            /* equal share of the one row; basis 0 so widths match */
+  min-width: 0;          /* allow shrinking so all buttons fit one horizontal row */
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2938,6 +2955,16 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   background: rgba(255,255,255,0.14);
   border-color: rgba(255,255,255,0.6);
 }
+/* Memorialized (answered) list is a read-only record — no pointer / hover. */
+.agent-view .bubble.agent .bubble-choices.memorial .choice-btn { cursor: default; }
+.agent-view .bubble.agent .bubble-choices.memorial .choice-btn:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.16);
+}
+.agent-view .bubble.agent .bubble-choices.memorial .choice-btn[aria-pressed="true"]:hover {
+  background: rgba(255,255,255,0.14);
+  border-color: rgba(255,255,255,0.6);
+}
 /* Below the options: "Select one or more" hint at bottom-left, Submit at right. */
 .agent-view .bubble.agent .bubble-choices-submit {
   display: flex;
@@ -2954,6 +2981,11 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   font-size: 0.66rem;
   padding: 0.4rem 1.32rem;   /* ~20% wider than before */
 }
+/* Grayed out until at least one option is selected. */
+.agent-view .bubble.agent .bubble-choices-submit .choice-submit.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 /* "Other" choice — hold to dictate. Inherits the choice-btn look but stacks a
    label over a "Hold to talk" subtext, and swaps both for a wave while held. */
@@ -2961,8 +2993,8 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   position: relative;
   appearance: none;
   cursor: pointer;
-  flex: 1 1 0;
-  min-width: 7.5rem;
+  flex: 1 1 0;             /* equal share of the one row */
+  min-width: 0;           /* allow shrinking so all buttons fit horizontally */
   display: flex;
   flex-direction: column;
   align-items: flex-start;

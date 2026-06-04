@@ -52,8 +52,8 @@ export function emitToken(projectId, agentId, delta) {
 export function emitActivity(projectId, summary, agentId, extra) {
   publish({ type: 'activity', projectId, agentId, summary, ...(extra || {}) });
 }
-export function emitDelegate(projectId, fromAgentId, toAgentId, task) {
-  publish({ type: 'delegate', projectId, fromAgentId, toAgentId, task });
+export function emitDelegate(projectId, fromAgentId, toAgentId, task, extra) {
+  publish({ type: 'delegate', projectId, fromAgentId, toAgentId, task, ...(extra || {}) });
 }
 export function emitNotification(opts) {
   publish({ type: 'notification', ...opts });
