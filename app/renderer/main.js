@@ -5189,7 +5189,7 @@ gp.addEventListener('press', (e) => {
   if (mode === MODE_NEW_PROJ_TOPOLOGY) {
     if (b === 'left')        topoMoveCard(-1);
     else if (b === 'right')  topoMoveCard(+1);
-    else if (b === 'down')   topoFocusBack();
+    else if (b === 'down')   { if (ring.index >= TOPOLOGIES.length) enterShortcuts(); else topoFocusBack(); }
     else if (b === 'up')   { if (ring.index >= TOPOLOGIES.length) topoFocusCards(); else focusSurfaceClose(); }
     else if (b === 'cross') { const c = ring.current(); if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId); else c?.click?.(); }
     else if (b === 'circle') renderNewProjectRoles();
@@ -6065,7 +6065,7 @@ window.addEventListener('keydown', (e) => {
   } else if (mode === MODE_NEW_PROJ_TOPOLOGY) {
     if (e.key === 'ArrowLeft')       { e.preventDefault(); topoMoveCard(-1); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); topoMoveCard(+1); }
-    else if (e.key === 'ArrowDown')  { e.preventDefault(); topoFocusBack(); }
+    else if (e.key === 'ArrowDown')  { e.preventDefault(); if (ring.index >= TOPOLOGIES.length) enterShortcuts(); else topoFocusBack(); }
     else if (e.key === 'ArrowUp')    { e.preventDefault(); if (ring.index >= TOPOLOGIES.length) topoFocusCards(); else focusSurfaceClose(); }
     else if (e.key === 'Enter') {
       e.preventDefault();

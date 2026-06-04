@@ -207,12 +207,16 @@ async function callOpenRouterJSON({ apiKey, model, prompt, timeoutMs = 20_000 })
   finally { clearTimeout(timer); }
 }
 
-/* Decide who builds what. Returns role-based assignments [{ role, task }] — the
- * PM may pick roles that aren't on the team yet; startTeamWork adds them. Uses
- * the capable PM model (the cheap router was returning empty assignments). */
+/* Decide who builds what. Returns { assignments, clarify }:
+ *  - assignments: [{ role, task }] — concrete starting tasks (the PM may pick
+ *    roles not yet on the team; startTeamWork adds them).
+ *  - clarify: [{ role, question, options }] — on-team roles the PM couldn't
+ *    confidently task; surfaced to the user as a choice question whose answer
+ *    becomes that role's task.
+ * Uses the capable PM model (the cheap router was returning empty assignments). */
 export async function assignKickoffTasks(projectId, opts = {}) {
   const project = getProject(projectId);
-  if (!project) return [];
+  if (!project) return { assignments: [], clarify: [] };
   const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
   const callJSON = opts.callJSON || callOpenRouterJSON;
   const present = new Set(project.agents.filter(a => a.enabled).map(a => a.role));
@@ -222,19 +226,32 @@ export async function assignKickoffTasks(projectId, opts = {}) {
     `You are the PM of project "${project.name}". Goal: "${project.goal}".\n` +
     `Operating model (every assignment must fit this): ${topologyGuidance(project.topology)}\n` +
     `Available roles — assign the best-fit role to each task. You MAY use roles not yet on the team; they will be added:\n${catalog}\n\n` +
-    `Return JSON {"assignments":[{"role":"<roleId>","task":"<one concrete starting task that follows the operating model>"}]}. ` +
-    `Use exact role ids. One task each, only roles that genuinely apply. Max ${FANOUT_CAP} assignments.`;
+    `Assign a concrete starting task to EVERY role already on the team. You may also add other roles with tasks. ` +
+    `Only when you genuinely cannot determine a useful first task for an on-team role, put it in "clarify" with a short question and 2-4 short options for the user instead of guessing.\n` +
+    `Return JSON {"assignments":[{"role":"<roleId>","task":"<concrete starting task that follows the operating model>"}],` +
+    `"clarify":[{"role":"<roleId>","question":"<short question>","options":["<opt>","<opt>"]}]}. ` +
+    `Use exact role ids, one entry per role. Max ${FANOUT_CAP} assignments.`;
   let parsed;
   try { parsed = JSON.parse(await callJSON({ apiKey, model: getModelForRole('pm'), prompt })); }
-  catch { parsed = { assignments: [] }; }
-  const out = [];
+  catch { parsed = {}; }
   const seen = new Set();
+  const assignments = [];
   for (const a of (parsed.assignments || []).slice(0, FANOUT_CAP)) {
     if (!a?.task || !getRole(a.role) || a.role === 'pm' || seen.has(a.role)) continue;
     seen.add(a.role);
-    out.push({ role: a.role, task: String(a.task).slice(0, 400) });
+    assignments.push({ role: a.role, task: String(a.task).slice(0, 400) });
   }
-  return out;
+  const clarify = [];
+  for (const c of (parsed.clarify || [])) {
+    if (!getRole(c?.role) || c.role === 'pm' || seen.has(c.role)) continue;
+    seen.add(c.role);
+    clarify.push({
+      role: c.role,
+      question: String(c.question || `What should the ${getRole(c.role).label} focus on first?`).slice(0, 200),
+      options: Array.isArray(c.options) ? c.options.map(o => String(o).trim()).filter(Boolean).slice(0, 4) : [],
+    });
+  }
+  return { assignments, clarify };
 }
 
 /* When kickoff completes, the assigned specialists actually start building. For
@@ -370,13 +387,25 @@ export async function executeKickoff(projectId, opts = {}) {
   emitStatus(projectId, project.leadAgentId, 'drafting');
   emitActivity(projectId, 'PM: kickoff in progress…', project.leadAgentId);
   await generateKickoffDocs(projectId, opts);
-  const assigned = await assignKickoffTasks(projectId, opts);
+  const { assignments, clarify } = await assignKickoffTasks(projectId, opts);
+
+  // Coverage guarantee: every on-team specialist must end up with a task. Any
+  // the PM left out of both assignments and clarify gets a role-based starter.
+  const onTeam = project.agents.filter(a => a.enabled && a.id !== project.leadAgentId);
+  const covered = new Set([...assignments.map(a => a.role), ...clarify.map(c => c.role)]);
+  for (const a of onTeam) {
+    if (covered.has(a.role)) continue;
+    assignments.push({ role: a.role, task: `Begin the core ${getRole(a.role).label.toLowerCase()} work toward the goal: "${project.goal}". Propose your first concrete deliverable.` });
+    covered.add(a.role);
+  }
+  const assigned = assignments;
+
   if (getProject(projectId)) {
     appendTurn(project.leadAgentId, 'assistant', reportSpec(Object.keys(DOC_TITLES).length, assigned, project));
-    // Follow-up: the PM asks the questions it needs answered — but ONE AT A
-    // TIME. We generate the full list now, post only the first question, and
-    // advance through the rest as the user answers (handleLeadMessageDuringKickoff).
-    const questions = await generateQuestions(project, opts);
+    // Follow-up questions, asked ONE AT A TIME. Clarify questions (whose answers
+    // become that role's task) come first, then the PM's general questions.
+    const clarifyQuestions = clarify.map(c => ({ q: c.question, options: c.options, role: c.role }));
+    const questions = [...clarifyQuestions, ...(await generateQuestions(project, opts))];
     if (questions.length && getProject(projectId)) {
       appendTurn(project.leadAgentId, 'assistant', questionSpec(questions[0], 1, questions.length));
       // Stash the assignments so the team starts building once Q&A wraps up.
@@ -410,6 +439,14 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     if (!project) return { handled: false };
     appendTurn(project.leadAgentId, 'user', text);
     const questions = k.questions || [];
+    // If the question being answered was a "clarify" for a specific role, the
+    // user's answer becomes that role's starting task.
+    const answered = questions[k.qIdx ?? 0];
+    if (answered?.role && text.trim()) {
+      const next = (getKickoff(projectId).assignments || []).filter(x => x.role !== answered.role);
+      next.push({ role: answered.role, task: text.trim().slice(0, 400) });
+      setKickoff(projectId, { assignments: next });
+    }
     const nextIdx = (k.qIdx ?? 0) + 1;
     if (nextIdx < questions.length) {
       const spec = questionSpec(questions[nextIdx], nextIdx + 1, questions.length);
