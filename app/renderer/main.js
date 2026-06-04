@@ -4995,7 +4995,15 @@ gp.addEventListener('press', (e) => {
       }
       if (b === 'left')   { cycleBubbleAction(-1); return; }
       if (b === 'right')  { cycleBubbleAction(+1); return; }
-      if (b === 'cross')  { const a = document.activeElement; if (a?.classList?.contains('bubble-action') || a?.closest?.('.bubble-kickoff-actions, .bubble-choices')) a.click(); return; }
+      if (b === 'cross')  {
+        const a = document.activeElement;
+        if (a?.classList?.contains('bubble-action') || a?.closest?.('.bubble-kickoff-actions, .bubble-choices')) { a.click(); return; }
+        // On the bubble itself (no action focused yet) → activate the primary
+        // kickoff action so Approve takes a single press, not two.
+        const approve = chatBubbles[chatBubbleIdx]?.querySelector('.bubble-kickoff-actions .role-confirm');
+        if (approve) approve.click();
+        return;
+      }
       if (b === 'circle') { leaveBubbleFocus(); ring.paint(); return; }
       if (b === 'l1')     { cycleAgent(-1); return; }
       if (b === 'r1')     { cycleAgent(+1); return; }
@@ -6068,6 +6076,12 @@ window.addEventListener('keydown', (e) => {
           || document.activeElement?.closest?.('.bubble-kickoff-actions, .bubble-choices'))) {
         // Activate the focused action icon or kickoff Approve/Reject button.
         e.preventDefault(); document.activeElement.click(); return;
+      }
+      if (e.key === 'Enter') {
+        // On the bubble itself (no action focused) → Enter approves the kickoff
+        // plan in one press instead of two.
+        const approve = chatBubbles[chatBubbleIdx]?.querySelector('.bubble-kickoff-actions .role-confirm');
+        if (approve) { e.preventDefault(); approve.click(); return; }
       }
       if (e.key === 'Escape') { e.preventDefault(); leaveBubbleFocus(); ring.paint(); return; }
     }
