@@ -7,7 +7,7 @@ import { getRole } from './roles.js';
 import { getProject, setKickoff, getKickoff, TOPOLOGIES } from './projects.js';
 import { appendTurn, getContext } from './scratchpad.js';
 import { getModelForRole, getRouterModel } from './models.js';
-import { emitNotification, emitActivity, emitDelegate, publish as publishEvent } from './events.js';
+import { emitNotification, emitActivity, emitDelegate, emitStatus, publish as publishEvent } from './events.js';
 import { writeNote } from './backends/notes.js';
 import { RESPONSE_STYLE } from './orchestrator.js';
 
@@ -138,12 +138,18 @@ export async function startKickoff(projectId, opts = {}) {
     return;
   }
   const callText = opts.callText || callOpenRouterText;
+  // PM is now actively drafting the plan — light up the L1 tile ("Drafting")
+  // and the L2 thinking bubble while the model works.
+  emitStatus(projectId, project.leadAgentId, 'drafting');
   const body = (await callText({ apiKey, model: getModelForRole('pm'), prompt: buildPlanPrompt(project) }))
     || 'I\'ll draft a PRD, a roadmap, team operating notes, and an open-questions doc, then assign each teammate a starting task. Approve to begin.';
   appendTurn(project.leadAgentId, 'assistant', planSpec(body));
   const planTurnIndex = getContext(project.leadAgentId).messages.length - 1;
   setKickoff(projectId, { status: 'awaiting_approval', planTurnIndex });
   emitActivity(projectId, `${project.agents.find(a => a.id === project.leadAgentId)?.name || 'PM'}: kickoff plan ready`, project.leadAgentId);
+  // Plan delivered — PM is no longer working; it's now waiting on the user.
+  // (idle + the unseen activity above paints the tile "Waiting for response".)
+  emitStatus(projectId, project.leadAgentId, 'idle');
   emitNotification({ kind: 'info', projectId, title: 'Kickoff plan ready',
                      body: `Open ${project.name} → PM to approve the kickoff.` });
 }
@@ -244,44 +250,112 @@ function reportSpec(docCount, assigned, project) {
   });
 }
 
+/* A single kickoff question, asked one at a time. `lead` is an optional short
+ * acknowledgement of the previous answer that prefixes the question. */
+function questionSpec(question, n, total, lead) {
+  const counter = total > 1 ? `Question ${n} of ${total}` : 'A question';
+  const body = `${lead ? lead.trim() + '\n\n' : ''}${String(question).trim()}`;
+  return JSON.stringify({
+    intent: 'answer', template: 'reader', context: counter, title: 'Kickoff',
+    body,
+    actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+  });
+}
+
+function closingSpec(body) {
+  return JSON.stringify({
+    intent: 'answer', template: 'reader', context: 'Kickoff', title: 'All set',
+    body,
+    actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+  });
+}
+
+/* Generate the kickoff follow-up questions as a clean list (one per line).
+ * Returns [] when no key / call fails so the caller degrades gracefully. */
+async function generateQuestions(project, opts = {}) {
+  const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+  if (!apiKey || apiKey.includes('replace-me')) return [];
+  const callText = opts.callText || callOpenRouterText;
+  const who = project.agents.find(a => a.id === project.leadAgentId)?.name || 'the PM';
+  const raw = await callText({
+    apiKey, model: getModelForRole('pm'), timeoutMs: 30_000,
+    prompt: `You are ${who}, PM of project "${project.name}". Goal: "${project.goal}". ` +
+      `The kickoff is approved. List the 3-5 most important questions you genuinely need answered ` +
+      `to move forward (scope, priorities, constraints, unknowns), ordered most-important first. ` +
+      `Output ONLY the questions, one per line, no numbering, no bullets, no preamble.` + RESPONSE_STYLE,
+  });
+  return String(raw || '')
+    .split('\n')
+    .map(s => s.replace(/^\s*(?:[-*\d.)]+\s*)/, '').trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
 export async function executeKickoff(projectId, opts = {}) {
   const k = getKickoff(projectId);
-  if (k.status === 'running' || k.status === 'done') return { ran: false };
+  if (['running', 'done', 'asking'].includes(k.status)) return { ran: false };
   const project = getProject(projectId);
   if (!project) return { ran: false };
   setKickoff(projectId, { status: 'running', startedAt: Date.now() });
+  // PM is working — docs, task assignment, drafting questions. Light up
+  // "Drafting" on L1 + the L2 thinking bubble for the whole stretch.
+  emitStatus(projectId, project.leadAgentId, 'drafting');
   emitActivity(projectId, 'PM: kickoff in progress…', project.leadAgentId);
   await generateKickoffDocs(projectId, opts);
   const assigned = await assignKickoffTasks(projectId, opts);
   if (getProject(projectId)) {
     appendTurn(project.leadAgentId, 'assistant', reportSpec(Object.keys(DOC_TITLES).length, assigned, project));
-    // Follow-up: the PM asks the user the questions it needs answered to move
-    // forward, so approval leads straight into a working conversation.
-    const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
-    const callText = opts.callText || callOpenRouterText;
-    if (apiKey && !apiKey.includes('replace-me')) {
-      const fu = await callText({
-        apiKey, model: getModelForRole('pm'), timeoutMs: 30_000,
-        prompt: `You are ${project.agents.find(a => a.id === project.leadAgentId)?.name || 'the PM'}, PM of project "${project.name}". Goal: "${project.goal}". The kickoff is approved and docs are drafted. Now ask the user 2-4 specific follow-up questions you genuinely need answered to move forward (scope, priorities, constraints, unknowns). One short intro line, then a bullet list of questions. First person.` + RESPONSE_STYLE,
-      });
-      if (fu && getProject(projectId)) {
-        appendTurn(project.leadAgentId, 'assistant', JSON.stringify({
-          intent: 'answer', template: 'reader', context: 'Kickoff', title: 'A few questions',
-          body: fu,
-          actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
-        }));
-      }
+    // Follow-up: the PM asks the questions it needs answered — but ONE AT A
+    // TIME. We generate the full list now, post only the first question, and
+    // advance through the rest as the user answers (handleLeadMessageDuringKickoff).
+    const questions = await generateQuestions(project, opts);
+    if (questions.length && getProject(projectId)) {
+      appendTurn(project.leadAgentId, 'assistant', questionSpec(questions[0], 1, questions.length));
+      setKickoff(projectId, { status: 'asking', questions, qIdx: 0, finishedAt: Date.now() });
+      // A question is pending → the PM is waiting on the user.
+      emitStatus(projectId, project.leadAgentId, 'idle');
+      emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
+                         body: `${project.name}: docs created, ${assigned.length} task${assigned.length === 1 ? '' : 's'} assigned. The PM has a few questions.` });
+      emitActivity(projectId, 'PM: first question ready', project.leadAgentId);
+    } else {
+      // No key / no questions — just finish.
+      setKickoff(projectId, { status: 'done', finishedAt: Date.now() });
+      emitStatus(projectId, project.leadAgentId, 'idle');
+      emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
+                         body: `${project.name}: docs created and ${assigned.length} task${assigned.length === 1 ? '' : 's'} assigned.` });
+      emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId);
     }
-    setKickoff(projectId, { status: 'done', finishedAt: Date.now() });
-    emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
-                       body: `${project.name}: docs created and ${assigned.length} task${assigned.length === 1 ? '' : 's'} assigned.` });
-    emitActivity(projectId, 'PM: follow-up questions ready', project.leadAgentId);
   }
   return { ran: true, assigned };
 }
 
 export async function handleLeadMessageDuringKickoff(projectId, text, opts = {}) {
-  if (getKickoff(projectId).status !== 'awaiting_approval') return { handled: false };
+  const k = getKickoff(projectId);
+
+  // Post-approval Q&A: serve the kickoff questions one at a time. Each user
+  // reply is recorded as their answer and advances to the next question.
+  if (k.status === 'asking') {
+    const project = getProject(projectId);
+    if (!project) return { handled: false };
+    appendTurn(project.leadAgentId, 'user', text);
+    const questions = k.questions || [];
+    const nextIdx = (k.qIdx ?? 0) + 1;
+    if (nextIdx < questions.length) {
+      const spec = questionSpec(questions[nextIdx], nextIdx + 1, questions.length, 'Got it.');
+      appendTurn(project.leadAgentId, 'assistant', spec);
+      setKickoff(projectId, { qIdx: nextIdx });
+      emitActivity(projectId, `PM: question ${nextIdx + 1} ready`, project.leadAgentId);
+      return { handled: true, intent: 'next_question', spec };
+    }
+    // Out of questions — wrap up and let normal conversation take over.
+    const spec = closingSpec("Thanks — that's everything I needed to get us moving. The team's on it; ask me anything from here.");
+    appendTurn(project.leadAgentId, 'assistant', spec);
+    setKickoff(projectId, { status: 'done', qIdx: nextIdx });
+    emitActivity(projectId, 'PM: kickoff Q&A complete', project.leadAgentId);
+    return { handled: true, intent: 'questions_done', spec };
+  }
+
+  if (k.status !== 'awaiting_approval') return { handled: false };
   const intent = classifyApproval(text);
   const project = getProject(projectId);
   if (intent === 'approve') {

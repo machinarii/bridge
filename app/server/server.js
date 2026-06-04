@@ -496,12 +496,19 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
     const project0 = getProject(pid);
     if (project0 && aid === project0.leadAgentId) {
       const ko = await handleLeadMessageDuringKickoff(pid, text);
+      // The Q&A flow (one question at a time) and approval both hand back a
+      // spec to surface directly as the PM's reply.
+      if (ko.handled && ko.spec) {
+        const spec = JSON.parse(ko.spec);
+        setLastSpec(aid, spec);
+        return res.json(spec);
+      }
       if (ko.handled && ko.intent === 'approve') {
         const msgs = getContext(aid).messages;
         const last = msgs[msgs.length - 1];
         const reportSpec = JSON.parse(last.content);
         setLastSpec(aid, reportSpec);
-        return res.json(reportSpec);   // the kickoff report
+        return res.json(reportSpec);   // the kickoff report / first question
       }
       // revise/unsure fall through to the normal PM reply below.
     }

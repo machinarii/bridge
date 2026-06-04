@@ -104,7 +104,9 @@ test('executeKickoff runs once and is idempotent', async () => {
     };
     const first = await executeKickoff(p.id, deps);
     assert.equal(first.ran, true);
-    assert.equal(getKickoff(p.id).status, 'done');
+    // With questions generated (callText yields one), the PM moves into the
+    // one-at-a-time Q&A state rather than straight to 'done'.
+    assert.equal(getKickoff(p.id).status, 'asking');
     assert.equal(listNotes(p.id).length, 4);
     const second = await executeKickoff(p.id, deps);
     assert.equal(second.ran, false);
@@ -126,6 +128,18 @@ test('approval routing: yes runs, question replies, not-awaiting passes through'
     const yes = await handleLeadMessageDuringKickoff(p.id, 'yes go ahead', deps);
     assert.equal(yes.handled, true);
     assert.equal(yes.intent, 'approve');
+    // Approval runs the kickoff, which lands in the Q&A ('asking') state.
+    assert.equal(getKickoff(p.id).status, 'asking');
+
+    // Each subsequent reply advances through the questions, then closes out.
+    const a1 = await handleLeadMessageDuringKickoff(p.id, 'answer one', deps);
+    assert.equal(a1.handled, true);
+    assert.ok(['next_question', 'questions_done'].includes(a1.intent));
+    // Drain any remaining questions until the PM wraps up at 'done'.
+    let guard = 0;
+    while (getKickoff(p.id).status === 'asking' && guard++ < 10) {
+      await handleLeadMessageDuringKickoff(p.id, 'another answer', deps);
+    }
     assert.equal(getKickoff(p.id).status, 'done');
   } finally { deleteProject(p.id); }
 });

@@ -2337,6 +2337,9 @@ async function kickoffDecide(which, agent) {
   clearUnseen(agent.id);   // the user acted → no longer awaiting them
   const path = which === 'approve' ? 'kickoff/approve' : 'kickoff/decline';
   setIndicator('thinking', which === 'approve' ? 'Starting kickoff…' : 'Dismissing…');
+  // Approve kicks off a long server task (docs, tasks, questions) — show the
+  // "…" thinking bubble immediately so the wait isn't dead air.
+  if (which === 'approve') { leaveBubbleFocus(); showPendingAgentBubble(); }
   try {
     const r = await fetch(`/projects/${activeProject.id}/${path}`, { method: 'POST' });
     if (!r.ok) throw new Error(await r.text());
@@ -2352,29 +2355,53 @@ async function kickoffDecide(which, agent) {
   }
 }
 
-/* Agent-offered choices: a vertical list of selectable options inside the
- * bubble. Picking one sends it back to the agent as the user's next message.
- * Reachable via the bubble's keyboard/gamepad model (cycleBubbleAction). */
+/* Agent-offered choices: a horizontal row of selectable options inside the
+ * bubble. The user toggles one or more (Space / Enter / ✕), then a Submit
+ * button below-right sends the chosen set as the next message. Reachable via
+ * the bubble's keyboard/gamepad model (cycleBubbleAction). */
 function buildChoiceList(choices, agent) {
   const wrap = document.createElement('div');
   wrap.className = 'bubble-choices';
+
+  const opts = document.createElement('div');
+  opts.className = 'bubble-choices-options';
   for (const c of choices) {
     const text = String(c).trim();
     if (!text) continue;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'choice-btn';
+    btn.setAttribute('aria-pressed', 'false');
     btn.textContent = text;
-    btn.addEventListener('click', (e) => { e.stopPropagation(); selectChoice(text, agent); });
-    wrap.appendChild(btn);
+    btn.addEventListener('click', (e) => { e.stopPropagation(); toggleChoice(btn); });
+    opts.appendChild(btn);
   }
+  wrap.appendChild(opts);
+
+  const submitRow = document.createElement('div');
+  submitRow.className = 'bubble-choices-submit';
+  const submit = document.createElement('button');
+  submit.type = 'button';
+  submit.className = 'choice-submit role-confirm';
+  submit.textContent = 'Submit';
+  submit.addEventListener('click', (e) => { e.stopPropagation(); submitChoices(wrap, agent); });
+  submitRow.appendChild(submit);
+  wrap.appendChild(submitRow);
+
   return wrap;
 }
-
-function selectChoice(text, agent) {
+function toggleChoice(btn) {
+  const on = btn.getAttribute('aria-pressed') === 'true';
+  btn.setAttribute('aria-pressed', on ? 'false' : 'true');
+  btn.classList.toggle('selected', !on);
+}
+function submitChoices(wrap, agent) {
   if (currentAgent()?.id !== agent.id) return;
+  const picked = [...wrap.querySelectorAll('.choice-btn[aria-pressed="true"]')]
+    .map(b => b.textContent.trim()).filter(Boolean);
+  if (!picked.length) return;          // nothing selected → no-op
   leaveBubbleFocus();
-  submitIntent(text);   // the pick becomes the user's next message
+  submitIntent(picked.join('; '));     // the chosen option(s) become the next message
 }
 
 /* Selectable chat bubbles: each prompt / response is a tabbable
@@ -2486,6 +2513,23 @@ function renderHandoffBubble(m, idx) {
     el.textContent = String(m.content || '');
   }
   return el;
+}
+
+/* Re-render the open L2 chat for `agentId` when the server posts a turn on its
+ * own (kickoff plan, one-at-a-time questions). No-op unless we're zoomed on
+ * that agent and no client request owns the view. Pulls the new turn in and
+ * clears the "…" thinking bubble. */
+let _zoomRefreshPending = false;
+async function maybeRefreshZoomFor(agentId) {
+  if (mode !== MODE_ZOOM || inflightController) return;
+  const a = currentAgent();
+  if (!a || a.id !== agentId) return;
+  if (_zoomRefreshPending) return;
+  _zoomRefreshPending = true;
+  try {
+    const chat = chatScrollEl();
+    if (chat) await renderChatHistory(chat, a);
+  } finally { _zoomRefreshPending = false; }
 }
 
 async function renderChatHistory(container, agent) {
@@ -2667,6 +2711,19 @@ async function renderChatHistory(container, agent) {
     container.style.scrollBehavior = 'auto';
     container.scrollTop = container.scrollHeight;
     container.style.scrollBehavior = prevBehavior;
+
+    // If the agent is busy (e.g. the PM drafting its kickoff plan or working
+    // post-approval) and no client request owns the view, show the "…" thinking
+    // bubble so the user sees it's working — across every agent.
+    if (agentBusy[agent.id] && !inflightController) showPendingAgentBubble();
+
+    // Kickoff plan awaiting approval → auto-focus the plan bubble so a single
+    // Cross/Enter approves (no need to press Up first). The approval buttons
+    // only render while the plan is pending, so their presence is the signal.
+    if (chatBubbles.length &&
+        chatBubbles[chatBubbles.length - 1].querySelector('.bubble-kickoff-actions')) {
+      focusLastBubble();
+    }
   } catch (err) {
     console.warn('[chat] history failed:', err);
   }
@@ -2716,12 +2773,9 @@ function showPendingAgentBubble() {
   if (!pendingAgentBubbleEl || !chat.contains(pendingAgentBubbleEl)) {
     const b = document.createElement('div');
     b.className = 'bubble agent pending';
-    const who = currentAgent();
-    const hdr = who
-      ? `<div class="bubble-author"><span class="bubble-author-name">${escapeHtml(who.name)}</span>` +
-        `<span class="bubble-author-role">${escapeHtml(roleLabel(who.role))}</span></div>`
-      : '';
-    b.innerHTML = `${hdr}<div class="bubble-content">${TYPING_DOTS}</div>`;
+    // No name/role header: the "…" is always the viewed agent's own bubble.
+    // (Foreign/delegate bubbles get their header only once the real reply lands.)
+    b.innerHTML = `<div class="bubble-content">${TYPING_DOTS}</div>`;
     chat.appendChild(b);
     pendingAgentBubbleEl = b;
   }
@@ -3656,6 +3710,14 @@ function handleBridgeEvent(ev) {
       agentStatus[ev.agentId] = ev.verb || 'idle';
       agentBusy[ev.agentId] = (ev.verb && ev.verb !== 'idle');
       paintAgentStatus(ev.agentId);
+      // Reflect a server-initiated work cycle (e.g. PM kickoff) in the open L2:
+      // show the "…" thinking bubble while it works, pull the new turn in when
+      // it finishes. Skipped while a client request owns the view (submitIntent
+      // drives that case itself).
+      if (mode === MODE_ZOOM && !inflightController && currentAgent()?.id === ev.agentId) {
+        if (agentBusy[ev.agentId]) showPendingAgentBubble();
+        else maybeRefreshZoomFor(ev.agentId);
+      }
       break;
     }
     case 'token': {
@@ -3675,6 +3737,9 @@ function handleBridgeEvent(ev) {
       // opened (a reply, a kickoff plan, an assigned task).
       if (ev.type === 'activity' && ev.agentId) markUnseen(ev.agentId);
       else if (ev.type === 'delegate' && ev.toAgentId) markUnseen(ev.toAgentId);
+      // A server-posted turn (kickoff plan / question) for the agent we're
+      // viewing → pull it into the open chat and clear the "…" bubble.
+      if (ev.type === 'activity' && ev.agentId) maybeRefreshZoomFor(ev.agentId);
       break;
     }
     case 'note_added':
@@ -6072,9 +6137,13 @@ window.addEventListener('keydown', (e) => {
         cycleBubbleAction(e.key === 'ArrowRight' ? +1 : -1);
         return;
       }
+      // Space toggles the focused multi-select choice option (Enter / ✕ do too).
+      if (e.code === 'Space' && document.activeElement?.classList?.contains('choice-btn')) {
+        e.preventDefault(); document.activeElement.click(); return;
+      }
       if (e.key === 'Enter' && (document.activeElement?.classList?.contains('bubble-action')
           || document.activeElement?.closest?.('.bubble-kickoff-actions, .bubble-choices'))) {
-        // Activate the focused action icon or kickoff Approve/Reject button.
+        // Activate the focused action icon, choice toggle, or Approve/Reject/Submit.
         e.preventDefault(); document.activeElement.click(); return;
       }
       if (e.key === 'Enter') {
@@ -6253,6 +6322,9 @@ async function finalizeNewProject() {
     pickerIndex = projects.findIndex(p => p.id === project.id);
     gridIndex = 0; zoomedIndex = 0;
     setIndicator('idle', 'Connected');
+    // The PM immediately starts drafting the kickoff plan on the server — show
+    // "Drafting" on its tile right away rather than waiting on the SSE round-trip.
+    if (project.leadAgentId) { agentStatus[project.leadAgentId] = 'drafting'; agentBusy[project.leadAgentId] = true; }
     renderGrid();
   } catch (err) {
     setIndicator('error', 'Create failed');
