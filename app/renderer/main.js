@@ -2257,8 +2257,8 @@ function renderZoom(specOverride) {
     <div class="chat-scroll"></div>
     <div class="tile-surface"></div>
     <div class="agent-view-hint">
-      <span class="for-gamepad">Hold <kbd>R2</kbd> to speak</span>
-      <span class="for-keyboard">Hold <kbd>v</kbd> to speak</span>
+      <span class="for-gamepad">Hold <kbd>R2</kbd> to talk</span>
+      <span class="for-keyboard">Hold <kbd>V</kbd> to talk</span>
     </div>`;
   surfaceEl.appendChild(view);
   // Close × button — top-right of the agent surface, exits to L1.
