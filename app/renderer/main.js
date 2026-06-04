@@ -756,6 +756,13 @@ async function loadProjects() {
   projects = ((await pj.json()).projects || [])
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   window._roles = (await rj.json()).roles || [];
+  // Restore "Waiting for response" from server truth (an unanswered question) —
+  // survives page reloads and any missed SSE events. Leaves 'view' (task
+  // complete) states alone; only reconciles 'reply'.
+  for (const p of projects) for (const a of (p.agents || [])) {
+    if (a.awaitingReply) agentPending.set(a.id, 'reply');
+    else if (agentPending.get(a.id) === 'reply') agentPending.delete(a.id);
+  }
 }
 
 /* ---------- UI helpers ---------- */

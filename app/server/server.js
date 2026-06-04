@@ -277,14 +277,34 @@ app.post('/github/device', async (_req, res) => {
 
 app.post('/github/disconnect', (_req, res) => res.json(disconnectGithub()));
 
+/* True when an agent's latest turn is an unanswered question (an assistant turn
+ * carrying a `choices` array with no user reply after it). Lets the client
+ * restore "Waiting for response" on load, surviving reloads / missed events. */
+function agentAwaitingReply(agentId) {
+  const msgs = getContext(agentId).messages || [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    if (m.role === 'system') continue;          // skip handoff markers
+    if (m.role === 'user') return false;         // a reply came after → answered
+    if (m.role === 'assistant') {
+      try {
+        const p = JSON.parse(String(m.content || '').replace(/^```(?:json)?/i, '').replace(/```$/, '').trim());
+        if (Array.isArray(p?.choices) && p.choices.length) return true;
+      } catch { /* not a spec */ }
+      return false;                              // latest is a plain deliverable
+    }
+  }
+  return false;
+}
+
 app.get('/projects', (_req, res) => {
-  // Enrich each project with the most-recent scratchpad activity
-  // across its agents. Falls back to createdAt when there's nothing
-  // logged yet so the UI always has something to render.
+  // Enrich each project with the most-recent scratchpad activity across its
+  // agents (falls back to createdAt), plus a per-agent `awaitingReply` flag.
   const enriched = listProjects().map(p => {
     const agentIds = p.agents.map(a => a.id);
     const last = lastActivityAt(agentIds);
-    return { ...p, updatedAt: last || p.createdAt };
+    const agents = p.agents.map(a => ({ ...a, awaitingReply: agentAwaitingReply(a.id) }));
+    return { ...p, agents, updatedAt: last || p.createdAt };
   });
   res.json({ projects: enriched });
 });
