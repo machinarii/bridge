@@ -2520,7 +2520,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   top: var(--surface-top, 1.5rem);
   left: 1.5rem;
   bottom: var(--surface-bottom, 5rem);
-  width: 280px;
+  width: 320px;   /* match the Activity drawer width */
   background: var(--bg-elev);
   border: 1px solid #1d2734;
   border-radius: var(--radius);
@@ -2558,19 +2558,18 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .file-entry {
   display: flex; justify-content: space-between;
   padding: 0.5rem 1rem; cursor: pointer;
-  border-left: 3px solid transparent;
 }
 .file-entry .who { opacity: 0.5; font-size: 0.85rem; }
 /* Files that live inside a folder are indented so the nesting reads clearly. */
 .file-entry.in-folder { padding-left: 2rem; }
 .file-entry.focused {
   background: rgba(110,168,255,0.22);
-  border-left-color: var(--focus, #ffffff);
-  border-left-width: 4px;
+  /* Inset bar (not a border) so content stays aligned at 1rem like Activity. */
+  box-shadow: inset 4px 0 0 var(--focus, #ffffff);
 }
 /* File selector (drawer): shifts the surface right via margin so the
  * surface visibly narrows to fit. */
-body[data-file-drawer="open"] #surface { margin-left: calc(280px + 1rem); }
+body[data-file-drawer="open"] #surface { margin-left: calc(320px + 1rem); }
 /* File viewer (open file): translates the surface right by the viewer
  * width without resizing — surface keeps its width, right edge
  * extends past the viewport. Animated for a slide reveal. */
