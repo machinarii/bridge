@@ -84,11 +84,11 @@ test('assignKickoffTasks returns role-based assignments, including roles not on 
       { role: 'designer', task: 'Draft the main screen wireframe.' },
       { role: 'sw_engineer', task: 'Stand up the project skeleton.' },  // not yet on the team
     ] });
-    const assigned = await assignKickoffTasks(p.id, { apiKey: 'k', callJSON: stub });
-    assert.equal(assigned.length, 2);
-    assert.deepEqual(assigned.map(a => a.role).sort(), ['designer', 'sw_engineer']);
-    assert.match(assigned.find(a => a.role === 'designer').task, /wireframe/);
-    assert.match(assigned.find(a => a.role === 'sw_engineer').task, /skeleton/);
+    const { assignments } = await assignKickoffTasks(p.id, { apiKey: 'k', callJSON: stub });
+    assert.equal(assignments.length, 2);
+    assert.deepEqual(assignments.map(a => a.role).sort(), ['designer', 'sw_engineer']);
+    assert.match(assignments.find(a => a.role === 'designer').task, /wireframe/);
+    assert.match(assignments.find(a => a.role === 'sw_engineer').task, /skeleton/);
   } finally { deleteProject(p.id); }
 });
 
