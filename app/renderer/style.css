@@ -1851,7 +1851,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 #back-shortcut .sc {
   display: inline-flex; align-items: center; gap: 0.4rem;
   white-space: nowrap;
-  padding: 0.4rem 0.6rem;
+  padding: 0.4rem 0.4rem;
   border-radius: 6px;
   transition: background 120ms, outline-color 120ms;
 }

@@ -1112,11 +1112,16 @@ function createSurfaceCloseButton(onClose) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault(); e.stopPropagation();
       onClose();
-    } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft' ||
-               e.key === 'ArrowUp'   || e.key === 'ArrowRight') {
-      // Any arrow key releases the × focus and hands it back to the
-      // surface ring. Up/Right have no natural neighbor (X sits at
-      // the top-right corner), so we still treat them as "leave".
+    } else if (e.key === 'ArrowDown') {
+      // On L2, Down re-enters the chat at the most-recent (last) bubble so the
+      // highlight is on-screen; elsewhere it just hands focus back to the ring.
+      e.preventDefault(); e.stopPropagation();
+      btn.blur();
+      if (mode === MODE_ZOOM && chatBubbles.length) focusLastBubble();
+      else ring.paint();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'ArrowRight') {
+      // Up/Left/Right have no natural neighbor (X sits at the top-right
+      // corner), so release the × focus back to the surface ring.
       e.preventDefault(); e.stopPropagation();
       btn.blur();
       ring.paint();
