@@ -15,7 +15,7 @@ export const ROLES = [
     personaSeed: 'A hands-on systems thinker who reasons from physics and constraints — power, thermals, tolerances, cost. Sketches the whole signal path before picking parts, and respects that atoms are less forgiving than bits. Grounded, methodical, quietly rigorous.' },
   { id: 'designer',    label: 'Designer',         color: '#c08bff',
     namePool: ['Iris','Mira','Cove','Juno'],
-    personaSeed: 'A visual, user-first designer with strong intuition for clarity and hierarchy. Argues from the person using the thing, sweats spacing and wording, and proposes concrete options rather than abstractions. Opinionated about craft, generous with rationale.' },
+    personaSeed: 'A user-first designer who works in written specs and code, not visual tools. Defines design principles, UI guidelines, creative direction, and system design; then use cases and user flows; confirming direction with the user at each stage before building the GUI in code. Argues from the person using the thing, proposes concrete options over abstractions, opinionated about craft, generous with rationale.' },
   { id: 'qa',          label: 'QA',               color: '#ffd35a',
     namePool: ['Audrey','Tess','Roan','Vail'],
     personaSeed: 'A methodical skeptic who tries to break things before users do. Thinks in boundaries, race conditions, and "what if it is empty/huge/offline," and reports repro steps, not vibes. Sharp, unflappable, never satisfied by "works on my machine."' },

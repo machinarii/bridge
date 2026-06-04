@@ -26,9 +26,30 @@ export const RESPONSE_STYLE = `
 ## When direction is unclear or you need a decision
 Don't guess. Offer 2-4 short labeled choices (A, B, C, D) and let the user pick. Put them in the answer spec's "choices" array (short strings, each starting with its letter); the user's pick becomes their next message.
 
+## What you can actually do (grounding — hard rule)
+You work entirely inside Bridge. Your only outputs are **markdown documents** and **code**, produced directly here in the conversation. You have NO access to external or visual tools (Figma, Sketch, design software), no chat channels, no email, no tickets, no internet, no repos you can't see.
+- Never promise external artifacts or future hand-offs: no "I'll share a Figma link", no "I'll post it in the project channel", no "I'll tag the PM when it's ready", no "uploading to…".
+- Never give ETAs, timelines, or deadlines ("2 days", "by Friday", "next sprint"). You produce the work now, in text — or state exactly what you need to proceed.
+- Don't invent files, links, tools, or systems that don't exist. Do the actual work in this reply (write the doc, write the code), or ask a focused question.
+
 ## Conduct (hard rule)
 No irreversible/destructive actions without confirmation. Never expose API keys, tokens, or credentials — not even as examples. Don't fabricate citations, library APIs, or function signatures; say when you're unsure. Don't claim work is done when it's partial or untested. Be correct over appearing helpful. For financial/legal/medical topics, include a disclaimer.
 `;
+
+/* Role-specific working guidance, injected into the system prompt. Grounds each
+ * role in what it actually delivers inside Bridge (docs + code), not real-world
+ * tools or hand-offs. */
+const ROLE_GUIDANCE = {
+  designer: `As the Designer you work in written documents and code — never visual-design tools (there is no Figma/Sketch in Bridge). Follow this sequence, and do NOT skip ahead:
+1. Write the design foundation as a markdown doc: design principles, UI guidelines, creative direction, and system design. Then ask the user to confirm before continuing (offer choices if a direction is open).
+2. After they confirm, write use cases and user flows as a markdown doc. Then ask the user to confirm.
+3. Only once the full design documentation is complete and the user has reviewed it, build the GUI directly in code.
+Never promise a Figma file, an external link, a channel post, or a delivery date.`,
+};
+function roleGuidance(roleId) {
+  const g = ROLE_GUIDANCE[roleId];
+  return g ? `\n${g}\n` : '';
+}
 
 /* Tile-spec contract is unchanged from Aurora MVP — see prior README. */
 
@@ -48,7 +69,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${topoLine}${sharedBlock}
+${roleGuidance(agent.role)}${topoLine}${sharedBlock}
 Stay in role and on-goal. Speak briefly, in first person when relevant. The user is talking to you specifically.
 ${RESPONSE_STYLE}
 
@@ -120,14 +141,23 @@ function samplingFor({ effort, regenerate }) {
   return out;
 }
 
-export async function interpretIntent({ projectId, agentId, text, sharedFrom, regenerate = 0, effort = 'high' }) {
+export async function interpretIntent({ projectId, agentId, text, sharedFrom, regenerate = 0, effort = 'high', handoff }) {
   const project = getProject(projectId);
   if (!project) throw new Error(`unknown project: ${projectId}`);
   const agent = project.agents.find(a => a.id === agentId);
   if (!agent) throw new Error(`unknown agent: ${agentId}`);
 
   const apiKey = process.env.OPENROUTER_API_KEY;
-  appendTurn(agentId, 'user', text);
+  // A delegated task records as a From→To handoff turn (so it doesn't render as
+  // the user's own "you" bubble). `text` is still the prompt for the model.
+  if (handoff) {
+    appendTurn(agentId, 'system', JSON.stringify({
+      kind: 'handoff', from: handoff.from, fromRole: handoff.fromRole,
+      to: handoff.to, toRole: handoff.toRole, task: text,
+    }));
+  } else {
+    appendTurn(agentId, 'user', text);
+  }
 
   // v2 status: agent is reading context, evaluating inputs.
   emitStatus(projectId, agentId, 'analyzing');
@@ -178,7 +208,10 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
     const raw = data?.choices?.[0]?.message?.content || '';
     appendTurn(agentId, 'assistant', raw);
     const spec = parseSpec(raw);
-    emitActivity(projectId, `${agent.name}: ${spec?.title || spec?.intent || 'replied'}`, agentId);
+    // A reply with choices asks the user something → "Waiting for response";
+    // otherwise it's a finished deliverable → "Task complete" (clears on view).
+    const needsResponse = Array.isArray(spec?.choices) && spec.choices.length > 0;
+    emitActivity(projectId, `${agent.name}: ${spec?.title || spec?.intent || 'replied'}`, agentId, { awaitKind: needsResponse ? 'reply' : 'view' });
     return hydrateSpec(spec, { project, agent, text });
   } finally {
     emitStatus(projectId, agentId, 'idle');
@@ -254,7 +287,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${topoLine}${sharedBlock}
+${roleGuidance(agent.role)}${topoLine}${sharedBlock}
 Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.
 ${RESPONSE_STYLE}`;
 }
@@ -339,7 +372,9 @@ async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey
   });
   if (!full || !full.trim()) return null;
   appendTurn(agentId, 'assistant', full);
-  emitActivity(projectId, `${agent.name}: replied`, agentId);
+  // Prose answer (no choices) → a finished deliverable: "Task complete" (clears
+  // when the user views it; immediate no-op if they're already looking).
+  emitActivity(projectId, `${agent.name}: replied`, agentId, { awaitKind: 'view' });
   return hydrateSpec({ intent: 'answer', template: 'reader', context: '', title: '', body: full, streamed: true },
     { project, agent, text });
 }
