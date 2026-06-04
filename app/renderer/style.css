@@ -2891,10 +2891,11 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   margin-top: 0.7rem;
 }
 .agent-view .bubble.agent .bubble-choices-options {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;         /* always one horizontal row — never a grid */
-  align-items: stretch;      /* uniform height: all buttons match the tallest */
+  /* Single-row grid: equal columns, all cells stretch to the tallest one's
+     content height (reliable uniform height — flex basis:0 mis-measures it). */
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 0.4rem;
 }
 /* Selection buttons load in gradually (staggered), like the Layer 1 tiles. */

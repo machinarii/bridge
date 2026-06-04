@@ -42,12 +42,14 @@ Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 
 - **Multi-agent group chat + working delegation.** A delegate's reply surfaces in the delegating agent's chat as a labeled "foreign" bubble; the handoff renders as a `From → To` bubble. 1:1 delegation actually routes now (`resolveDelegateSpec`). `parseSpec` hardened so rich agent output (wireframes, code) never 500s.
 - **Topology-driven routing.** The chosen work topology is injected into the PM's routing prompt and agent system prompts — it now actually shapes assignment/coordination, not just `project.md`.
-- **PM auto-kickoff (`app/server/kickoff.js`).** On project create the PM posts a plan-first kickoff to the lead chat. Approve (in-bubble button **or** "yes") → generates PRD + roadmap + operating-notes + open-questions docs (named files via `writeNote`), assigns topology-shaped starting tasks, posts a report, then asks follow-up questions. Reject holds it off. State machine on `project.kickoff.status`.
-- **In-bubble agent choices.** Agents return a `choices[]` array when a decision is needed; rendered as a selectable list in the bubble; the pick becomes the user's next message.
-- **Agent house style.** Shared `RESPONSE_STYLE` (legible reasoning, telegraphic bullets, no italics, banned clichés/moves) injected into every agent prompt + team synthesis + kickoff.
-- **Voice overhaul.** Push-to-talk (hold V / R2), live word-by-word partials (re-transcribe the growing clip), wave only while holding, fixed-size capture box, Parakeet 422/decode bugs fixed (explicit `File(...)`, module-level fastapi import, temp-file + ffmpeg decode of webm).
-- **Layer 1 "Waiting for response"** — a tile glows + reads "Waiting for response" while an agent awaits the user's reply (clears when the user actually responds, not on view).
-- **Create-flow polish** — topology Cancel, Enter-toggles-checkbox, name/goal Clear buttons, default-highlight Continue, transition animations, close-button ↕ nav, etc.
+- **PM auto-kickoff that runs the team (`app/server/kickoff.js`).** Plan-first → one-tap Approve → writes 4 starter docs → asks follow-up questions **one at a time** (numbered "Q1:", as multi-select choice bubbles). Assignment is **role-based** via the PM model and may pick roles not on the team. When all questions are answered → kickoff **complete** → `startTeamWork` **fans out**: each assigned specialist runs its task (`interpretIntent`) and produces a deliverable; **missing roles auto-added** (`addAgent`) with an "Added teammates" PM message + `team_changed` event. A clarify-question's answer becomes that role's task; every on-team role is guaranteed one (gap-filled). State machine on `project.kickoff.status` (`drafting→awaiting_approval→running→asking→done`).
+- **Agent tile states via `awaitKind`.** A reply with `choices` → "Waiting for response" (orange, clears on reply); a deliverable → "Task complete" (green, clears on view). Client tracks `agentPending` (`agentId → 'reply'|'view'`); server tags activity events with `awaitKind`. Old `markUnseen`/`unseenAgents` replaced.
+- **Multi-select in-bubble choices.** A/B/C buttons in one horizontal **grid row** (uniform height, grows to fit), letter heading + description, **Other = hold-to-talk** free-form (standard mic wave), grayed **Submit** until a pick, "Select one or more" hint. Answered questions render **memorialized** (read-only, picks shown). Selection is **Enter/✕ only** (no Space).
+- **Agent grounding.** `RESPONSE_STYLE` now hard-grounds output to markdown docs + code (no Figma/external tools, channels, ETAs). `ROLE_GUIDANCE` adds per-role workflow (e.g. Designer: principles/guidelines/direction/system design → confirm → use cases/flows → confirm → build in code).
+- **Delegated task = handoff bubble.** `interpretIntent({ handoff })` records a delegated kickoff task as a PM→agent handoff turn, not a right-aligned "you" bubble.
+- **Chat motion.** "…" thinking across agents, typewriter reveal for scripted bubbles, slide-up arrival (current + new), staggered choice entrance, new-bubble highlight.
+- **Model defaults.** Reasoning effort defaults to **high**, base temperature **0.8**, default model **opus-4.7** (`.env`), richer per-role persona seeds.
+- **Create-flow / nav polish** — topology screen footer reachable (Down from Back row), L0 chips trimmed (no Hold-to-talk / Type-prompt / notification bell), role-screen "Select" relabel, etc.
 
 ## Architecture additions
 
@@ -56,6 +58,9 @@ Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 - `app/server/team.js` — `resolveDelegateSpec` (1:1 delegation), topology in routing.
 - `app/server/projects.js` — `kickoff` field + `getKickoff`/`setKickoff`; `TOPOLOGIES` exported.
 - `app/server/backends/notes.js` — `writeNote(projectId, name, body)` for human-named docs.
+- `app/server/kickoff.js` — `startTeamWork` (fan-out + auto-add), role-based `assignKickoffTasks` returning `{ assignments, clarify }`, kickoff Q&A advances `assignments`.
+- `app/server/orchestrator.js` — `RESPONSE_STYLE` grounding, `ROLE_GUIDANCE` + `roleGuidance()`, `interpretIntent({ handoff })`, `awaitKind` on activity events.
+- `app/server/events.js` — `emitActivity`/`emitDelegate` take an `extra` arg (carries `awaitKind`).
 - Routes: `POST /projects/:pid/kickoff/approve`, `…/kickoff/decline`.
 
 ## Tests
@@ -64,12 +69,13 @@ Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 
 ## Known gaps / follow-ups
 
-- **Kickoff Phases 3 & 4 not built:** real code scaffolding into a hidden per-project `code/` folder (Phase 3) and cross-project "agent replied elsewhere" notifications (Phase 4). Design notes in `docs/superpowers/specs/2026-06-03-pm-kickoff-design.md`.
+- **Fan-out cost.** Kickoff completion makes N real high-effort opus calls (one per specialist) + charter generation for any auto-added role. Intended, but real cost/latency.
+- **Agent-tile pending state is client-side** (`agentPending` map) — lost on a hard page reload (the live SSE re-establishes it for new events, but an already-pending question won't show until the next event). Persisting it server-side (e.g. from `kickoff.status` / last turn) is a follow-up.
+- **"Task complete" clears on view**, "Waiting for response" clears on reply — verify this matches expectations across non-kickoff replies too.
 - **`npm run stt`** should set `HF_HOME=build/hf-cache` (and ideally one launch script starts web + STT together).
 - **`app/renderer/speech.js`** (browser Web Speech) is now dead code — voice is Parakeet-only.
-- **Choices nav** is Left/Right (reuses the bubble-action model) even though the list is vertical — switch to Up/Down if that feels off.
-- **"Waiting for response"** persists until the user replies to that agent — by design, but verify it matches expectations across all agents (not just the kickoff PM).
-- The app is **unsigned/un-notarized** if packaged (`Bridge-0.2.0-arm64.dmg` in `dist/` predates most of this work — rebuild from `main` to ship these changes; sign with team `935434BZ22` for distribution).
+- Two **pre-existing** test failures unrelated to this work (`listRoles returns all 14 roles` — catalog is 11; `createProject writes charter markdown for each role`).
+- The app is **unsigned/un-notarized** if packaged — rebuild from `main` to ship these changes; sign with team `935434BZ22` for distribution.
 
 ## Design docs
 
