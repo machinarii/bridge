@@ -46,7 +46,7 @@ Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 - **In-bubble agent choices.** Agents return a `choices[]` array when a decision is needed; rendered as a selectable list in the bubble; the pick becomes the user's next message.
 - **Agent house style.** Shared `RESPONSE_STYLE` (legible reasoning, telegraphic bullets, no italics, banned clichés/moves) injected into every agent prompt + team synthesis + kickoff.
 - **Voice overhaul.** Push-to-talk (hold V / R2), live word-by-word partials (re-transcribe the growing clip), wave only while holding, fixed-size capture box, Parakeet 422/decode bugs fixed (explicit `File(...)`, module-level fastapi import, temp-file + ffmpeg decode of webm).
-- **L1 "Waiting for response"** — a tile glows + reads "Waiting for response" while an agent awaits the user's reply (clears when the user actually responds, not on view).
+- **Layer 1 "Waiting for response"** — a tile glows + reads "Waiting for response" while an agent awaits the user's reply (clears when the user actually responds, not on view).
 - **Create-flow polish** — topology Cancel, Enter-toggles-checkbox, name/goal Clear buttons, default-highlight Continue, transition animations, close-button ↕ nav, etc.
 
 ## Architecture additions
