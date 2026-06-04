@@ -46,3 +46,11 @@ export function appendNote(projectId, body) {
   writeFileSync(join(notesDir(projectId), `${id}.md`), body, 'utf8');
   return { id, label: deriveLabel(body) };
 }
+
+/* Write (or overwrite) a note with a stable, human-readable filename — used by
+ * the kickoff so docs land as PRD.md, milestones.md, … instead of timestamps. */
+export function writeNote(projectId, name, body) {
+  const id = String(name).replace(/\.md$/i, '').replace(/[^a-z0-9._-]/gi, '-').replace(/^-+|-+$/g, '') || 'note';
+  writeFileSync(join(notesDir(projectId), `${id}.md`), body, 'utf8');
+  return { id, label: deriveLabel(body) };
+}
