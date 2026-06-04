@@ -256,7 +256,7 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
  * reply as a foreign-author bubble in the delegating agent's chat. Returns the
  * terminal (non-delegate) spec — the teammate's answer — or the original spec
  * when it can't resolve (e.g. no enabled agent of the requested role). */
-export async function resolveDelegateSpec({ projectId, fromAgentId, spec, effort = 'medium', depth = 0 }) {
+export async function resolveDelegateSpec({ projectId, fromAgentId, spec, effort = 'high', depth = 0 }) {
   if (!spec || spec.intent !== 'delegate') return spec;
   if (depth >= MAX_DELEGATION_DEPTH) return spec;
   const project = getProject(projectId);

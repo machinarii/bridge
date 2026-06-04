@@ -107,18 +107,20 @@ const EFFORT_BUDGET = { low: 1024, medium: 4096, high: 8192, extra: 16384, max: 
  * (quality). top_p / max_tokens stay at their defaults. */
 function samplingFor({ effort, regenerate }) {
   let lvl = EFFORT_LEVELS.indexOf(effort);
-  if (lvl < 0) lvl = 1;                       // default: medium
+  if (lvl < 0) lvl = 2;                       // default: high reasoning
   const out = {};
   const n = Math.max(0, Number(regenerate) || 0);
+  // Base temperature 0.8 for livelier, more varied phrasing; each redo nudges
+  // it up further for more variety.
+  out.temperature = Math.min(1.1, 0.8 + 0.2 * n);   // 0.8, 1.0, 1.1 …
   if (n > 0) {
-    out.temperature = Math.min(1.1, 0.7 + 0.2 * n);   // 0.9, 1.1, 1.1 …
     lvl = Math.min(EFFORT_LEVELS.length - 1, lvl + n); // each redo → one tier up
   }
   out.reasoning = { max_tokens: EFFORT_BUDGET[EFFORT_LEVELS[lvl]] };
   return out;
 }
 
-export async function interpretIntent({ projectId, agentId, text, sharedFrom, regenerate = 0, effort = 'medium' }) {
+export async function interpretIntent({ projectId, agentId, text, sharedFrom, regenerate = 0, effort = 'high' }) {
   const project = getProject(projectId);
   if (!project) throw new Error(`unknown project: ${projectId}`);
   const agent = project.agents.find(a => a.id === agentId);
@@ -319,7 +321,7 @@ async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
 
 /* Returns a hydrated 'reader' spec on success, or null to defer to the JSON
  * tile path (action intents, empty output, or classify failure). */
-async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate = 0, effort = 'medium' }) {
+async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate = 0, effort = 'high' }) {
   if (await classifyIntent({ apiKey, text }) !== 'answer') return null;
   emitStatus(projectId, agentId, 'drafting');
   const history = getContext(agentId).messages.slice(0, -1);

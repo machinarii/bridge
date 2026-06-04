@@ -490,7 +490,7 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
   const text = String(req.body?.text || '').trim();
   if (!text) return res.status(400).json({ error: 'empty intent' });
   const regenerate = Number(req.body?.regenerate) || 0;
-  const effort = String(req.body?.effort || 'medium');
+  const effort = String(req.body?.effort || 'high');
   try {
     // During an awaiting kickoff, a message to the lead may approve it.
     const project0 = getProject(pid);
@@ -580,7 +580,7 @@ app.get('/projects/:pid/files', (req, res) => {
 app.post('/projects/:pid/team/interpret', async (req, res) => {
   const text = String(req.body?.text || '').trim();
   if (!text) return res.status(400).json({ error: 'empty intent' });
-  const effort = String(req.body?.effort || 'medium');
+  const effort = String(req.body?.effort || 'high');
   try {
     const result = await runTeamVoice({ projectId: req.params.pid, text, effort });
     res.json(result);
