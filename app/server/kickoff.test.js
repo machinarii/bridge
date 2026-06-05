@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import { classifyApproval, topologyGuidance, DOC_TITLES, buildPlanPrompt, startKickoff, executeKickoff, handleLeadMessageDuringKickoff } from './kickoff.js';
 import { createProject, getKickoff, setKickoff, deleteProject } from './projects.js';
 import { getContext } from './scratchpad.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+// Keep tests hermetic: project repos go to a throwaway temp base, never ~/bridge-projects.
+process.env.BRIDGE_PROJECTS_BASE = mkdtempSync(join(tmpdir(), 'bridge-test-'));
 
 test('classifyApproval recognizes clear yes/no', () => {
   assert.equal(classifyApproval('yes'), 'approve');

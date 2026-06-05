@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE_DIR = resolve(__dirname, '..', 'state');
+// Keep tests hermetic: project repos go to a throwaway temp base, never ~/bridge-projects.
+process.env.BRIDGE_PROJECTS_BASE = mkdtempSync(join(tmpdir(), 'bridge-test-'));
 
 // Isolate each run — delete projects.json before importing
 rmSync(resolve(STATE_DIR, 'projects.json'), { force: true });
