@@ -22,3 +22,18 @@ export function verifyScript(scripts) {
   if (scripts?.test) steps.push({ name: 'test', cmd: 'npm test' });
   return steps.map(s => `echo "@@STEP ${s.name}" && ${s.cmd}`).join(' && ');
 }
+
+/** Run install/build/test for a project in the sandbox; report the failing step.
+ * Returns { ok:true } or { ok:false, step, output, daemonDown?, timedOut? }. */
+export async function verifyProject(projectId, { runner = runInContainer, image } = {}) {
+  const p = getProject(projectId);
+  if (!p) return { ok: false, step: 'setup', output: 'unknown project' };
+  const repoPath = ensureRepoPath(projectId);
+  const scripts = pkgScripts(repoPath);
+  if (!scripts) return { ok: false, step: 'setup', output: 'no package.json — nothing to run' };
+  const r = await runner(repoPath, { image, script: verifyScript(scripts) });
+  if (r.daemonDown) return { ok: false, step: 'docker', output: r.output, daemonDown: true };
+  if (r.exitCode === 0) return { ok: true };
+  const markers = [...String(r.output || '').matchAll(/@@STEP (\w+)/g)].map(m => m[1]);
+  return { ok: false, step: markers[markers.length - 1] || 'install', output: r.output, timedOut: !!r.timedOut };
+}
