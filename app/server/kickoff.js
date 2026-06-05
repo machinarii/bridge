@@ -10,6 +10,22 @@ import { getModelForRole, getRouterModel } from './models.js';
 import { emitNotification, emitActivity, emitDelegate, emitStatus, publish as publishEvent } from './events.js';
 import { writeNote } from './backends/notes.js';
 import { commitIfChanged } from './workspace.js';
+import { generateBuildPlan, runScaffold } from './scaffold.js';
+
+// After kickoff Q&A, the PM proposes a build plan as a selectable question.
+const BUILD_CHOICES = ['Build it', 'Hold off — let me adjust'];
+function isBuildApproval(text) { return String(text || '').trim() === BUILD_CHOICES[0]; }
+
+/** A build-plan turn: the proposed stack + file tree, as a choice bubble. */
+function buildPlanSpec(plan) {
+  const tree = plan.files.map(f => `- \`${f.path}\` — ${f.purpose}`).join('\n');
+  const body = `Here's the build plan (${plan.stack || 'app'}): ${plan.summary || ''}\n\n` +
+    `**Files I'll scaffold:**\n${tree}\n\nReady to scaffold these into the project repo?`;
+  return JSON.stringify({
+    intent: 'answer', template: 'reader', context: 'Build plan', title: 'Build plan',
+    body, choices: BUILD_CHOICES,
+  });
+}
 import { RESPONSE_STYLE, interpretIntent } from './orchestrator.js';
 
 export const DOC_TITLES = {
@@ -498,18 +514,52 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
       emitActivity(projectId, `PM: question ${nextIdx + 1} ready`, project.leadAgentId, { awaitKind: 'reply' });
       return { handled: true, intent: 'next_question', spec };
     }
-    // Out of questions — kickoff is now genuinely complete.
-    const spec = closingSpec("Thanks — that's everything I needed. Kickoff is complete: docs are up to date and the team has its starting tasks. Ask me anything from here.");
+    // Out of questions — enough is captured. Propose a build plan to approve.
+    setKickoff(projectId, { qIdx: nextIdx });
+    const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+    let plan = null;
+    try { plan = await generateBuildPlan(projectId, { callText: opts.callText || callOpenRouterText, apiKey }); } catch { /* fall through */ }
+    if (plan && plan.files?.length) {
+      const spec = buildPlanSpec(plan);
+      appendTurn(project.leadAgentId, 'assistant', spec);
+      setKickoff(projectId, { status: 'build_pending' });
+      emitActivity(projectId, 'PM: build plan ready', project.leadAgentId, { awaitKind: 'reply' });
+      return { handled: true, intent: 'build_plan', spec };
+    }
+    // No plan (e.g. no API key) → close kickoff the old way and let the team work.
+    const spec = closingSpec("Thanks — that's everything I needed. Kickoff is complete: the docs are up to date and the team has its starting tasks. Ask me anything from here.");
     appendTurn(project.leadAgentId, 'assistant', spec);
-    setKickoff(projectId, { status: 'done', qIdx: nextIdx });
+    setKickoff(projectId, { status: 'done' });
     emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
                        body: `${project.name}: questions answered and the team is moving.` });
-    // Terminal message — the PM isn't awaiting a reply, so don't glow "Waiting".
     emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId);
-    // Kickoff is complete → the specialists start building (auto-adding any
-    // missing roles). Fire-and-forget so the closing returns promptly.
     startTeamWork(projectId, opts);
     return { handled: true, intent: 'questions_done', spec };
+  }
+
+  // Build-plan approval: "Build it" → scaffold the repo; the result is posted back.
+  if (k.status === 'build_pending') {
+    const project = getProject(projectId);
+    if (!project) return { handled: false };
+    appendTurn(project.leadAgentId, 'user', text);
+    if (!isBuildApproval(text)) {
+      // "Hold off / adjust" → keep waiting; the normal /interpret reply handles it.
+      return { handled: true, intent: 'build_hold', awaiting: true };
+    }
+    emitStatus(projectId, project.leadAgentId, 'coding');
+    emitActivity(projectId, 'PM: scaffolding…', project.leadAgentId);
+    const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+    let r;
+    try { r = await runScaffold(projectId, { callText: opts.callText || callOpenRouterText, apiKey }); }
+    catch (e) { r = { ok: false, reason: String(e?.message || e) }; }
+    const spec = closingSpec(r.ok
+      ? `Done — scaffolded ${r.fileCount} file${r.fileCount === 1 ? '' : 's'} and committed them (${r.commitSha}). Open the project folder to see the code.`
+      : `Scaffold didn't complete: ${r.reason || 'unknown error'}. The plan is still ready — say "Build it" to retry.`);
+    appendTurn(project.leadAgentId, 'assistant', spec);
+    setKickoff(projectId, { status: r.ok ? 'built' : 'build_pending' });
+    emitStatus(projectId, project.leadAgentId, 'idle');
+    emitActivity(projectId, r.ok ? 'PM: scaffold complete' : 'PM: scaffold failed', project.leadAgentId);
+    return { handled: true, intent: r.ok ? 'scaffolded' : 'scaffold_failed', spec };
   }
 
   if (k.status !== 'awaiting_approval') return { handled: false };
