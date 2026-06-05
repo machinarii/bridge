@@ -2,12 +2,13 @@ import express from 'express';
 import { migrateLegacyOnce } from './scratchpad.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { listRoles } from './roles.js';
 import { getRouterModel } from './models.js';
 import { listSkills, getSkill, withSkillEnabled } from './skills.js';
 import { githubStatus, startDeviceFlow, disconnectGithub, setGithubPersist, detectAndStore } from './github.js';
 import { listProjects, getProject, createProject, setAgentEnabled, addAgent, removeAgent, renameProject, deleteProject, migrateCharterFilenames } from './projects.js';
+import { buildFileTree, readProjectFile } from './server-files.js';
 import { charterFileNameFor } from './charters.js';
 import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
@@ -40,7 +41,6 @@ if (!process.env.LOCAL_STT_URL) {
 const PORT = Number(process.env.PORT || 4317);
 const RENDERER_DIR = resolve(__dirname, '..', 'renderer');
 const ASSETS_DIR   = resolve(__dirname, '..', 'assets');
-const STATE_DIR = resolve(__dirname, '..', 'state');
 
 const app = express();
 app.use(express.json({ limit: '64kb' }));
@@ -573,28 +573,9 @@ app.post('/projects/:pid/agents/:aid/history/truncate', (req, res) => {
 });
 
 app.get('/projects/:pid/files', (req, res) => {
-  const p = getProject(req.params.pid);
-  if (!p) return res.status(404).json({ error: 'unknown project' });
-  const projDir = resolve(STATE_DIR, p.id);
-  function fileEntry(absPath, kind) {
-    const stat = statSync(absPath);
-    return { path: absPath.replace(projDir + '/', ''), kind, mtime: stat.mtimeMs };
-  }
-  const charters = readdirSync(resolve(projDir, 'roles'))
-    .filter(f => f.endsWith('.md'))
-    .map(f => {
-      // Charter files are named role-<label>.md — match each back to its agent.
-      const agent = p.agents.find(a => charterFileNameFor(a.role) === f);
-      return { ...fileEntry(resolve(projDir, 'roles', f), 'charter'), roleId: agent?.role || null, agentName: agent?.name || '' };
-    })
-    // Only surface charters for agents currently on the project — drop any
-    // orphaned charter left by a removed agent so the explorer matches the team.
-    .filter(c => c.roleId);
-  const notes = readdirSync(resolve(projDir, 'notes'))
-    .filter(f => f.endsWith('.md'))
-    .sort().reverse()
-    .map(f => ({ ...fileEntry(resolve(projDir, 'notes', f), 'note') }));
-  res.json({ projectMd: 'project.md', charters, notes });
+  const tree = buildFileTree(req.params.pid);
+  if (!tree) return res.status(404).json({ error: 'unknown project' });
+  res.json(tree);
 });
 
 app.post('/projects/:pid/team/interpret', async (req, res) => {
@@ -611,13 +592,13 @@ app.post('/projects/:pid/team/interpret', async (req, res) => {
 });
 
 app.get('/projects/:pid/file/*', (req, res) => {
-  const p = getProject(req.params.pid);
-  if (!p) return res.status(404).json({ error: 'unknown project' });
-  const rel = req.params[0];
-  if (rel.includes('..')) return res.status(400).json({ error: 'bad path' });
-  const path = resolve(STATE_DIR, p.id, rel);
-  if (!existsSync(path)) return res.status(404).json({ error: 'not found' });
-  res.json({ path: rel, body: readFileSync(path, 'utf8') });
+  try {
+    const body = readProjectFile(req.params.pid, req.params[0]);
+    res.json({ path: req.params[0], body });
+  } catch (err) {
+    const msg = String(err.message);
+    res.status(msg === 'not found' ? 404 : 400).json({ error: msg });
+  }
 });
 
 migrateLegacyOnce();
