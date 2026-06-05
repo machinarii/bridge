@@ -14,6 +14,7 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRole, listRoles, FALLBACK_NAMES } from './roles.js';
 import { generateProjectCharters, charterFileNameFor, legacyCharterFileNames } from './charters.js';
+import { resolveRepoPath, ensureRepo } from './workspace.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE_DIR = resolve(__dirname, '..', 'state');
@@ -121,6 +122,16 @@ export function setKickoff(id, patch) {
   p.kickoff = { ...(p.kickoff || { status: 'idle' }), ...patch };
   save();
   return p.kickoff;
+}
+
+/** Resolve + persist the project's code-repo path on first use, and make sure
+ * the git repo exists on disk. Stable thereafter (a rename won't move it). */
+export function ensureRepoPath(id) {
+  const p = getProject(id);
+  if (!p) return null;
+  if (!p.repoPath) { p.repoPath = resolveRepoPath(p.name); save(); }
+  ensureRepo(p.repoPath);
+  return p.repoPath;
 }
 
 export async function createProject({ name, goal, roleIds, topology }) {
