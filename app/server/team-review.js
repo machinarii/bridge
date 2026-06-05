@@ -3,7 +3,10 @@
  * proposes a build plan. Deterministic state machine only — model-driven plan
  * generation and live kickoff wiring land in Plan 4. */
 import { getProject, setProjectState } from './projects.js';
-import { writeNote } from './backends/notes.js';
+import { writeNote, listNotes, readNote } from './backends/notes.js';
+import { getModelForRole } from './models.js';
+import { getRole } from './roles.js';
+import { generateBuildPlan } from './scaffold.js';
 
 /** The enabled, non-lead agents in tile order — the round's queue. */
 export function teamReviewAgents(projectId) {
@@ -56,4 +59,37 @@ export function recordPlan(projectId, agentId, planMarkdown, { answered = false 
   if (tr.order[tr.idx] === agentId) tr.idx += 1;
   setProjectState(projectId, { teamReview: tr });
   return tr;
+}
+
+/** Captured planning docs as model context. */
+function reviewDocs(projectId) {
+  return listNotes(projectId)
+    .map(n => `### ${n.id}\n${readNote(projectId, n.id) || ''}`)
+    .join('\n\n');
+}
+
+/** Generate one agent's domain plan from the captured docs and record it. */
+export async function planAgentTurn(projectId, agentId, { callText, apiKey } = {}) {
+  const p = getProject(projectId);
+  const agent = p?.agents.find(a => a.id === agentId);
+  if (!agent) return null;
+  const roleLabel = getRole(agent.role)?.label || agent.role;
+  const prompt =
+    `You are ${agent.name}, the ${roleLabel} on project "${p.name}" (goal: "${p.goal}"). ` +
+    `Review the captured planning docs and write YOUR short domain plan in markdown: ` +
+    `what you'll own and your first 3-5 concrete steps toward the goal. Markdown only.\n\n` +
+    `Docs:\n${reviewDocs(projectId)}`;
+  let md = '';
+  try { md = String(await callText({ apiKey, model: getModelForRole(agent.role), prompt, timeoutMs: 30_000 }) || '').trim(); }
+  catch { md = ''; }
+  if (!md) md = `# ${agent.name} — ${roleLabel} plan\n\n_(plan not generated)_\n`;
+  recordPlan(projectId, agentId, md);
+  return getProject(projectId)?.teamReview || null;
+}
+
+/** When the round is complete, propose the PM build plan (→ phase build_pending).
+ * Returns the plan, or null if the round isn't ready yet. */
+export async function maybeFinishTeamReview(projectId, { callText, apiKey } = {}) {
+  if (!teamReviewReady(projectId)) return null;
+  return generateBuildPlan(projectId, { callText, apiKey });
 }
