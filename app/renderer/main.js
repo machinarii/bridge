@@ -495,6 +495,39 @@ window.addEventListener('keydown', (e) => {
 }, true);
 window.addEventListener('mousemove', () => setInputMode('keyboard'), true);
 
+/* ── Two-finger horizontal trackpad swipe ≡ the [ / ] keys ─────────────────
+ * A two-finger swipe arrives as a burst of `wheel` events with a dominant
+ * horizontal delta. We fire once on the leading edge of a gesture, then wait
+ * for the burst to settle before re-arming — so one swipe = one step, exactly
+ * like one keypress. The action is whatever [ / ] do on the current screen
+ * (prev/next project on L1, prev/next agent on L2): we synthesize the real
+ * keydown so it flows through the same handler + guards.
+ *   swipe left  → '['   (prev)
+ *   swipe right → ']'   (next)
+ * If the direction feels inverted on your trackpad, flip the comparison below. */
+let _swipeArmed = true;
+let _swipeSettleT = null;
+window.addEventListener('wheel', (e) => {
+  const ax = Math.abs(e.deltaX), ay = Math.abs(e.deltaY);
+  // Only deliberate, clearly-horizontal gestures — let vertical scroll and
+  // tiny diagonal jitter pass through untouched.
+  if (ax < 30 || ax <= ay * 1.5) return;
+  // Don't hijack a genuinely horizontally-scrollable target (wide code block
+  // or table in the chat) — let it scroll instead.
+  for (let el = e.target; el && el !== document.body; el = el.parentElement) {
+    if (el.scrollWidth > el.clientWidth + 2) {
+      const ox = getComputedStyle(el).overflowX;
+      if (ox === 'auto' || ox === 'scroll') return;
+    }
+  }
+  if (_swipeSettleT) clearTimeout(_swipeSettleT);
+  _swipeSettleT = setTimeout(() => { _swipeArmed = true; }, 180);
+  if (!_swipeArmed) return;
+  _swipeArmed = false;
+  const key = e.deltaX > 0 ? ']' : '[';
+  window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+}, { passive: true });
+
 /* ---------- Reasoning-effort quick picker ----------
  * Hold R (keyboard) or the DualSense touchpad, then nudge Up/Down with the
  * arrows / d-pad / either analog stick; release to commit. Effort is scoped:
@@ -622,7 +655,27 @@ let agentBusy = {};
 /* v2 — last-known status verb per agent. Updated by the SSE
  * subscriber; rendered into agent-tile .status on L1. */
 let agentStatus = {}; // { [agentId]: 'idle'|'drafting'|'analyzing'|'waiting' }
-const VERB_LABELS = { idle: 'Idle', drafting: 'Drafting', analyzing: 'Analyzing', waiting: 'Waiting' };
+// Agent work verbs. Every non-idle verb is a "busy" state — green dot, rolls up
+// to project "Working" (see projectStatus). `waiting` = blocked on a teammate
+// (still busy/green, NOT the orange "needs you" state). Server currently emits
+// only idle/analyzing/drafting; the rest are renderer-ready and light up once
+// the orchestrator calls emitStatus() with them.
+const VERB_LABELS = {
+  idle: 'Idle',
+  analyzing: 'Analyzing',
+  drafting: 'Drafting',
+  coding: 'Coding',
+  prototyping: 'Prototyping',
+  documenting: 'Documenting',
+  reviewing: 'Reviewing',
+  testing: 'Testing',
+  debugging: 'Debugging',
+  researching: 'Researching',
+  planning: 'Planning',
+  building: 'Building',
+  deploying: 'Deploying',
+  waiting: 'Waiting',
+};
 function verbLabel(v) { return VERB_LABELS[v] || 'Idle'; }
 
 /* Per-agent pending state after it produces output, shown (while idle) on the
@@ -837,10 +890,11 @@ function renderProjects() {
     tile.className = 'project-tile';
     tile.dataset.projectId = p.id;
     tile.style.setProperty('--tile-color', getProjectColor(p));
+    const ps = projectStatus(p);
     tile.innerHTML = `
       <h2 class="name">${escapeHtml(sentenceCase(p.name))}</h2>
       <div class="meta">${p.agents.length} agent${p.agents.length===1?'':'s'}</div>
-      <div class="project-updated">${escapeHtml(formatProjectUpdated(p.updatedAt || p.createdAt))}</div>`;
+      <div class="project-updated" data-status="${ps.kind}"><span class="dot"></span><span class="status-verb">${escapeHtml(ps.label)}</span></div>`;
     const myIdx = tileEls.length;
     // Tap opens; press-and-hold (1.4s) opens the edit modal.
     tile.addEventListener('pointerdown', () => startProjectHold(myIdx));
@@ -1251,6 +1305,44 @@ function formatProjectUpdated(at) {
   if (mo < 12) return `Updated ${mo} mo ago`;
   const y = Math.floor(d / 365);
   return `Updated ${y} yr ago`;
+}
+
+/* ── Layer 0 project status ───────────────────────────────────────────────
+ * Projects use a DIFFERENT status vocabulary than agents (see design.md §15.2
+ * and §15.2.1). A project tile rolls its agents' live state up into one label:
+ *   'attention' → "Needs attention"    — an agent is idle but awaiting the
+ *                 user's reply (agentPending === 'reply')
+ *   'working'   → "Working"            — an agent is actively busy (a non-idle
+ *                 verb: analyzing / drafting / waiting)
+ *   'updated'   → "Updated X ago"      — neither; the last-activity timestamp
+ * Attention outranks Working — it's the actionable one. */
+function projectStatus(p) {
+  let attention = false, working = false;
+  for (const a of (p.agents || [])) {
+    if (a.enabled === false) continue;
+    const verb = agentStatus[a.id] || (agentBusy[a.id] ? 'drafting' : 'idle');
+    if (verb !== 'idle') { working = true; continue; }
+    if (agentPending.get(a.id) === 'reply') attention = true;
+  }
+  if (attention) return { kind: 'attention', label: 'Needs attention' };
+  if (working)   return { kind: 'working',   label: 'Working' };
+  return { kind: 'updated', label: formatProjectUpdated(p.updatedAt || p.createdAt) };
+}
+
+/* Repaint L0 project tiles' status line in place (cheap — ≤8 tiles). No-op
+ * off Layer 0, so it's safe to call from any live-event handler. */
+function paintProjectStatuses() {
+  if (mode !== MODE_PROJECTS) return;
+  for (const tile of surfaceEl.querySelectorAll('.project-tile[data-project-id]')) {
+    const p = projects.find(x => x.id === tile.dataset.projectId);
+    const el = tile.querySelector('.project-updated');
+    if (!p || !el) continue;
+    const ps = projectStatus(p);
+    el.dataset.status = ps.kind;
+    const verbEl = el.querySelector('.status-verb');
+    if (verbEl) verbEl.textContent = ps.label;
+    else el.textContent = ps.label;
+  }
 }
 
 async function renderNewProjectRoles() {
@@ -2237,6 +2329,7 @@ async function enterZoom(specOverride) {
     renderZoom(specOverride);
     return;
   }
+  _focusLastOnNextChatRender = true;   // navigated INTO the agent → focus its last bubble
   const sourceTile = ring.current();
   const sourceRect = sourceTile?.getBoundingClientRect();
   const targetRect = surfaceContentRect();
@@ -2443,7 +2536,7 @@ function buildChoiceList(choices, agent, picked) {
   submitRow.className = 'bubble-choices-submit';
   const hint = document.createElement('span');
   hint.className = 'bubble-choices-hint';
-  hint.textContent = 'Select one or more';
+  hint.textContent = 'Select one or more with ←/→';
   const submit = document.createElement('button');
   submit.type = 'button';
   submit.className = 'choice-submit role-confirm is-disabled';   // disabled until a pick
@@ -2500,6 +2593,10 @@ function submitChoices(wrap, agent) {
 let chatBubbles = [];      // DOM nodes in order
 let chatBubbleIdx = -1;    // -1 = not in chat
 let chatMessages = [];     // last-fetched message records
+// Set by a navigation INTO L2 (open agent / switch agent) so the next chat
+// render lands focus on the agent's last bubble. Consumed (and cleared) once;
+// live re-renders (SSE/ack) don't set it, so they never steal focus.
+let _focusLastOnNextChatRender = false;
 let _prevTurnCount = {};   // per-agent: message count at last render, to animate only NEW bubbles
 let pendingUserBubbleEl = null;  // optimistic "you" bubble shown while holding to talk
 let pendingAgentBubbleEl = null; // "…" agent bubble shown the instant a prompt is submitted
@@ -2511,6 +2608,27 @@ function formatBubbleTime(at) {
     const d = new Date(at);
     return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   } catch { return ''; }
+}
+
+/* Relative "2 min ago" / "3 hours ago" / "3 days ago" — used by the activity
+ * feed (computed at render time; refreshes whenever the list repaints). */
+function relativeTime(at) {
+  if (!at) return '';
+  const diff = Date.now() - Number(at);
+  if (!Number.isFinite(diff) || diff < 0) return 'just now';
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d} day${d === 1 ? '' : 's'} ago`;
+  const w = Math.floor(d / 7);
+  if (w < 5) return `${w} week${w === 1 ? '' : 's'} ago`;
+  const mo = Math.floor(d / 30);
+  if (mo < 12) return `${mo} month${mo === 1 ? '' : 's'} ago`;
+  const y = Math.floor(d / 365);
+  return `${y} year${y === 1 ? '' : 's'} ago`;
 }
 
 /* v2 — Claude-Code-style action cards rendered above the body in
@@ -2852,6 +2970,17 @@ async function renderChatHistory(container, agent) {
           optsEl.classList.add('stagger');
           [...optsEl.children].forEach((el, k) => el.style.setProperty('--stagger-i', String(k)));
         }
+        // A fresh question (answerable choices) → drop focus straight onto the
+        // first option so the user can answer immediately: no press to reach the
+        // bubble, no press to step into the options. (Mirrors the kickoff-plan
+        // auto-focus below; chatBubbleIdx must point at this bubble so the
+        // bubble keyboard/gamepad model — cycleBubbleAction, submit — takes over.)
+        const firstChoice = newest.querySelector('.bubble-choices:not(.memorial) .choice-btn');
+        if (firstChoice) {
+          chatBubbleIdx = chatBubbles.length - 1;
+          firstChoice.focus({ preventScroll: true });
+          paintBubbleFocus();
+        }
       }
     }
     // Land at the bottom instantly; the rise keyframe starts each bubble
@@ -2864,7 +2993,14 @@ async function renderChatHistory(container, agent) {
     // If the agent is busy (e.g. the PM drafting its kickoff plan or working
     // post-approval) and no client request owns the view, show the "…" thinking
     // bubble so the user sees it's working — across every agent.
-    if (agentBusy[agent.id] && !inflightController) showPendingAgentBubble();
+    // Use agentStatus (the server's SSE truth) as the authority, not just
+    // agentBusy: submitIntent clears agentBusy when its HTTP request returns,
+    // but background work (kickoff/team) outlives that request and keeps the
+    // server-side verb non-idle — so without this the "…" bubble vanishes on
+    // L2 re-entry while the agent is still working.
+    const stillWorking = agentBusy[agent.id]
+      || (agentStatus[agent.id] && agentStatus[agent.id] !== 'idle');
+    if (stillWorking && !inflightController) showPendingAgentBubble();
 
     // Kickoff plan awaiting approval → auto-focus the plan bubble so a single
     // Cross/Enter approves (no need to press Up first). The approval buttons
@@ -2872,6 +3008,16 @@ async function renderChatHistory(container, agent) {
     if (chatBubbles.length &&
         chatBubbles[chatBubbles.length - 1].querySelector('.bubble-kickoff-actions')) {
       focusLastBubble();
+    }
+
+    // Navigating INTO this agent (opened it / swiped to it) → land focus on its
+    // last bubble so the user starts on the most recent message, no press to
+    // reach it. chatBubbleIdx is still -1 here unless a block above already
+    // claimed focus (kickoff plan / a fresh question's first choice) — in which
+    // case we leave that more-specific target alone.
+    if (_focusLastOnNextChatRender) {
+      _focusLastOnNextChatRender = false;
+      if (chatBubbles.length && chatBubbleIdx < 0) focusLastBubble();
     }
   } catch (err) {
     console.warn('[chat] history failed:', err);
@@ -3329,6 +3475,7 @@ function cycleAgent(delta) {
   if (i < 0 || i >= n) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
+  _focusLastOnNextChatRender = true;   // switched to another agent → focus its last bubble
   slideAgent(delta, () => { zoomedIndex = i; renderZoom(); });
 }
 
@@ -3873,6 +4020,7 @@ function handleBridgeEvent(ev) {
       agentStatus[ev.agentId] = ev.verb || 'idle';
       agentBusy[ev.agentId] = (ev.verb && ev.verb !== 'idle');
       paintAgentStatus(ev.agentId);
+      paintProjectStatuses();   // L0 tile "Working" rollup follows agent verbs
       // Reflect a server-initiated work cycle (e.g. PM kickoff) in the open L2:
       // show the "…" thinking bubble while it works, pull the new turn in when
       // it finishes. Skipped while a client request owns the view (submitIntent
@@ -3901,6 +4049,7 @@ function handleBridgeEvent(ev) {
       //   anything else → clear. (delegate/assignment carries no awaitKind.)
       if (ev.type === 'activity' && ev.agentId) setAgentPending(ev.agentId, ev.awaitKind || null);
       else if (ev.type === 'delegate' && ev.toAgentId) setAgentPending(ev.toAgentId, ev.awaitKind || null);
+      paintProjectStatuses();   // L0 tile "Attention required" rollup follows pending replies
       // A server-posted turn (kickoff plan / question) for the agent we're
       // viewing → pull it into the open chat and clear the "…" bubble.
       if (ev.type === 'activity' && ev.agentId) maybeRefreshZoomFor(ev.agentId);
@@ -4059,20 +4208,14 @@ function repaintActivityList() {
   for (const entry of entries) {
     const row = document.createElement('div');
     row.className = `activity-entry activity-${entry.kind}`;
-    row.tabIndex = 0;
+    // View-only feed: entries are not interactive (no focus / click / open).
     row.dataset.projectId = entry.projectId || '';
     const meta = document.createElement('div');
     meta.className = 'activity-meta';
-    meta.textContent = formatBubbleTime(entry.at) || '';
+    meta.textContent = relativeTime(entry.at);
 
     if (crossProject) {
-      // Open the project (and the agent, if known) on click / Enter.
-      const open = () => openProjectFromActivityEntry(entry);
-      row.addEventListener('click', open);
-      row.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); open(); }
-      });
-
+      // View-only: no click / keyboard open — the feed is for glancing only.
       const proj = projects.find(p => p.id === entry.projectId);
       const agent = proj?.agents?.find(a => a.id === entry.agentId);
       const agentName = agent?.name || agentNameForProjectAgent(entry.projectId, entry.agentId);
@@ -4855,12 +4998,12 @@ fileViewerCloseEl?.addEventListener('click', (e) => {
 fileViewerCloseEl?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault(); e.stopPropagation();
-    closeFileViewer();
+    closeFileViewerToExplorer();
     return;
   }
   if (e.key === 'Escape') {
     e.preventDefault(); e.stopPropagation();
-    closeFileViewer();
+    closeFileViewerToExplorer();
     return;
   }
   if (e.key === 'ArrowDown') {
@@ -4952,6 +5095,7 @@ function rebuildFileEntries() {
       openFocusedFile();
     });
   }
+  paintOpenFile();   // keep the open-file marker after a rebuild (folder toggle)
 }
 
 async function openFocusedFile() {
@@ -4989,9 +5133,13 @@ function showFileViewer(path, body) {
   fileViewerOpen = true;
   document.body.dataset.fileViewer = 'open';
   // Opening a file highlights the text container: the right stick now scrolls
-  // it, and Up jumps to the × button. Hand focus over from the explorer.
+  // it, and Up jumps to the × button. Hand focus over from the explorer — but
+  // keep the opened file visibly marked in the explorer so it's clear which
+  // file is showing.
+  _openFilePath = path;
   explorerFocused = false;
   fileEntries.forEach(el => el.classList.remove('focused'));
+  paintOpenFile();
   setSurfaceCloseFocus(false);
   setViewerBodyFocus(true);
 }
@@ -5003,6 +5151,30 @@ function closeFileViewer() {
   setSurfaceCloseFocus(false);
   setViewerBodyFocus(false);
   setSurfaceContainerFocus(false);
+  _openFilePath = null;
+  paintOpenFile();
+}
+
+// Path of the file currently shown in the viewer — kept marked in the explorer
+// (a persistent ".open" highlight) so it's clear which file is open, and used
+// to send focus back to that entry when the viewer is dismissed.
+let _openFilePath = null;
+function paintOpenFile() {
+  fileEntries.forEach(el =>
+    el.classList.toggle('open', !!_openFilePath && el.dataset.path === _openFilePath));
+}
+/* Dismiss the viewer (Esc / Back / ×) and return the explorer highlight to the
+ * file that was open, so the user lands back on it rather than nowhere. */
+function closeFileViewerToExplorer() {
+  const path = _openFilePath;
+  closeFileViewer();
+  if (!fileExplorerOpen) return;
+  if (path) {
+    const i = fileEntries.findIndex(el => el.dataset.path === path);
+    if (i >= 0) fileFocus = i;
+  }
+  explorerFocused = true;
+  paintFileFocus();
 }
 
 /** When the user arrows right off the viewer × button, the surface
@@ -5152,7 +5324,7 @@ gp.addEventListener('press', (e) => {
     if (b === 'cross')  { fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
     if (b === 'left')   { if (fileExplorerOpen) { setViewerBodyFocus(false); explorerFocused = true; paintFileFocus(); } return; }
     if (b === 'right')  { setViewerBodyFocus(false); setSurfaceContainerFocus(true); return; }
-    if (b === 'circle') { closeFileViewer(); return; }
+    if (b === 'circle') { closeFileViewerToExplorer(); return; }
   }
   // Whole surface container highlighted (right off the viewer body): Left
   // returns to the body, Cross drops into the grid, Circle steps back.
@@ -5165,7 +5337,7 @@ gp.addEventListener('press', (e) => {
   // The viewer × button holds DOM focus (reached via Up from the body):
   // Cross/Circle close it, Down returns to the body.
   if (fileViewerOpen && document.activeElement === fileViewerCloseEl) {
-    if (b === 'cross' || b === 'circle') { closeFileViewer(); return; }
+    if (b === 'cross' || b === 'circle') { closeFileViewerToExplorer(); return; }
     if (b === 'down')  { fileViewerCloseEl.blur(); setViewerBodyFocus(true); return; }
     if (b === 'up' || b === 'left' || b === 'right') return;
   }
@@ -6269,7 +6441,7 @@ window.addEventListener('keydown', (e) => {
     }
     if (e.key === 'ArrowRight') { e.preventDefault(); setViewerBodyFocus(false); setSurfaceContainerFocus(true); return; }
     if (e.key === 'Enter')      { e.preventDefault(); fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
-    if (e.key === 'Escape')     { e.preventDefault(); closeFileViewer(); return; }
+    if (e.key === 'Escape')     { e.preventDefault(); closeFileViewerToExplorer(); return; }
   }
 
   // Whole surface container highlighted (arrowed right off the viewer body):
@@ -6283,15 +6455,16 @@ window.addEventListener('keydown', (e) => {
 
   // Surface holds "close viewer" focus — Enter closes; Left returns to ×.
   if (surfaceCloseFocused) {
-    if (e.key === 'Enter')      { e.preventDefault(); closeFileViewer(); return; }
+    if (e.key === 'Enter')      { e.preventDefault(); closeFileViewerToExplorer(); return; }
     if (e.key === 'ArrowLeft')  { e.preventDefault(); setSurfaceCloseFocus(false); fileViewerCloseEl?.focus(); return; }
-    if (e.key === 'Escape')     { e.preventDefault(); closeFileViewer(); return; }
+    if (e.key === 'Escape')     { e.preventDefault(); closeFileViewerToExplorer(); return; }
   }
 
-  // File viewer (right panel) — Esc closes it before any back navigation.
+  // File viewer (right panel) — Esc closes it before any back navigation,
+  // returning the highlight to the open file in the explorer.
   if (fileViewerOpen && e.key === 'Escape') {
     e.preventDefault();
-    closeFileViewer();
+    closeFileViewerToExplorer();
     return;
   }
 
