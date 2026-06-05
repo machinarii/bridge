@@ -9,6 +9,7 @@ import { appendTurn, getContext, setLastSpec } from './scratchpad.js';
 import { getModelForRole, getRouterModel } from './models.js';
 import { emitNotification, emitActivity, emitDelegate, emitStatus, publish as publishEvent } from './events.js';
 import { writeNote } from './backends/notes.js';
+import { commitIfChanged } from './workspace.js';
 import { RESPONSE_STYLE, interpretIntent } from './orchestrator.js';
 
 export const DOC_TITLES = {
@@ -197,6 +198,8 @@ export async function generateKickoffDocs(projectId, opts = {}) {
     const note = writeNote(projectId, DOC_FILENAMES[kind], body);
     publishEvent({ type: 'note_added', projectId, noteId: note.id });
   }
+  // Commit the planning docs so the repo keeps clean history.
+  try { const repo = getProject(projectId)?.repoPath; if (repo) commitIfChanged(repo, 'Add kickoff planning docs'); } catch {}
 }
 
 /* As the user answers the kickoff questions, fold each Q→answer into

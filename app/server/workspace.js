@@ -70,3 +70,12 @@ export function commitAll(repoPath, message) {
   ], { cwd: repoPath });
   return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: repoPath }).toString().trim();
 }
+
+/** Commit only if the working tree has changes. Returns the short SHA, or null
+ * when there was nothing to commit — so callers can persist docs idempotently
+ * without a "nothing to commit" failure. */
+export function commitIfChanged(repoPath, message) {
+  const status = execFileSync('git', ['status', '--porcelain'], { cwd: repoPath }).toString().trim();
+  if (!status) return null;
+  return commitAll(repoPath, message);
+}

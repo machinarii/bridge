@@ -229,3 +229,15 @@ test('commitAll commits and returns a short sha, log contains message, status is
     rmSync(tmpBase, { recursive: true, force: true });
   }
 });
+
+import { commitIfChanged } from './workspace.js';
+test('commitIfChanged commits only when there are changes', () => {
+  const base = mkdtempSync(join(tmpdir(), 'bridge-ws-'));
+  const repo = join(base, 'demo');
+  ensureRepo(repo);
+  assert.equal(commitIfChanged(repo, 'noop'), null, 'nothing to commit → null');
+  writeFiles(repo, [{ path: 'x.txt', contents: 'x\n' }]);
+  const sha = commitIfChanged(repo, 'add x');
+  assert.match(sha, /^[0-9a-f]{7,}$/);
+  assert.equal(commitIfChanged(repo, 'again'), null, 'clean tree → null');
+});

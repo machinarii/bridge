@@ -14,7 +14,7 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRole, listRoles, FALLBACK_NAMES } from './roles.js';
 import { generateProjectCharters, charterFileNameFor, legacyCharterFileNames } from './charters.js';
-import { resolveRepoPath, ensureRepo } from './workspace.js';
+import { resolveRepoPath, ensureRepo, commitIfChanged } from './workspace.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Resolved lazily so tests can redirect ALL project state to a throwaway dir via
@@ -222,6 +222,8 @@ export async function createProject({ name, goal, roleIds, topology }) {
 
   // Generate per-project charters (falls back to base verbatim on failure).
   await generateProjectCharters(project);
+  // Start the repo's history with the initial docs (project.md + charters).
+  try { commitIfChanged(repoPath, 'Initialize project docs'); } catch {}
   return project;
 }
 
