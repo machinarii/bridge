@@ -43,3 +43,24 @@ test('createProject writes project.md and charters into <repo>/docs', async () =
     else process.env.BRIDGE_PROJECTS_BASE = prev;
   }
 });
+
+test('notes write/read under <repo>/docs and listNotes excludes project.md', async () => {
+  const base = mkdtempSync(join(tmpdir(), 'bridge-ws-'));
+  const prev = process.env.BRIDGE_PROJECTS_BASE;
+  process.env.BRIDGE_PROJECTS_BASE = base;
+  const { writeNote, listNotes, readNote } = await import('./backends/notes.js');
+  const p = await createProject({ name: 'Notes Repo', goal: 'g', roleIds: ['pm'], topology: 'hub-and-spoke' });
+  try {
+    writeNote(p.id, 'PRD', '# PRD\n\nbody\n');
+    assert.ok(existsSync(join(base, 'notes-repo', 'docs', 'PRD.md')), 'note written into repo/docs');
+    assert.equal(readNote(p.id, 'PRD'), '# PRD\n\nbody\n');
+    const ids = listNotes(p.id).map(n => n.id);
+    assert.ok(ids.includes('PRD'), 'listNotes sees PRD');
+    assert.ok(!ids.includes('project'), 'listNotes excludes project.md');
+  } finally {
+    deleteProject(p.id);
+    rmSync(base, { recursive: true, force: true });
+    if (prev === undefined) delete process.env.BRIDGE_PROJECTS_BASE;
+    else process.env.BRIDGE_PROJECTS_BASE = prev;
+  }
+});
