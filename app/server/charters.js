@@ -3,7 +3,7 @@
  * to the base verbatim on any failure. Written to <projectId>/roles/<roleId>.md.
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRole } from './roles.js';
@@ -143,7 +143,9 @@ export async function generateProjectCharters(project, { concurrency = 5, agents
       agentName: a.name,
       roleId: a.role,
     });
-    const path = resolve(STATE_DIR, project.id, 'roles', charterFileName(getRole(a.role)));
+    const rolesDir = resolve(project.repoPath, 'docs', 'roles');
+    mkdirSync(rolesDir, { recursive: true });
+    const path = resolve(rolesDir, charterFileName(getRole(a.role)));
     writeFileSync(path, r.markdown, 'utf8');
     return { agentId: a.id, roleId: a.role, customized: r.customized, reason: r.reason };
   });
