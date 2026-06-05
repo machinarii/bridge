@@ -78,7 +78,8 @@ export function buildPlanPrompt(project) {
     `Write a SHORT kickoff plan (2-4 sentences, first person, speakable) telling the user how you'll start: ` +
     `you'll draft a PRD plus a roadmap, team operating notes, and an open-questions doc, then assign a starting ` +
     `task to each relevant teammate. If the goal is vague, instead ask 1-2 clarifying questions. ` +
-    `Plain prose only — no JSON, no markdown headings.` +
+    `Do NOT list lettered options or ask which doc to start with — the user picks from buttons ` +
+    `shown below your message. Plain prose only — no JSON, no markdown headings.` +
     RESPONSE_STYLE
   );
 }
@@ -103,17 +104,28 @@ export async function callOpenRouterText({ apiKey, model, prompt, timeoutMs = PL
   finally { clearTimeout(timer); }
 }
 
-function planSpec(body) {
+// The kickoff plan is presented as a selectable question (the question-bubble
+// module) rather than an Approve/Reject gate. The first two options proceed;
+// the last lets the user hold the plan to adjust it. Submitting a choice routes
+// through handleLeadMessageDuringKickoff (awaiting_approval) like any reply.
+const PLAN_CHOICES = [
+  'Go ahead with this plan',
+  'Go ahead, but ask me clarifying questions first',
+  'Let me adjust the plan first',
+];
+/** True when a submitted plan choice means "proceed" (vs. hold to adjust). */
+function isApprovingChoice(text) {
+  const t = String(text || '').trim();
+  return t === PLAN_CHOICES[0] || t === PLAN_CHOICES[1];
+}
+
+function planSpec(body, choices = PLAN_CHOICES) {
   return JSON.stringify({
     intent: 'answer', template: 'reader', context: 'Kickoff', title: 'Kickoff plan',
     body,
-    // Approve only. There's no "Revise" button: a Revise→cancel action just
-    // exited the agent view (a dead no-op for the label). To revise, the user
-    // simply types/speaks their change — the server's /interpret interception
-    // already routes 'revise'/'unsure' replies while the PM keeps waiting.
-    actions: [
-      { verb: 'Approve', glyph: 'cross', action: { type: 'approve_kickoff' } },
-    ],
+    // Selectable choices — no Approve/Reject buttons. The renderer's choice
+    // module shows them with a Submit; the chosen option drives the kickoff.
+    ...(choices && choices.length ? { choices } : {}),
   });
 }
 
@@ -142,7 +154,7 @@ export async function startKickoff(projectId, opts = {}) {
   // and the L2 thinking bubble while the model works.
   emitStatus(projectId, project.leadAgentId, 'drafting');
   const body = (await callText({ apiKey, model: getModelForRole('pm'), prompt: buildPlanPrompt(project) }))
-    || 'I\'ll draft a PRD, a roadmap, team operating notes, and an open-questions doc, then assign each teammate a starting task. Approve to begin.';
+    || 'I\'ll draft a PRD, a roadmap, team operating notes, and an open-questions doc, then assign each teammate a starting task.';
   appendTurn(project.leadAgentId, 'assistant', planSpec(body));
   const planTurnIndex = getContext(project.leadAgentId).messages.length - 1;
   setKickoff(projectId, { status: 'awaiting_approval', planTurnIndex });
@@ -500,10 +512,11 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
   if (k.status !== 'awaiting_approval') return { handled: false };
   const intent = classifyApproval(text);
   const project = getProject(projectId);
-  if (intent === 'approve') {
+  // A submitted plan choice ("Go ahead…") proceeds, same as an affirmative reply.
+  if (intent === 'approve' || isApprovingChoice(text)) {
     appendTurn(project.leadAgentId, 'user', text);
     await executeKickoff(projectId, opts);
-    return { handled: true, intent };
+    return { handled: true, intent: 'approve' };
   }
   // revise / unsure: record the message and let the PM keep waiting. The
   // normal /interpret path will produce the PM's conversational reply.
