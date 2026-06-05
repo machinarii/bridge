@@ -1406,11 +1406,11 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   max-width: 70%;
   padding: 0.7rem 0.9rem;
   border-radius: 14px;
-  /* Bubble copy uses JetBrains Mono so user prompts and agent
-   * responses share one consistent text style (Claude-Code-y vibe). */
+  /* Bubble copy uses JetBrains Mono ExtraLight (200) so the conversation text
+   * reads distinctly lighter than the rest of the UI chrome. */
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.65rem;
-  font-weight: 300;
+  font-weight: 200;
   line-height: 1.45;
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -1420,6 +1420,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   transition: box-shadow 120ms, transform 180ms cubic-bezier(.2,.8,.2,1);
 }
 .agent-view .bubble.agent { margin-bottom: 1.4rem; }
+.agent-view .bubble.user { margin-bottom: 2em; }
 .agent-view .bubble.focused {
   box-shadow: 0 0 0 2px var(--focus, #ffffff), 0 0 16px 2px rgba(255,255,255,0.25);
 }
@@ -1489,7 +1490,12 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   line-height: 1.5;
 }
 .agent-view .bubble.agent .bubble-content ol { margin: 0.3em 0 1.4em 1em; }
-.agent-view .bubble.agent .bubble-content li { margin: 0.15em 0; }
+.agent-view .bubble.agent .bubble-content li { margin: 0.15em 0; font-weight: 200; }
+/* Leaf list items (the actual content) stay ExtraLight (200). A list item that
+ * heads a sub-list acts like a sub-heading for it → normal weight (400). Works
+ * for ordered and unordered lists at any depth. */
+.agent-view .bubble.agent .bubble-content li:has(> ul),
+.agent-view .bubble.agent .bubble-content li:has(> ol) { font-weight: 400; }
 .agent-view .bubble.agent .bubble-content blockquote {
   margin: 0.4em 0;
   padding: 0.25em 0.75em;
@@ -1546,7 +1552,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .agent-view .bubble.agent .bubble-content .md-table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0.5em 0;
+  margin: 0.5em 0 2em;
   font-size: 0.95em;
 }
 .agent-view .bubble.agent .bubble-content .md-table th,
@@ -1556,8 +1562,13 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   text-align: left;
   vertical-align: top;
 }
+/* Cell content stays ExtraLight (200); headers read at normal weight (400) so
+ * the header row is distinguishable without being heavy. */
+.agent-view .bubble.agent .bubble-content .md-table td {
+  font-weight: 200;
+}
 .agent-view .bubble.agent .bubble-content .md-table th {
-  font-weight: 500;
+  font-weight: 400;
   border-bottom-color: rgba(255,255,255,0.22);
 }
 
@@ -2071,10 +2082,28 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   bottom: 0.6rem;
   font-size: 0.78rem;
   font-weight: 300;
-  color: var(--fg-dim);
+  color: var(--fg);                 /* white text — the dot carries the status color */
   letter-spacing: 0.02em;
   opacity: 0.75;
+  display: inline-flex; align-items: center; gap: 6px;
   pointer-events: none;
+}
+/* L0 project status rolls up its agents' live state into one line, styled like
+ * the agent status line: white text + a colored dot (see design.md §15.2.1).
+ * Dot legend mirrors the agent dots — green = working, orange = needs the user,
+ * dim grey = just a timestamp. */
+.project-tile .project-updated .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--fg-dim);
+  transition: background 200ms, box-shadow 200ms;
+}
+.project-tile .project-updated[data-status="working"] .dot {
+  background: var(--accent-2, #9cf2c1);
+  box-shadow: 0 0 8px 1px color-mix(in oklab, var(--accent-2, #9cf2c1) 80%, transparent);
+}
+.project-tile .project-updated[data-status="attention"] .dot {
+  background: var(--warn, #ffb86b);
+  box-shadow: 0 0 8px 1px color-mix(in oklab, var(--warn, #ffb86b) 80%, transparent);
 }
 .project-tile.new-project .project-updated { display: none; }
 
@@ -2577,6 +2606,13 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .file-entry .who { opacity: 0.5; font-size: 0.85rem; }
 /* Files that live inside a folder are indented so the nesting reads clearly. */
 .file-entry.in-folder { padding-left: 2rem; }
+/* The file currently open in the viewer stays marked so it's clear which file
+ * is showing — a soft accent bar. The bright keyboard-focus highlight below is
+ * listed after, so it wins when the user is actually navigating this entry. */
+.file-entry.open {
+  background: rgba(110,168,255,0.10);
+  box-shadow: inset 3px 0 0 var(--accent, #6ea8ff);
+}
 .file-entry.focused {
   background: rgba(110,168,255,0.22);
   /* Inset bar (not a border) so content stays aligned at 1rem like Activity. */
@@ -2716,12 +2752,7 @@ body[data-memory-drawer="open"] #surface { margin-left: calc(320px + 1rem); }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.activity-entry:focus,
-.activity-entry:focus-visible {
-  outline: 1px solid var(--focus, #ffffff);
-  outline-offset: -1px;
-  background: rgba(255,255,255,0.04);
-}
+/* View-only feed — entries are not focusable/clickable, so no focus/hover state. */
 .activity-empty {
   padding: 1rem; font-size: 0.9rem; font-weight: 300;
   color: var(--fg-dim); font-style: italic; text-align: left;
@@ -2789,10 +2820,11 @@ body[data-skills-drawer="open"] #surface { margin-left: calc(280px + 1rem); }
   from { opacity: 0; transform: translateX(-24px); }
   to   { opacity: 1; transform: translateX(0); }
 }
-/* When the file selector drawer is also open, sit the viewer to the right
- * of it (280 px offset + gap) instead of overlapping. */
+/* When the file selector drawer is also open, sit the viewer to the right of
+ * it instead of overlapping. The explorer is `left: 1.1rem; width: 320px`, so
+ * clear its right edge (1.1rem + 320px) plus a gap. */
 body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
-  left: calc(1.5rem + 280px + 0.75rem);
+  left: calc(1.1rem + 320px + 0.75rem);
 }
 
 #file-viewer header {
