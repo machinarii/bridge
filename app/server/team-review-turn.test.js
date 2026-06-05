@@ -56,3 +56,22 @@ test('maybeFinishTeamReview: null until ready, then proposes a build plan (phase
     assert.equal(getProject(p.id).phase, 'build_pending');
   } finally { deleteProject(p.id); }
 });
+
+import { handleLeadMessageDuringKickoff } from './kickoff.js';
+test('interactive team round: each specialist asks a question, then build plan', async () => {
+  const p = await createProject({ name: 'Round Live', goal: 'g', roleIds: ['pm', 'designer', 'sw_engineer'], topology: 'hub-and-spoke' });
+  try {
+    // jump straight to the team round
+    const { startTeamReview } = await import('./team-review.js');
+    const { setKickoff, getProject } = await import('./projects.js');
+    startTeamReview(p.id);
+    // post first question manually via the handler path: simulate being in team_review
+    setKickoff(p.id, { status: 'team_review' });
+    // answer specialist 1 → should ask specialist 2 (another question)
+    const r1 = await handleLeadMessageDuringKickoff(p.id, 'use a clean minimal UI', { callText: async () => 'Q? | a | b' });
+    assert.equal(r1.intent, 'team_review_question');
+    // answer specialist 2 → round done → build plan attempt (stub non-JSON → close)
+    const r2 = await handleLeadMessageDuringKickoff(p.id, 'node + sqlite', { callText: async () => 'Q? | a | b' });
+    assert.ok(['build_plan', 'questions_done'].includes(r2.intent));
+  } finally { deleteProject(p.id); }
+});

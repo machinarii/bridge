@@ -93,3 +93,25 @@ export async function maybeFinishTeamReview(projectId, { callText, apiKey } = {}
   if (!teamReviewReady(projectId)) return null;
   return generateBuildPlan(projectId, { callText, apiKey });
 }
+
+/** Generate ONE focused domain question (with 2-4 short options) from a
+ * specialist, to ask the user during the round. Returns { q, options }. */
+export async function teamReviewQuestion(projectId, agentId, { callText, apiKey } = {}) {
+  const p = getProject(projectId);
+  const agent = p?.agents.find(a => a.id === agentId);
+  if (!agent) return null;
+  const roleLabel = getRole(agent.role)?.label || agent.role;
+  const prompt =
+    `You are ${agent.name}, the ${roleLabel} on project "${p.name}" (goal: "${p.goal}"). ` +
+    `Based on the captured docs, ask the user ONE focused question you genuinely need answered to do ` +
+    `your part well, with 2-4 short, distinct options. Output ONE line only: ` +
+    `"Question? | option one | option two | option three" — no preamble, no numbering.\n\n` +
+    `Docs:\n${reviewDocs(projectId)}`;
+  let raw = '';
+  try { raw = String(await callText({ apiKey, model: getModelForRole(agent.role), prompt, timeoutMs: 30_000 }) || ''); } catch { raw = ''; }
+  const parts = (raw.split('\n').find(l => l.includes('|')) || raw.split('\n')[0] || '')
+    .split('|').map(s => s.replace(/^\s*[-*\d.)]+\s*/, '').trim()).filter(Boolean);
+  const q = parts[0] || `What matters most for the ${roleLabel.toLowerCase()} work?`;
+  const options = parts.slice(1, 5);
+  return { q, options: options.length ? options : ['Sounds good — your call', 'Let me give detail'] };
+}

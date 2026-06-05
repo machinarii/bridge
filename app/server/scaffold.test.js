@@ -80,3 +80,16 @@ test('scaffoldProject is atomic: a generation failure writes nothing and flags e
     assert.equal(getProject(p.id).phase, 'build_pending', 'phase rolls back to pending');
   } finally { deleteProject(p.id); }
 });
+
+test('scaffoldProject static-checks generated JS and reports syntax issues', async () => {
+  const p = await createProject({ name: 'Check JS', goal: 'g', roleIds: ['pm', 'sw_engineer'], topology: 'hub-and-spoke' });
+  try {
+    writeNote(p.id, 'PRD', '# PRD\n');
+    await generateBuildPlan(p.id, { callText: async () => JSON.stringify({ stack: 'node', summary: 's', files: [{ path: 'good.js', purpose: 'g' }, { path: 'bad.js', purpose: 'b' }] }) });
+    const ct = async ({ prompt }) => prompt.includes('PATH:bad.js') ? 'function (' : 'const x = 1;\n';
+    const r = await scaffoldProject(p.id, { callText: ct });
+    assert.equal(r.ok, true);
+    assert.ok(r.issues.some(i => i.path === 'bad.js'), 'bad.js flagged with a syntax issue');
+    assert.ok(!r.issues.some(i => i.path === 'good.js'), 'good.js is clean');
+  } finally { deleteProject(p.id); }
+});
