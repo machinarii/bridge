@@ -5,7 +5,7 @@
  * `callText` (same DI as kickoff.js), so this is fully unit-testable. */
 import { getProject, setProjectState, ensureRepoPath } from './projects.js';
 import { listNotes, readNote } from './backends/notes.js';
-import { writeFiles, commitAll } from './workspace.js';
+import { writeFiles, commitAll, commitIfChanged } from './workspace.js';
 import { getModelForRole } from './models.js';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
@@ -81,10 +81,22 @@ async function generateFile(callText, project, plan, file, docs, apiKey) {
   return { path: file.path, contents: String(raw ?? '') };
 }
 
-/** Generate contents for every planned file (batched), then write + commit in
- * one atomic step. On any failure, nothing is written/committed and build.status
- * becomes 'error' (phase rolls back to build_pending). Returns {ok, commitSha, fileCount}. */
-export async function scaffoldProject(projectId, { callText, apiKey, batchSize = 6 } = {}) {
+/** Regenerate ONE file that failed the syntax check, given the error. */
+async function regenerateFile(callText, project, plan, file, error, docs, apiKey) {
+  const prompt =
+    `The file ${file.path} in project "${project.name}" (stack: ${plan.stack}) has a syntax error:\n${error}\n\n` +
+    `Rewrite the COMPLETE corrected contents of ${file.path} (purpose: ${file.purpose || 'source file'}). ` +
+    `Context docs:\n${docs}\n\nOutput ONLY the raw file contents — no markdown fences, no commentary.`;
+  const raw = await callText({ apiKey, model: getModelForRole('sw_engineer'), prompt, timeoutMs: 30_000 });
+  return { path: file.path, contents: String(raw ?? '') };
+}
+
+/** Generate contents for every planned file (batched), write + commit atomically,
+ * then close the feedback loop: syntax-check the JS and regenerate any failing
+ * files until they parse or `fixRounds` is exhausted. Returns
+ * {ok, commitSha, fileCount, issues, fixRounds}. On a generation failure nothing
+ * is written/committed and build.status becomes 'error'. */
+export async function scaffoldProject(projectId, { callText, apiKey, batchSize = 6, fixRounds = 2 } = {}) {
   const p = getProject(projectId);
   const build = p?.build;
   if (!build?.plan?.files?.length) return { ok: false, reason: 'no build plan' };
@@ -100,10 +112,26 @@ export async function scaffoldProject(projectId, { callText, apiKey, batchSize =
     }
     // Everything generated — now the single atomic write + commit.
     writeFiles(repoPath, out);
-    const commitSha = commitAll(repoPath, 'Scaffold: initial project structure');
-    const issues = staticCheck(repoPath, out);   // observe: syntax-check the generated JS
+    let commitSha = commitAll(repoPath, 'Scaffold: initial project structure');
+    // Feedback loop: syntax-check the JS, regenerate failing files, re-check —
+    // bounded by fixRounds. `issues` ends as whatever still won't parse.
+    let issues = staticCheck(repoPath, out);
+    let round = 0;
+    while (issues.length && round < fixRounds) {
+      round++;
+      const fixes = await Promise.all(issues.map(issue => {
+        const purpose = build.plan.files.find(f => f.path === issue.path)?.purpose || '';
+        return regenerateFile(callText, p, build.plan, { path: issue.path, purpose }, issue.error, docs, apiKey);
+      }));
+      writeFiles(repoPath, fixes);
+      issues = staticCheck(repoPath, fixes);   // re-check only the regenerated files
+    }
+    if (round > 0) {
+      const fixSha = commitIfChanged(repoPath, `Fix scaffold syntax issues (${round} round${round === 1 ? '' : 's'})`);
+      if (fixSha) commitSha = fixSha;
+    }
     setProjectState(projectId, { phase: 'built', build: { ...build, status: 'done', commitSha, issues } });
-    return { ok: true, commitSha, fileCount: out.length, issues };
+    return { ok: true, commitSha, fileCount: out.length, issues, fixRounds: round };
   } catch (err) {
     setProjectState(projectId, { phase: 'build_pending', build: { ...build, status: 'error' } });
     throw err;

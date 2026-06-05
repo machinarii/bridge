@@ -87,9 +87,36 @@ test('scaffoldProject static-checks generated JS and reports syntax issues', asy
     writeNote(p.id, 'PRD', '# PRD\n');
     await generateBuildPlan(p.id, { callText: async () => JSON.stringify({ stack: 'node', summary: 's', files: [{ path: 'good.js', purpose: 'g' }, { path: 'bad.js', purpose: 'b' }] }) });
     const ct = async ({ prompt }) => prompt.includes('PATH:bad.js') ? 'function (' : 'const x = 1;\n';
-    const r = await scaffoldProject(p.id, { callText: ct });
+    const r = await scaffoldProject(p.id, { callText: ct, fixRounds: 0 }); // isolate the check
     assert.equal(r.ok, true);
     assert.ok(r.issues.some(i => i.path === 'bad.js'), 'bad.js flagged with a syntax issue');
     assert.ok(!r.issues.some(i => i.path === 'good.js'), 'good.js is clean');
+  } finally { deleteProject(p.id); }
+});
+
+test('scaffoldProject closes the feedback loop: regenerates a failing file until it parses', async () => {
+  const p = await createProject({ name: 'Fix Loop', goal: 'g', roleIds: ['pm', 'sw_engineer'], topology: 'hub-and-spoke' });
+  try {
+    writeNote(p.id, 'PRD', '# PRD\n');
+    await generateBuildPlan(p.id, { callText: async () => JSON.stringify({ stack: 'node', summary: 's', files: [{ path: 'a.js', purpose: 'p' }] }) });
+    // initial generation → broken; regeneration (prompt mentions the error) → valid
+    const ct = async ({ prompt }) => prompt.includes('syntax error') ? 'const x = 1;\n' : 'function (';
+    const r = await scaffoldProject(p.id, { callText: ct });
+    assert.equal(r.ok, true);
+    assert.equal(r.issues.length, 0, 'the syntax issue was fixed');
+    assert.ok(r.fixRounds >= 1, 'at least one fix round ran');
+  } finally { deleteProject(p.id); }
+});
+
+test('scaffoldProject reports issues that survive the fix rounds', async () => {
+  const p = await createProject({ name: 'Stays Broken', goal: 'g', roleIds: ['pm', 'sw_engineer'], topology: 'hub-and-spoke' });
+  try {
+    writeNote(p.id, 'PRD', '# PRD\n');
+    await generateBuildPlan(p.id, { callText: async () => JSON.stringify({ stack: 'node', summary: 's', files: [{ path: 'b.js', purpose: 'p' }] }) });
+    const ct = async () => 'function (';   // always broken
+    const r = await scaffoldProject(p.id, { callText: ct, fixRounds: 1 });
+    assert.equal(r.ok, true);
+    assert.equal(r.fixRounds, 1);
+    assert.ok(r.issues.some(i => i.path === 'b.js'), 'still flagged after exhausting fix rounds');
   } finally { deleteProject(p.id); }
 });
