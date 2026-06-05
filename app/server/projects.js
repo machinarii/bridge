@@ -17,8 +17,10 @@ import { generateProjectCharters, charterFileNameFor, legacyCharterFileNames } f
 import { resolveRepoPath, ensureRepo } from './workspace.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const STATE_DIR = resolve(__dirname, '..', 'state');
-const FILE = join(STATE_DIR, 'projects.json');
+// Resolved lazily so tests can redirect ALL project state to a throwaway dir via
+// BRIDGE_STATE_DIR — and never touch the real app/state/projects.json.
+function stateDir() { return process.env.BRIDGE_STATE_DIR || resolve(__dirname, '..', 'state'); }
+function projectsFile() { return join(stateDir(), 'projects.json'); }
 
 /* Work topologies — how the team operates. The `rule` is written into the
  * project's project.md so the orchestrator and the user share one source of
@@ -35,9 +37,10 @@ let cache = null;
 
 function load() {
   if (cache) return cache;
-  mkdirSync(STATE_DIR, { recursive: true });
-  if (existsSync(FILE)) {
-    try { cache = JSON.parse(readFileSync(FILE, 'utf8')); }
+  mkdirSync(stateDir(), { recursive: true });
+  const file = projectsFile();
+  if (existsSync(file)) {
+    try { cache = JSON.parse(readFileSync(file, 'utf8')); }
     catch { cache = { projects: [] }; }
   } else cache = { projects: [] };
   return cache;
@@ -45,7 +48,7 @@ function load() {
 
 function save() {
   if (!cache) return;
-  writeFileSync(FILE, JSON.stringify(cache, null, 2), 'utf8');
+  writeFileSync(projectsFile(), JSON.stringify(cache, null, 2), 'utf8');
 }
 
 function slugify(s) {
@@ -255,7 +258,7 @@ export function removeAgent(projectId, agentId) {
   save();
   // Remove the agent's charter file so the explorer doesn't show a stale entry.
   try {
-    const charterPath = resolve(STATE_DIR, projectId, 'roles', charterFileNameFor(agent.role));
+    const charterPath = resolve(stateDir(), projectId, 'roles', charterFileNameFor(agent.role));
     if (existsSync(charterPath)) rmSync(charterPath);
   } catch (err) { console.warn(`[removeAgent] charter cleanup failed: ${err.message}`); }
   return { project: p, removedRole: agent.role };
@@ -291,7 +294,7 @@ export function deleteProject(id) {
   const [removed] = data.projects.splice(idx, 1);
   save();
   // Remove the project's on-disk state (project.md, notes, charters, git repo).
-  try { rmSync(resolve(STATE_DIR, id), { recursive: true, force: true }); } catch {}
+  try { rmSync(resolve(stateDir(), id), { recursive: true, force: true }); } catch {}
   return { ok: true, id, name: removed.name };
 }
 
@@ -303,7 +306,7 @@ export function deleteProject(id) {
 export function migrateCharterFilenames() {
   let renamed = 0;
   for (const p of load().projects) {
-    const dir = resolve(STATE_DIR, p.id, 'roles');
+    const dir = resolve(stateDir(), p.id, 'roles');
     if (!existsSync(dir)) continue;
     for (const a of (p.agents || [])) {
       let canonical;

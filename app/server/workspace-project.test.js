@@ -4,6 +4,7 @@ import { mkdtempSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProject, getProject, deleteProject, ensureRepoPath } from './projects.js';
+process.env.BRIDGE_STATE_DIR = mkdtempSync(join(tmpdir(), "bridge-state-")); // isolate state — never touch app/state
 
 test('ensureRepoPath resolves once, persists, and creates a git repo', async () => {
   const base = mkdtempSync(join(tmpdir(), 'bridge-ws-'));
