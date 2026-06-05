@@ -189,13 +189,15 @@ export async function createProject({ name, goal, roleIds, topology }) {
 
   const project = { id, name, goal, topology: topo ? topology : null, createdAt: Date.now(), leadAgentId, agents };
 
-  // Scaffold folder
-  const projDir = resolve(STATE_DIR, id);
-  mkdirSync(resolve(projDir, 'roles'), { recursive: true });
-  mkdirSync(resolve(projDir, 'notes'), { recursive: true });
+  // The project repo is the single home for docs + (later) code.
+  const repoPath = resolveRepoPath(name);
+  ensureRepo(repoPath);
+  project.repoPath = repoPath;
+  const docs = resolve(repoPath, 'docs');
+  mkdirSync(resolve(docs, 'roles'), { recursive: true });
   const topoSection = topo ? `\n\n## Work topology\n**${topo.label}** — ${topo.rule}` : '';
   writeFileSync(
-    resolve(projDir, 'project.md'),
+    resolve(docs, 'project.md'),
     `# ${name}\n\n## Goal\n${goal}\n\n## Team\n${agents.map(a => `- ${a.name} — ${getRole(a.role).label}`).join('\n')}${topoSection}\n\n## Created\n${new Date(project.createdAt).toISOString()}\n`,
     'utf8'
   );
