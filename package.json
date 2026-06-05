@@ -6,7 +6,7 @@
   "main": "app/electron/main.js",
   "scripts": {
     "server": "node app/server/server.js",
-    "stt": "bash -c 'source app/stt/.venv/bin/activate && python app/stt/parakeet_server.py'",
+    "stt": "bash -c 'export HF_HUB_CACHE=\"$PWD/build/hf-cache/hub\" && source app/stt/.venv/bin/activate && python app/stt/parakeet_server.py'",
     "electron": "electron .",
     "dev": "electron .",
     "fetch:python": "bash build/fetch-python.sh",
