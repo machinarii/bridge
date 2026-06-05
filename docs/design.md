@@ -188,6 +188,7 @@ languages never share the screen at the same time.
 | **Space** | Toggle on/off (role in role picker, agent enabled at L1) |
 | **Arrows** | Navigate the grid; at L1 also cycle agents within row |
 | **`[` / `]`** | Cycle agent at L2 (slide animation); cycle project at L1 |
+| **Two-finger swipe ← / →** | Trackpad equivalent of `[` / `]` — swipe left = `[` (prev), swipe right = `]` (next). Synthesizes the real keydown so it follows the same per-screen behavior + guards; one swipe = one step. Ignored over a horizontally-scrollable element (wide code/table). |
 | **Hold v** | Voice push-to-talk |
 | **/** | Type a prompt inline (focuses the prompt text field below the surface) |
 | **E** | File **Explorer** drawer (was `F` / `\`) |
@@ -819,13 +820,39 @@ Plus the **create flow** sub-sequence: *roles → topology → name → goal*.
 Each tile shows **name**, **role**, and a **status line** (a colored dot + a
 verb). The dot color is a fixed legend:
 
-| State | Verb label | Dot color | Clears when |
+**Work verbs** (`VERB_LABELS`) — every non-idle verb is a **busy** state: a
+**green** (`--accent-2`) **pulsing** dot, and it rolls up to project **Working**
+(§15.2.1). They differ only in the **word**, never the color — keep the dot
+legend to three meanings (green busy / orange needs-you / grey idle):
+
+| Verb | Label | Meaning |
+|---|---|---|
+| `idle` | Idle | not working (dim grey dot) |
+| `analyzing` | Analyzing | reading / classifying the codebase |
+| `drafting` | Drafting | generating prose / a reply |
+| `coding` | Coding | writing code |
+| `prototyping` | Prototyping | spiking / building an app prototype |
+| `documenting` | Documenting | updating docs |
+| `reviewing` | Reviewing | checking code or another agent's output |
+| `testing` | Testing | writing / running tests |
+| `debugging` | Debugging | investigating a failure |
+| `researching` | Researching | gathering external info / reading docs |
+| `planning` | Planning | structuring work before drafting |
+| `building` | Building | compiling / bundling |
+| `deploying` | Deploying | shipping / releasing |
+| `waiting` | Waiting | **blocked on a teammate** (a delegate) — still busy/green, *not* the orange "needs you" |
+
+**Pending overlays** (shown only while the verb is `idle`):
+
+| State | Label | Dot color | Clears when |
 |---|---|---|---|
-| `idle` | Idle | dim grey (`--fg-dim`) | — |
-| `analyzing` | Analyzing | **green** (`--accent-2`) | reading / classifying (busy) |
-| `drafting` | Drafting | **green** (`--accent-2`) + pulse | generating (busy) |
-| `data-unseen` (idle) | **Waiting for response** | **orange** (`--warn`), pulsing tile glow | the user **replies** |
-| `data-complete` (idle) | **Task complete** | **green** (`--accent-2`), steady green tile highlight | the user **opens** the agent |
+| `data-unseen` | **Waiting for response** | **orange** (`--warn`), pulsing tile glow | the user **replies** |
+| `data-complete` | **Task complete** | **green** (`--accent-2`), steady green tile highlight | the user **opens** the agent |
+
+> **Emission status:** the server (`emitStatus`) currently emits only `idle`,
+> `analyzing`, and `drafting`. The rest are **renderer-ready** (label + green dot
+> + project rollup all work) but will not appear until the orchestrator calls
+> `emitStatus()` with them — i.e. once agent work is classified into these verbs.
 
 Which pending state an agent lands in is decided by **what its reply is**, not
 how it was triggered. The server tags the reply's activity event with an
@@ -842,6 +869,39 @@ The renderer tracks this in an `agentPending` map (`agentId → 'reply' | 'view'
 pending states only show while the verb is idle (the work verb wins while busy).
 Other flags: `data-lead` (PM tile), `data-disabled` (toggled off),
 `data-speaking` (soft outline pulse while its TTS plays).
+
+### 15.2.1 Project tile (Layer 0) — rolled-up status
+
+**Projects and agents use separate status vocabularies — do not mix them.** An
+*agent* tile (L1) shows a fine-grained **verb** (Idle / Analyzing / Drafting /
+Waiting) plus a pending overlay (Waiting for response / Task complete). A
+*project* tile (L0) shows none of those verbs; it **rolls its agents' live state
+up** into one of three project-level labels. Visually it uses the **same style as
+the agent status line** — **white text (`--fg`) + a colored status dot** — so the
+two grids' metadata lines up; the dot (not the text) carries the status color:
+
+| Project status | Shown when | Dot color | Source |
+|---|---|---|---|
+| **Needs attention** | any enabled agent is **idle but awaiting the user's reply** (`agentPending === 'reply'`) | **orange** (`--warn`) | `projectStatus()` |
+| **Working** | any enabled agent has a **non-idle verb** (any work verb — coding, testing, reviewing, …) and none needs the user | **green** (`--accent-2`) | `projectStatus()` |
+| **Updated _X_ ago** | no agent is busy or awaiting — the last-activity timestamp | dim grey (`--fg-dim`) | `formatProjectUpdated()` |
+
+Priority is **Needs attention > Working > Updated** — the actionable state
+wins. The label is computed by `projectStatus(p)` (returns `{ kind, label }`
+where `kind ∈ {attention, working, updated}`, surfaced as
+`data-status` on `.project-updated`). Disabled agents are ignored.
+
+Because L0 tiles are built once by `renderProjects()` and not re-rendered on
+every event, `paintProjectStatuses()` repaints them in place on each `status`
+and `activity`/`delegate` event so "Working" / "Needs attention" track agent
+activity live. Mapping at a glance:
+
+| Agent verb / pending (L1)        | Contributes to project status (L0) |
+|----------------------------------|------------------------------------|
+| any non-idle work verb (`analyzing`, `coding`, `testing`, `waiting`, …) | **Working** |
+| idle + pending `reply`           | **Needs attention** |
+| idle + pending `view` (Task complete) | nothing — falls through to **Updated X ago** |
+| idle, no pending                 | nothing — **Updated X ago** |
 
 ### 15.3 Chat bubbles (Layer 2)
 
@@ -862,6 +922,13 @@ Other flags: `data-lead` (PM tile), `data-disabled` (toggled off),
   **Left/Right** cycle that bubble's in-bubble controls (retry/edit on your
   bubbles; **Reject/Approve** on a kickoff plan; **choice options**). **✕/Enter**
   activates the focused control.
+- **Auto-select last bubble on entry:** navigating **into** an agent (opening it
+  from L1, or swiping / `[` `]` to another agent at L2) lands focus on that
+  agent's **last bubble** — so you start on its most recent message with no
+  press to reach it. Set via a one-shot `_focusLastOnNextChatRender` flag that
+  only the navigation paths (`enterZoom` true-entry, `cycleAgent`) raise, so
+  live re-renders (SSE/ack) never steal focus. A more specific auto-focus
+  (kickoff plan, or a fresh question's first choice) takes precedence when present.
 - **Kickoff approval:** the PM's plan bubble embeds **Reject / Approve** (standard
   `role-cancel` / `role-confirm` button styles, ~30% smaller), bottom-right.
   Reachable by keyboard/gamepad/mouse. **One-tap Approve:** pressing **✕/Enter**
@@ -883,10 +950,17 @@ Other flags: `data-lead` (PM tile), `data-disabled` (toggled off),
   - **Multi-select:** toggle one or more with **Enter / ✕** (Space is *not* a
     toggle). A **"Other — Hold to talk"** button (always appended) starts
     push-to-talk for a free-form answer, playing the standard mic wave inside
-    itself. A **"Select one or more"** hint sits bottom-left; **Submit** sits
+    itself. A **"Select one or more with ←/→"** hint sits bottom-left; **Submit** sits
     bottom-right and is **grayed out until at least one option is selected**.
     Submitting sends the chosen option(s) as the user's next message.
   - **Entrance:** buttons stagger in one-by-one (like Layer 1 tiles).
+  - **Auto-focus on arrival:** when a **new** question bubble lands (e.g. right
+    after you submit the previous answer), focus drops straight onto its **first
+    option** — no press to reach the bubble, no press to step into the options —
+    so the next answer is just *select → Submit*. Only fires for a genuinely new
+    bubble (`hasNew`), and sets `chatBubbleIdx` to that bubble so the standard
+    bubble nav (`cycleBubbleAction`, Submit) takes over. Mirrors the kickoff
+    plan's one-tap auto-focus.
   - **Memorialized:** once a later user turn answers the question, that bubble
     re-renders **read-only** with the picked options shown selected — no Submit,
     Other, or hint (it's a record). Read-only entries drop `role`/`tabindex`
