@@ -10,7 +10,8 @@ import { getModelForRole, getRouterModel } from './models.js';
 import { emitNotification, emitActivity, emitDelegate, emitStatus, publish as publishEvent } from './events.js';
 import { writeNote } from './backends/notes.js';
 import { commitIfChanged } from './workspace.js';
-import { generateBuildPlan, runScaffold } from './scaffold.js';
+import { runScaffold } from './scaffold.js';
+import { startTeamReview, currentReviewAgent, planAgentTurn, maybeFinishTeamReview } from './team-review.js';
 
 // After kickoff Q&A, the PM proposes a build plan as a selectable question.
 const BUILD_CHOICES = ['Build it', 'Hold off — let me adjust'];
@@ -514,11 +515,26 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
       emitActivity(projectId, `PM: question ${nextIdx + 1} ready`, project.leadAgentId, { awaitKind: 'reply' });
       return { handled: true, intent: 'next_question', spec };
     }
-    // Out of questions — enough is captured. Propose a build plan to approve.
+    // Out of questions — enough captured. Run the team planning round (each
+    // specialist records a domain plan), then propose a build plan to approve.
     setKickoff(projectId, { qIdx: nextIdx });
     const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+    const ct = opts.callText || callOpenRouterText;
     let plan = null;
-    try { plan = await generateBuildPlan(projectId, { callText: opts.callText || callOpenRouterText, apiKey }); } catch { /* fall through */ }
+    try {
+      startTeamReview(projectId);
+      let turns = 0, agent;
+      // Sequential: one specialist plans at a time (keeps the single-status UX).
+      while ((agent = currentReviewAgent(projectId)) && turns++ < 12) {
+        emitStatus(projectId, agent.id, 'analyzing');
+        emitActivity(projectId, `${agent.name}: planning their part`, agent.id);
+        await planAgentTurn(projectId, agent.id, { callText: ct, apiKey });
+        emitStatus(projectId, agent.id, 'idle');
+      }
+      const repo = getProject(projectId)?.repoPath;
+      if (repo) { try { commitIfChanged(repo, 'Add team planning notes'); } catch {} }
+      plan = await maybeFinishTeamReview(projectId, { callText: ct, apiKey });
+    } catch { /* fall through to the no-plan close */ }
     if (plan && plan.files?.length) {
       const spec = buildPlanSpec(plan);
       appendTurn(project.leadAgentId, 'assistant', spec);
