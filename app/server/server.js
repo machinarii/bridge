@@ -14,7 +14,8 @@ import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, getContext, lastActivityAt, truncateFrom } from './scratchpad.js';
 import { runTeamVoice, resolveDelegateSpec } from './team.js';
-import { startKickoff, handleLeadMessageDuringKickoff, declineKickoff } from './kickoff.js';
+import { startKickoff, handleLeadMessageDuringKickoff, declineKickoff, callOpenRouterText } from './kickoff.js';
+import { proposeBuildPlan, runScaffold } from './scaffold.js';
 import {
   notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
 } from './autosave.js';
@@ -503,6 +504,21 @@ app.post('/projects/:pid/kickoff/decline', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err?.message || err) });
   }
+});
+
+app.post('/projects/:pid/build-plan', async (req, res) => {
+  try {
+    const plan = await proposeBuildPlan(req.params.pid, { callText: callOpenRouterText });
+    if (!plan) return res.status(404).json({ error: 'unknown project' });
+    res.json({ plan });
+  } catch (err) { res.status(500).json({ error: String(err.message) }); }
+});
+
+app.post('/projects/:pid/scaffold', async (req, res) => {
+  try {
+    const r = await runScaffold(req.params.pid, { callText: callOpenRouterText });
+    res.json(r);
+  } catch (err) { res.status(500).json({ error: String(err.message) }); }
 });
 
 app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
