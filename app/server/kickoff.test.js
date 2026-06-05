@@ -56,7 +56,9 @@ test('startKickoff posts a plan turn and sets awaiting_approval', async () => {
     assert.equal(planTurn.role, 'assistant');
     const spec = JSON.parse(planTurn.content);
     assert.match(spec.body, /plan/i);
-    assert.ok(spec.actions.some(a => a.action?.type === 'approve_kickoff'));
+    // The plan is now a selectable question (choices), not an Approve/Reject gate.
+    assert.ok(Array.isArray(spec.choices) && spec.choices.length >= 2, 'plan offers choices');
+    assert.ok(!spec.actions || !spec.actions.some(a => a.action?.type === 'approve_kickoff'), 'no approve_kickoff action');
   } finally { deleteProject(p.id); }
 });
 
