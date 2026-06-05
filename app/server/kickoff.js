@@ -652,7 +652,7 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
     const r = await runAndFix(projectId, { callText: opts.callText || callOpenRouterText, runner: opts.runner, apiKey });
     let body;
-    if (r.daemonDown) body = "I couldn't reach Docker — start Docker Desktop and say \"Run it\" again.";
+    if (r.daemonDown) body = "I couldn't reach the Docker engine — start it (e.g. `colima start`) and say \"Run it\" again.";
     else if (r.ok) body = `✅ It runs — install, build, and tests all pass${r.rounds ? ` (after ${r.rounds} fix round${r.rounds === 1 ? '' : 's'})` : ''}. Everything's committed in the project repo.`;
     else body = `Couldn't get it green after ${r.rounds} round${r.rounds === 1 ? '' : 's'} — the \`${r.lastStep}\` step still fails. Latest output:\n\n\`\`\`\n${String(r.lastOutput || '').slice(-1200)}\n\`\`\`\n\nSay "Run it" to try again.`;
     const spec = closingSpec(body);
