@@ -10,8 +10,8 @@ import { getModelForRole, getRouterModel } from './models.js';
 import { emitNotification, emitActivity, emitDelegate, emitStatus, publish as publishEvent } from './events.js';
 import { writeNote } from './backends/notes.js';
 import { commitIfChanged } from './workspace.js';
-import { runScaffold } from './scaffold.js';
-import { startTeamReview, currentReviewAgent, planAgentTurn, maybeFinishTeamReview } from './team-review.js';
+import { generateBuildPlan, runScaffold } from './scaffold.js';
+import { startTeamReview, currentReviewAgent, recordPlan, teamReviewQuestion } from './team-review.js';
 
 // After kickoff Q&A, the PM proposes a build plan as a selectable question.
 const BUILD_CHOICES = ['Build it', 'Hold off — let me adjust'];
@@ -26,6 +26,40 @@ function buildPlanSpec(plan) {
     intent: 'answer', template: 'reader', context: 'Build plan', title: 'Build plan',
     body, choices: BUILD_CHOICES,
   });
+}
+
+/** A team-planning turn: one specialist's question relayed to the user, as a
+ * choice bubble (n of total for the round). */
+function teamReviewQuestionSpec(agent, tq, n, total) {
+  return JSON.stringify({
+    intent: 'answer', template: 'reader',
+    context: total > 1 ? `Team planning · ${n} of ${total}` : 'Team planning',
+    title: 'Team planning',
+    body: `**${agent.name}** asks: ${tq?.q || 'Anything I should know for my part?'}`,
+    choices: (tq?.options?.length ? tq.options : ['Sounds good — your call', 'Let me give detail']).slice(0, 4),
+  });
+}
+
+/** Round complete (or skipped) → propose a build plan to approve, or, with no
+ * plan (e.g. no API key), close the kickoff and let the team work. */
+async function proposeBuildOrClose(projectId, ct, apiKey, project, opts) {
+  let plan = null;
+  try { plan = await generateBuildPlan(projectId, { callText: ct, apiKey }); } catch { /* no plan */ }
+  if (plan && plan.files?.length) {
+    const spec = buildPlanSpec(plan);
+    appendTurn(project.leadAgentId, 'assistant', spec);
+    setKickoff(projectId, { status: 'build_pending' });
+    emitActivity(projectId, 'PM: build plan ready', project.leadAgentId, { awaitKind: 'reply' });
+    return { handled: true, intent: 'build_plan', spec };
+  }
+  const spec = closingSpec("Thanks — that's everything I needed. Kickoff is complete: the docs are up to date and the team has its starting tasks. Ask me anything from here.");
+  appendTurn(project.leadAgentId, 'assistant', spec);
+  setKickoff(projectId, { status: 'done' });
+  emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
+                     body: `${project.name}: questions answered and the team is moving.` });
+  emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId);
+  startTeamWork(projectId, opts);
+  return { handled: true, intent: 'questions_done', spec };
 }
 import { RESPONSE_STYLE, interpretIntent } from './orchestrator.js';
 
@@ -515,42 +549,51 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
       emitActivity(projectId, `PM: question ${nextIdx + 1} ready`, project.leadAgentId, { awaitKind: 'reply' });
       return { handled: true, intent: 'next_question', spec };
     }
-    // Out of questions — enough captured. Run the team planning round (each
-    // specialist records a domain plan), then propose a build plan to approve.
+    // Out of PM questions — start the team planning round: each specialist asks
+    // the user ONE question, one at a time. Send the first now.
     setKickoff(projectId, { qIdx: nextIdx });
-    const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
     const ct = opts.callText || callOpenRouterText;
-    let plan = null;
-    try {
-      startTeamReview(projectId);
-      let turns = 0, agent;
-      // Sequential: one specialist plans at a time (keeps the single-status UX).
-      while ((agent = currentReviewAgent(projectId)) && turns++ < 12) {
-        emitStatus(projectId, agent.id, 'analyzing');
-        emitActivity(projectId, `${agent.name}: planning their part`, agent.id);
-        await planAgentTurn(projectId, agent.id, { callText: ct, apiKey });
-        emitStatus(projectId, agent.id, 'idle');
-      }
-      const repo = getProject(projectId)?.repoPath;
-      if (repo) { try { commitIfChanged(repo, 'Add team planning notes'); } catch {} }
-      plan = await maybeFinishTeamReview(projectId, { callText: ct, apiKey });
-    } catch { /* fall through to the no-plan close */ }
-    if (plan && plan.files?.length) {
-      const spec = buildPlanSpec(plan);
+    const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+    startTeamReview(projectId);
+    const first = currentReviewAgent(projectId);
+    if (first) {
+      const total = getProject(projectId).teamReview.order.length;
+      const tq = await teamReviewQuestion(projectId, first.id, { callText: ct, apiKey });
+      const spec = teamReviewQuestionSpec(first, tq, 1, total);
       appendTurn(project.leadAgentId, 'assistant', spec);
-      setKickoff(projectId, { status: 'build_pending' });
-      emitActivity(projectId, 'PM: build plan ready', project.leadAgentId, { awaitKind: 'reply' });
-      return { handled: true, intent: 'build_plan', spec };
+      setKickoff(projectId, { status: 'team_review' });
+      emitActivity(projectId, `${first.name}: has a question`, project.leadAgentId, { awaitKind: 'reply' });
+      return { handled: true, intent: 'team_review_question', spec };
     }
-    // No plan (e.g. no API key) → close kickoff the old way and let the team work.
-    const spec = closingSpec("Thanks — that's everything I needed. Kickoff is complete: the docs are up to date and the team has its starting tasks. Ask me anything from here.");
-    appendTurn(project.leadAgentId, 'assistant', spec);
-    setKickoff(projectId, { status: 'done' });
-    emitNotification({ kind: 'info', projectId, title: 'Kickoff complete',
-                       body: `${project.name}: questions answered and the team is moving.` });
-    emitActivity(projectId, 'PM: kickoff complete', project.leadAgentId);
-    startTeamWork(projectId, opts);
-    return { handled: true, intent: 'questions_done', spec };
+    // No specialists on the team → straight to the build plan.
+    return await proposeBuildOrClose(projectId, ct, apiKey, project, opts);
+  }
+
+  // Team planning round: record the current specialist's answer, then ask the
+  // next one — or, when everyone has weighed in, propose the build plan.
+  if (k.status === 'team_review') {
+    const project = getProject(projectId);
+    if (!project) return { handled: false };
+    appendTurn(project.leadAgentId, 'user', text);
+    const ct = opts.callText || callOpenRouterText;
+    const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+    const agent = currentReviewAgent(projectId);
+    if (agent && text.trim()) {
+      recordPlan(projectId, agent.id, `# ${agent.name} — planning input\n\n${text.trim()}\n`, { answered: true });
+    }
+    const next = currentReviewAgent(projectId);
+    if (next) {
+      const tr = getProject(projectId).teamReview;
+      const tq = await teamReviewQuestion(projectId, next.id, { callText: ct, apiKey });
+      const spec = teamReviewQuestionSpec(next, tq, tr.idx + 1, tr.order.length);
+      appendTurn(project.leadAgentId, 'assistant', spec);
+      emitActivity(projectId, `${next.name}: has a question`, project.leadAgentId, { awaitKind: 'reply' });
+      return { handled: true, intent: 'team_review_question', spec };
+    }
+    // Everyone has weighed in → commit the planning notes, then propose the build.
+    const repo = getProject(projectId)?.repoPath;
+    if (repo) { try { commitIfChanged(repo, 'Add team planning notes'); } catch {} }
+    return await proposeBuildOrClose(projectId, ct, apiKey, project, opts);
   }
 
   // Build-plan approval: "Build it" → scaffold the repo; the result is posted back.
@@ -568,8 +611,11 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     let r;
     try { r = await runScaffold(projectId, { callText: opts.callText || callOpenRouterText, apiKey }); }
     catch (e) { r = { ok: false, reason: String(e?.message || e) }; }
+    const issueNote = r.ok && r.issues?.length
+      ? ` ⚠️ ${r.issues.length} file${r.issues.length === 1 ? '' : 's'} have syntax issues I'd fix in a follow-up pass: ${r.issues.map(i => '`' + i.path + '`').join(', ')}.`
+      : '';
     const spec = closingSpec(r.ok
-      ? `Done — scaffolded ${r.fileCount} file${r.fileCount === 1 ? '' : 's'} and committed them (${r.commitSha}). Open the project folder to see the code.`
+      ? `Done — scaffolded ${r.fileCount} file${r.fileCount === 1 ? '' : 's'} and committed them (${r.commitSha}).${issueNote} Open the project folder to see the code.`
       : `Scaffold didn't complete: ${r.reason || 'unknown error'}. The plan is still ready — say "Build it" to retry.`);
     appendTurn(project.leadAgentId, 'assistant', spec);
     setKickoff(projectId, { status: r.ok ? 'built' : 'build_pending' });

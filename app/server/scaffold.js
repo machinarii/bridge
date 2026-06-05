@@ -7,6 +7,25 @@ import { getProject, setProjectState, ensureRepoPath } from './projects.js';
 import { listNotes, readNote } from './backends/notes.js';
 import { writeFiles, commitAll } from './workspace.js';
 import { getModelForRole } from './models.js';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
+
+/** Post-scaffold static check: syntax-check generated JS (`node --check`, no
+ * execution — safe). Returns [{path, error}] for files that fail to parse. This
+ * is the "observe" first step of a feedback loop; the full run/test/fix loop is
+ * Phase B. */
+function staticCheck(repoPath, files) {
+  const issues = [];
+  for (const f of files) {
+    if (!/\.(?:js|mjs|cjs)$/.test(f.path)) continue;
+    try { execFileSync('node', ['--check', resolve(repoPath, f.path)], { stdio: 'pipe' }); }
+    catch (e) {
+      const msg = String(e.stderr || e.message || '').split('\n').find(l => l.trim()) || 'syntax error';
+      issues.push({ path: f.path, error: msg.trim().slice(0, 200) });
+    }
+  }
+  return issues;
+}
 
 /** Concatenate the project's captured planning docs as model context. */
 function gatherDocs(projectId) {
@@ -82,8 +101,9 @@ export async function scaffoldProject(projectId, { callText, apiKey, batchSize =
     // Everything generated — now the single atomic write + commit.
     writeFiles(repoPath, out);
     const commitSha = commitAll(repoPath, 'Scaffold: initial project structure');
-    setProjectState(projectId, { phase: 'built', build: { ...build, status: 'done', commitSha } });
-    return { ok: true, commitSha, fileCount: out.length };
+    const issues = staticCheck(repoPath, out);   // observe: syntax-check the generated JS
+    setProjectState(projectId, { phase: 'built', build: { ...build, status: 'done', commitSha, issues } });
+    return { ok: true, commitSha, fileCount: out.length, issues };
   } catch (err) {
     setProjectState(projectId, { phase: 'build_pending', build: { ...build, status: 'error' } });
     throw err;
