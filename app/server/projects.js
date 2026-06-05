@@ -134,6 +134,24 @@ export function ensureRepoPath(id) {
   return p.repoPath;
 }
 
+/** The project's docs directory inside its repo (<repo>/docs/). Ensures the
+ * repo + dir exist. Returns null if the project is unknown. */
+export function docsDir(id) {
+  const repo = ensureRepoPath(id);
+  if (!repo) return null;
+  const dir = resolve(repo, 'docs');
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+/** The project's role-charters directory (<repo>/docs/roles/). */
+export function rolesDir(id) {
+  const docs = docsDir(id);
+  if (!docs) return null;
+  const dir = resolve(docs, 'roles');
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 export async function createProject({ name, goal, roleIds, topology }) {
   if (!name) throw new Error('name required');
   if (!goal) throw new Error('goal required');
