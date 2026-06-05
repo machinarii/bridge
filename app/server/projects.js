@@ -127,6 +127,17 @@ export function setKickoff(id, patch) {
   return p.kickoff;
 }
 
+/** Shallow-merge arbitrary top-level fields onto a project record and persist.
+ * Used for lifecycle state like `phase` and `teamReview`. Returns the project,
+ * or null if unknown. */
+export function setProjectState(id, patch) {
+  const p = getProject(id);
+  if (!p) return null;
+  Object.assign(p, patch);
+  save();
+  return p;
+}
+
 /** Resolve + persist the project's code-repo path on first use, and make sure
  * the git repo exists on disk. Stable thereafter (a rename won't move it). */
 export function ensureRepoPath(id) {
