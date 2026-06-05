@@ -304,7 +304,20 @@ export function deleteProject(id) {
   if (idx === -1) throw new Error('unknown project');
   const [removed] = data.projects.splice(idx, 1);
   save();
-  // Remove the project's on-disk state (project.md, notes, charters, git repo).
+  // The project's code repo (~/bridge-projects/<slug>/) belongs to the user — we
+  // do NOT delete it. Instead drop a top-sorted marker (the '#' sorts first) so
+  // it's clear the project was removed from Bridge.
+  try {
+    if (removed.repoPath && existsSync(removed.repoPath)) {
+      const when = new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' });
+      writeFileSync(
+        resolve(removed.repoPath, '#PROJECT-REMOVED.md'),
+        `# PROJECT REMOVED\n\nThis project was removed from the Bridge app by the user on ${when}.\n`,
+        'utf8',
+      );
+    }
+  } catch {}
+  // Remove only Bridge's internal state for the project (registry folder / scratchpad).
   try { rmSync(resolve(stateDir(), id), { recursive: true, force: true }); } catch {}
   return { ok: true, id, name: removed.name };
 }
