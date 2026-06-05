@@ -187,6 +187,19 @@ export async function generateKickoffDocs(projectId, opts = {}) {
   }
 }
 
+/* As the user answers the kickoff questions, fold each Q→answer into
+ * open-questions.md so the doc becomes a resolved decisions log (the PM
+ * promises "I'll update them as I get more info"). Rebuilt in full from the
+ * accumulated pairs on every answer, so it's deterministic and idempotent. */
+function writeDecisionsDoc(projectId, qa) {
+  if (!getProject(projectId) || !qa?.length) return;
+  const body = `# ${DOC_TITLES.questions}\n\n` +
+    `_Resolved during kickoff Q&A._\n\n` +
+    qa.map((p, i) => `## ${i + 1}. ${p.q}\n\n**Answer:** ${p.a}\n`).join('\n');
+  const note = writeNote(projectId, DOC_FILENAMES.questions, body);
+  publishEvent({ type: 'note_added', projectId, noteId: note.id });
+}
+
 const FANOUT_CAP = 5;
 
 async function callOpenRouterJSON({ apiKey, model, prompt, timeoutMs = 20_000 }) {
@@ -447,9 +460,16 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     if (!project) return { handled: false };
     appendTurn(project.leadAgentId, 'user', text);
     const questions = k.questions || [];
+    const answered = questions[k.qIdx ?? 0];
+    // Fold this Q→answer into open-questions.md as a resolved decisions log.
+    if (answered && text.trim()) {
+      const qDir = (typeof answered === 'string') ? answered : (answered.q || '');
+      const qa = [...(getKickoff(projectId).qa || []), { q: qDir, a: text.trim() }];
+      setKickoff(projectId, { qa });
+      writeDecisionsDoc(projectId, qa);
+    }
     // If the question being answered was a "clarify" for a specific role, the
     // user's answer becomes that role's starting task.
-    const answered = questions[k.qIdx ?? 0];
     if (answered?.role && text.trim()) {
       const next = (getKickoff(projectId).assignments || []).filter(x => x.role !== answered.role);
       next.push({ role: answered.role, task: text.trim().slice(0, 400) });
