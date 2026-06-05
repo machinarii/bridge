@@ -3,6 +3,7 @@
  * proposes a build plan. Deterministic state machine only — model-driven plan
  * generation and live kickoff wiring land in Plan 4. */
 import { getProject, setProjectState } from './projects.js';
+import { writeNote } from './backends/notes.js';
 
 /** The enabled, non-lead agents in tile order — the round's queue. */
 export function teamReviewAgents(projectId) {
@@ -40,4 +41,19 @@ export function teamReviewReady(projectId) {
     const c = tr.captured[id];
     return !!c && (c.planned || c.answered);
   });
+}
+
+/** Capture an agent's domain plan: write it to the repo docs as plan-<role>.md,
+ * mark the agent captured, and advance the queue if it was the current turn.
+ * `answered` flags that the agent's question was answered (vs. only planned). */
+export function recordPlan(projectId, agentId, planMarkdown, { answered = false } = {}) {
+  const p = getProject(projectId);
+  const tr = p?.teamReview;
+  if (!tr || !tr.captured[agentId]) return null;
+  const agent = p.agents.find(a => a.id === agentId);
+  if (planMarkdown && agent) writeNote(projectId, `plan-${agent.role}`, planMarkdown);
+  tr.captured[agentId] = { planned: true, answered: !!answered };
+  if (tr.order[tr.idx] === agentId) tr.idx += 1;
+  setProjectState(projectId, { teamReview: tr });
+  return tr;
 }
