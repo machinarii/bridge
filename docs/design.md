@@ -718,6 +718,46 @@ MCP_PLUGINS=[{"id":"anthropic/filesystem","name":"Filesystem","enabled":true}]
 Currently just the registry + UI scaffold; actual MCP connection /
 tool exposure is a follow-up.
 
+### 12.5.5 Code generation & the execution sandbox
+
+Kickoff doesn't stop at planning — it scaffolds and **runs** real code
+(§15.12, steps 6–7). Two server modules own this:
+
+- **Scaffold (`scaffold.js` / `workspace.js`).** On **"Build it"** the PM
+  generates a build plan and an initial source tree under the project's repo
+  (`~/bridge-projects/<slug>/`, code at the root, planning docs under `docs/`),
+  writing files **path-safely** (escapes rejected), committing atomically, and
+  running a `node --check` syntax-fix pass before reporting the file count + SHA.
+- **Run-fix loop (`sandbox.js` → `verify.js` → `run-fix.js`).** On **"Run it"**
+  the repo is installed/built/tested **in a throwaway container**, and failures
+  drive a bounded model-fix loop (`runAndFix`).
+
+**The sandbox (`sandbox.js`) is the *only* place Bridge touches a container
+engine.** Design points:
+
+- It shells out to the **`docker` CLI** (`spawn('docker', …)`), never to a GUI
+  app or an engine-specific API. It needs only (a) a `docker` binary on `PATH`
+  and (b) a reachable Docker **daemon** — *any* provider works: **Colima**
+  (recommended, CLI-only, no GUI), OrbStack, Podman (via the `_bin` seam), or a
+  remote `DOCKER_HOST`. There is **no dependency on Docker Desktop**.
+- `dockerArgs()` builds `docker run --rm -v <repo>:/app -v /app/node_modules -w
+  /app --memory=2g --cpus=2 <image> sh -lc <script>` — the repo source is
+  **bind-mounted** (code stays local) while `node_modules` is a **container-only
+  overlay** so Linux install artifacts never pollute the host repo.
+- `runInContainer()` captures combined stdout+stderr, enforces a timeout, and
+  classifies a **daemon-down** error (`DAEMON_DOWN_RE`) so the UI can ask you to
+  start the engine instead of failing opaquely. It **never rejects** — outcomes
+  are returned. `verifyProject` marks `install`/`build`/`test` steps with
+  `@@STEP` markers to identify the failing step.
+- **DI seams** (`_bin`, `image`, injected `runner`/`callText`) make the whole
+  pipeline unit-testable **without Docker or network** — the live path defaults
+  to `runInContainer` + OpenRouter.
+
+> **Mount scope (Colima):** Colima mounts only `$HOME` into its VM by default.
+> Bridge writes projects under `~/bridge-projects/` (inside `$HOME`), so bind
+> mounts resolve. If `BRIDGE_PROJECTS_BASE` is relocated outside `$HOME`, start
+> Colima with `colima start --mount <path>:w`.
+
 ---
 
 ## 13. Implementation anchors
@@ -1080,29 +1120,51 @@ suffix is only a last resort if both pools are fully exhausted.
 ### 15.12 PM kickoff lifecycle (current)
 
 On project create the PM auto-kicks-off (`app/server/kickoff.js`), a
-plan-first state machine on `project.kickoff.status`:
+plan-first state machine on `project.kickoff.status` that runs all the way from
+a plan to **running, tested code** in the project repo:
 
 1. **`drafting`** → PM writes a plan-first message; its tile reads **Drafting**.
-2. **`awaiting_approval`** → the plan posts with inline **Reject / Approve**
-   (one-tap ✕/Enter). The plan bubble auto-focuses on open.
-3. On **Approve** → **`running`**: PM writes the 4 starter docs (PRD, roadmap,
-   operating notes, open questions), then assigns work. Assignment is **role-
-   based** via the PM model — it may pick roles **not yet on the team**.
+2. **`awaiting_approval`** → the plan posts as a **choice bubble** (§15.4), not
+   Approve/Reject buttons: *"Go ahead with this plan"* / *"Go ahead, but ask me
+   clarifying questions first"* / *"Let me adjust the plan first"*. The first two
+   proceed; the third holds so you can steer. The plan bubble auto-focuses on open.
+3. On an approving choice → **`running`**: PM writes the 4 starter docs (PRD,
+   roadmap, operating notes, open questions) into `<repo>/docs/`, then assigns
+   work. Assignment is **role-based** via the PM model — it may pick roles **not
+   yet on the team**.
 4. **`asking`** → the PM asks its kickoff questions **one at a time**, numbered
    **"Q1: …"**, each as a multi-select choice bubble (§15.4). A role the PM
    couldn't confidently task becomes a **clarify question** whose answer becomes
    that role's task. Every on-team role is guaranteed a task (gap-filled if
-   needed). The PM reads **Waiting for response** between questions.
-5. **`done`** (kickoff complete) → **fan-out**: each assigned specialist
-   actually runs its task (`startTeamWork` → `interpretIntent`), so its tile
-   lights up (analyzing → drafting) and it produces a first deliverable.
-   - **Missing roles are auto-added** (`addAgent`); the PM posts an "Added
-     teammates" message and a `team_changed` event refreshes the L1 grid.
-   - Each agent follows the **project topology** (injected into its system
-     prompt) and the §15.6 grounding.
-   - A delegated task records as a **PM → agent handoff bubble**, not a "you"
-     bubble (`interpretIntent` `handoff` option).
-   - The closing message is terminal — it does **not** set a pending state.
+   needed). Each Q→answer is folded into `open-questions.md` as a decisions log.
+   The PM reads **Waiting for response** between questions.
+5. **`team_review`** → a **team planning round**: each specialist asks the user
+   **one** question in turn (so every role shapes the plan before any code is
+   written). Answers are recorded as that agent's planning notes and committed
+   (*"Add team planning notes"*).
+6. **`build_pending`** → the PM proposes a **build plan** with choices
+   *"Build it"* / *"Hold off — let me adjust"* (`BUILD_CHOICES`). **"Build it"**
+   → `runScaffold` generates the initial source tree and **commits** it
+   (with a syntax-fix pass via `node --check`); the reply reports the file count
+   and commit SHA.
+7. **`run_pending`** → after a successful scaffold the PM offers *"Run it"* /
+   *"Not now"* (`RUN_CHOICES`). **"Run it"** → `runAndFix` (B3): install → build
+   → test the repo **in a throwaway sandbox container** (§12.5.5), and on failure
+   feed the failing step + repo files to the model, apply its edits, commit, and
+   re-verify — bounded by `maxRounds`. Outcomes:
+   - green → **`verified`** (*"✅ It runs…"*);
+   - still failing after the rounds → **`built`** (reports the failing step + tail
+     of output; *"Run it"* retries);
+   - container engine unreachable → stays **`run_pending`** (asks you to start it,
+     e.g. `colima start`).
+   **"Not now"** → **`done`** (code is committed; nothing run).
+8. Across these stages the team also **fans out**: assigned specialists run their
+   tasks (`startTeamWork` → `interpretIntent`), tiles light up (analyzing →
+   drafting), and **missing roles are auto-added** (`addAgent` → "Added
+   teammates" message + `team_changed` grid refresh). Each agent follows the
+   **project topology** (injected into its prompt) and the §15.6 grounding; a
+   delegated task records as a **PM → agent handoff bubble**. Terminal statuses
+   (`done` / `verified` / `built` / `declined`) set no pending state.
 
 ### 15.13 Chat motion (Layer 2)
 

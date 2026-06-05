@@ -130,6 +130,20 @@ HF_HOME="$PWD/build/hf-cache" npm run stt     # serves Parakeet on :8123
 ```
 The server defaults `LOCAL_STT_URL` to `http://127.0.0.1:8123/transcribe`. Requires **ffmpeg** on PATH (Parakeet decodes the browser's webm/opus through it). Without the sidecar, voice fails with a visible STT error rather than falling back.
 
+### Code execution sandbox (optional — for the build/run loop)
+
+After kickoff the PM can **scaffold and run** real code (the **"Build it" → "Run it"** flow). Scaffolding writes/commits files to the project repo and needs nothing extra. **Running** (install/build/test + auto-fix) executes inside a throwaway container, so it needs the `docker` **CLI** plus a reachable Docker **daemon**. Bridge shells out to the `docker` CLI only — it does **not** depend on Docker Desktop; any daemon provider works.
+
+Recommended (CLI-only, no GUI app) — **Colima**:
+
+```bash
+brew install colima
+colima start                 # boots a small Linux VM + daemon; docker CLI auto-targets it
+# optional: start at login →  brew services start colima
+```
+
+Alternatives: OrbStack, Podman (Bridge's runner has a `_bin` seam), or a remote `DOCKER_HOST`. The runner pulls `node:20-slim`, **bind-mounts** the repo (code stays local) and keeps `node_modules` container-only. If the daemon is down, the PM asks you to start it instead of failing. **Note:** Colima mounts only `$HOME` by default; Bridge writes projects under `~/bridge-projects/` (inside `$HOME`), so this works out of the box.
+
 ### Fonts
 
 Font files are **not bundled in this repository** — the licensing on the
