@@ -4,7 +4,8 @@ import { createProject, getKickoff, setKickoff, deleteProject } from './projects
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-// Keep tests hermetic: project repos go to a throwaway temp base, never ~/bridge-projects.
+// Isolate state + repos to throwaway temp dirs — never touch app/state or ~/bridge-projects.
+process.env.BRIDGE_STATE_DIR = mkdtempSync(join(tmpdir(), 'bridge-state-'));
 process.env.BRIDGE_PROJECTS_BASE = mkdtempSync(join(tmpdir(), 'bridge-test-'));
 
 test('kickoff state defaults to idle and round-trips', async () => {

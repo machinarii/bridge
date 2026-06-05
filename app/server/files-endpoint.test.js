@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProject, deleteProject } from './projects.js';
+process.env.BRIDGE_STATE_DIR = mkdtempSync(join(tmpdir(), "bridge-state-")); // isolate state — never touch app/state
 import { writeNote } from './backends/notes.js';
 import { buildFileTree, readProjectFile } from './server-files.js';
 

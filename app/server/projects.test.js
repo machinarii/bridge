@@ -6,15 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const STATE_DIR = resolve(__dirname, '..', 'state');
-// Keep tests hermetic: project repos go to a throwaway temp base, never ~/bridge-projects.
+// Isolate ALL project state to throwaway temp dirs — tests must NEVER touch the
+// real app/state/projects.json or ~/bridge-projects. (A fresh BRIDGE_STATE_DIR
+// starts empty, so no deletion of any shared file is needed.)
+process.env.BRIDGE_STATE_DIR = mkdtempSync(join(tmpdir(), 'bridge-state-'));
 process.env.BRIDGE_PROJECTS_BASE = mkdtempSync(join(tmpdir(), 'bridge-test-'));
-
-// Isolate each run — delete projects.json before importing
-rmSync(resolve(STATE_DIR, 'projects.json'), { force: true });
-for (const sub of ['p_test_alpha', 'p_test_alpha_2', 'p_test_beta', 'p_test_charters']) {
-  rmSync(resolve(STATE_DIR, sub), { recursive: true, force: true });
-}
+const STATE_DIR = process.env.BRIDGE_STATE_DIR;
 
 const { createProject, listProjects, getProject, deleteProject } = await import('./projects.js');
 const { charterFileNameFor } = await import('./charters.js');

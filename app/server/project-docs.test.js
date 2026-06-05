@@ -4,6 +4,7 @@ import { mkdtempSync, existsSync, rmSync, readFileSync, readdirSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProject, deleteProject, docsDir, rolesDir } from './projects.js';
+process.env.BRIDGE_STATE_DIR = mkdtempSync(join(tmpdir(), "bridge-state-")); // isolate state — never touch app/state
 
 test('docsDir/rolesDir resolve under the project repo and exist', async () => {
   const base = mkdtempSync(join(tmpdir(), 'bridge-ws-'));
