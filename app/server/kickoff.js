@@ -12,10 +12,14 @@ import { writeNote } from './backends/notes.js';
 import { commitIfChanged } from './workspace.js';
 import { generateBuildPlan, runScaffold } from './scaffold.js';
 import { startTeamReview, currentReviewAgent, recordPlan, teamReviewQuestion } from './team-review.js';
+import { runAndFix } from './run-fix.js';
 
 // After kickoff Q&A, the PM proposes a build plan as a selectable question.
 const BUILD_CHOICES = ['Build it', 'Hold off — let me adjust'];
 function isBuildApproval(text) { return String(text || '').trim() === BUILD_CHOICES[0]; }
+
+const RUN_CHOICES = ['Run it', 'Not now'];
+function isRunApproval(text) { return String(text || '').trim() === RUN_CHOICES[0]; }
 
 /** A build-plan turn: the proposed stack + file tree, as a choice bubble. */
 function buildPlanSpec(plan) {
@@ -614,14 +618,49 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     const issueNote = r.ok && r.issues?.length
       ? ` ⚠️ ${r.issues.length} file${r.issues.length === 1 ? '' : 's'} have syntax issues I'd fix in a follow-up pass: ${r.issues.map(i => '`' + i.path + '`').join(', ')}.`
       : '';
-    const spec = closingSpec(r.ok
-      ? `Done — scaffolded ${r.fileCount} file${r.fileCount === 1 ? '' : 's'} and committed them (${r.commitSha}).${issueNote} Open the project folder to see the code.`
-      : `Scaffold didn't complete: ${r.reason || 'unknown error'}. The plan is still ready — say "Build it" to retry.`);
+    if (r.ok) {
+      const body = `Done — scaffolded ${r.fileCount} file${r.fileCount === 1 ? '' : 's'} and committed them (${r.commitSha}).${issueNote} Want me to install, build, and test it in a sandbox to make sure it runs?`;
+      const spec = JSON.stringify({ intent: 'answer', template: 'reader', context: 'Scaffold', title: 'Scaffolded', body, choices: RUN_CHOICES });
+      appendTurn(project.leadAgentId, 'assistant', spec);
+      setKickoff(projectId, { status: 'run_pending' });
+      emitStatus(projectId, project.leadAgentId, 'idle');
+      emitActivity(projectId, 'PM: scaffold complete — offered to run', project.leadAgentId, { awaitKind: 'reply' });
+      return { handled: true, intent: 'scaffolded', spec };
+    }
+    // failure case stays as-is (closingSpec, status build_pending, intent 'scaffold_failed')
+    const spec = closingSpec(`Scaffold didn't complete: ${r.reason || 'unknown error'}. The plan is still ready — say "Build it" to retry.`);
     appendTurn(project.leadAgentId, 'assistant', spec);
-    setKickoff(projectId, { status: r.ok ? 'built' : 'build_pending' });
+    setKickoff(projectId, { status: 'build_pending' });
     emitStatus(projectId, project.leadAgentId, 'idle');
-    emitActivity(projectId, r.ok ? 'PM: scaffold complete' : 'PM: scaffold failed', project.leadAgentId);
-    return { handled: true, intent: r.ok ? 'scaffolded' : 'scaffold_failed', spec };
+    emitActivity(projectId, 'PM: scaffold failed', project.leadAgentId);
+    return { handled: true, intent: 'scaffold_failed', spec };
+  }
+
+  // Run the project in a sandbox: install/build/test, fix failures, report.
+  if (k.status === 'run_pending') {
+    const project = getProject(projectId);
+    if (!project) return { handled: false };
+    appendTurn(project.leadAgentId, 'user', text);
+    if (!isRunApproval(text)) {
+      const spec = closingSpec("No problem — the code's committed in the project repo. Ask me anything from here.");
+      appendTurn(project.leadAgentId, 'assistant', spec);
+      setKickoff(projectId, { status: 'done' });
+      return { handled: true, intent: 'run_declined', spec };
+    }
+    emitStatus(projectId, project.leadAgentId, 'testing');
+    emitActivity(projectId, 'PM: running install / build / test…', project.leadAgentId);
+    const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+    const r = await runAndFix(projectId, { callText: opts.callText || callOpenRouterText, runner: opts.runner, apiKey });
+    let body;
+    if (r.daemonDown) body = "I couldn't reach Docker — start Docker Desktop and say \"Run it\" again.";
+    else if (r.ok) body = `✅ It runs — install, build, and tests all pass${r.rounds ? ` (after ${r.rounds} fix round${r.rounds === 1 ? '' : 's'})` : ''}. Everything's committed in the project repo.`;
+    else body = `Couldn't get it green after ${r.rounds} round${r.rounds === 1 ? '' : 's'} — the \`${r.lastStep}\` step still fails. Latest output:\n\n\`\`\`\n${String(r.lastOutput || '').slice(-1200)}\n\`\`\`\n\nSay "Run it" to try again.`;
+    const spec = closingSpec(body);
+    appendTurn(project.leadAgentId, 'assistant', spec);
+    setKickoff(projectId, { status: r.ok ? 'verified' : (r.daemonDown ? 'run_pending' : 'built') });
+    emitStatus(projectId, project.leadAgentId, 'idle');
+    emitActivity(projectId, r.ok ? 'PM: build + test green' : 'PM: still failing', project.leadAgentId);
+    return { handled: true, intent: r.ok ? 'verified' : 'run_failed', spec };
   }
 
   if (k.status !== 'awaiting_approval') return { handled: false };

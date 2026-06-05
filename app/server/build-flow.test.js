@@ -19,7 +19,7 @@ test('build_pending + "Build it" scaffolds, commits, and marks built', async () 
     const r = await handleLeadMessageDuringKickoff(p.id, 'Build it', { callText: async () => 'console.log(1)\n' });
     assert.equal(r.intent, 'scaffolded');
     assert.ok(existsSync(resolve(getProject(p.id).build.repoPath, 'src/index.js')), 'file scaffolded');
-    assert.equal(getProject(p.id).kickoff.status, 'built');
+    assert.equal(getProject(p.id).kickoff.status, 'run_pending');   // was 'built'
   } finally { deleteProject(p.id); }
 });
 
