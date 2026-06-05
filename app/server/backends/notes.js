@@ -1,18 +1,16 @@
 /* Bridge — project-scoped markdown notes. One file per note under
- * app/state/<projectId>/notes/. */
+ * <repo>/docs/ (the project's git repo). */
 
-import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { resolve, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const STATE_DIR = resolve(__dirname, '..', '..', 'state');
+import { join } from 'node:path';
+import { docsDir } from '../projects.js';
 
 function notesDir(projectId) {
-  const dir = resolve(STATE_DIR, projectId, 'notes');
-  mkdirSync(dir, { recursive: true });
-  return dir;
+  // Planning docs live in the project repo's docs/ dir (the single home).
+  const dir = docsDir(projectId);
+  if (!dir) throw new Error(`no repo for project ${projectId}`);
+  return dir;   // docsDir already mkdir-p's it
 }
 
 function deriveLabel(body) {
@@ -23,7 +21,7 @@ function deriveLabel(body) {
 export function listNotes(projectId) {
   const dir = notesDir(projectId);
   return readdirSync(dir)
-    .filter(f => f.endsWith('.md'))
+    .filter(f => f.endsWith('.md') && f !== 'project.md')
     .sort()
     .reverse()
     .map(f => {
