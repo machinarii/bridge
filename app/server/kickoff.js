@@ -12,7 +12,7 @@ import { writeNote } from './backends/notes.js';
 import { commitIfChanged } from './workspace.js';
 import { generateBuildPlan, runScaffold } from './scaffold.js';
 import { startTeamReview, currentReviewAgent, recordPlan, teamReviewQuestion } from './team-review.js';
-import { runAndFix } from './run-fix.js';
+import { runAndFix, classifyFailure } from './run-fix.js';
 
 // After kickoff Q&A, the PM proposes a build plan as a selectable question.
 const BUILD_CHOICES = ['Build it', 'Hold off — let me adjust'];
@@ -20,6 +20,12 @@ function isBuildApproval(text) { return String(text || '').trim() === BUILD_CHOI
 
 const RUN_CHOICES = ['Run it', 'Not now'];
 function isRunApproval(text) { return String(text || '').trim() === RUN_CHOICES[0]; }
+
+// "Skip for now" on a question bubble: advance past the question without
+// recording an answer. The client sends this exact literal; question specs flag
+// themselves `skippable` so the renderer shows the Skip button.
+export const SKIP_TOKEN = 'Skip for now';
+export function isSkip(text) { return String(text || '').trim() === SKIP_TOKEN; }
 
 /** A build-plan turn: the proposed stack + file tree, as a choice bubble. */
 function buildPlanSpec(plan) {
@@ -35,24 +41,87 @@ function buildPlanSpec(plan) {
 /** A team-planning turn: one specialist's question relayed to the user, as a
  * choice bubble (n of total for the round). */
 function teamReviewQuestionSpec(agent, tq, n, total) {
-  return JSON.stringify({
+  // Another agent is asking — name them by role ("Iris (Designer) asks: …") so
+  // the user knows which specialist needs input.
+  const roleLabel = getRole(agent.role)?.label;
+  const who = `**${agent.name}**${roleLabel ? ` (${roleLabel})` : ''}`;
+  const spec = {
     intent: 'answer', template: 'reader',
     context: total > 1 ? `Team planning · ${n} of ${total}` : 'Team planning',
     title: 'Team planning',
-    body: `**${agent.name}** asks: ${tq?.q || 'Anything I should know for my part?'}`,
-    choices: (tq?.options?.length ? tq.options : ['Sounds good — your call', 'Let me give detail']).slice(0, 4),
-  });
+    body: `${who} asks: ${tq?.q || 'Anything I should know for my part?'}`,
+    skippable: true,
+  };
+  // Only real, model-produced options become buttons — no hollow placeholders.
+  // With none, the bubble is a plain question answered by typing / "Other".
+  if (tq?.options?.length) spec.choices = tq.options.slice(0, 4);
+  return JSON.stringify(spec);
+}
+
+/** Advance the team-planning queue to the next specialist that has a genuine
+ * question, SKIPPING any whose model call yields nothing usable (their turn is
+ * captured so the round still completes). Returns {agent, spec} or null when the
+ * queue is exhausted. */
+async function nextTeamReviewQuestion(projectId, ct, apiKey) {
+  let agent = currentReviewAgent(projectId);
+  while (agent) {
+    const tq = await teamReviewQuestion(projectId, agent.id, { callText: ct, apiKey });
+    if (tq) {
+      const tr = getProject(projectId).teamReview;
+      return { agent, spec: teamReviewQuestionSpec(agent, tq, tr.idx + 1, tr.order.length) };
+    }
+    // No usable question → skip this specialist (capture their turn, advance).
+    recordPlan(projectId, agent.id, '', { answered: true });
+    emitActivity(projectId, `${agent.name}: no question — skipped`, getProject(projectId)?.leadAgentId);
+    agent = currentReviewAgent(projectId);
+  }
+  return null;
 }
 
 /** Round complete (or skipped) → propose a build plan to approve, or, with no
  * plan (e.g. no API key), close the kickoff and let the team work. */
+/** The software engineer who owns build / scaffold / run. Returns an existing
+ * sw_engineer agent, or adds one so the build always has an owner. null only if
+ * adding fails (caller then keeps the build in the lead chat as a fallback). */
+async function ensureBuildAgent(projectId) {
+  const p = getProject(projectId);
+  if (!p) return null;
+  const existing = p.agents.find(a => a.role === 'sw_engineer');
+  if (existing) return existing;
+  try { await addAgent(projectId, 'sw_engineer'); }
+  catch (err) { console.warn(`[kickoff] could not add a software engineer: ${err?.message || err}`); return null; }
+  publishEvent({ type: 'team_changed', projectId });
+  return getProject(projectId)?.agents.find(a => a.role === 'sw_engineer') || null;
+}
+
 async function proposeBuildOrClose(projectId, ct, apiKey, project, opts) {
   let plan = null;
   try { plan = await generateBuildPlan(projectId, { callText: ct, apiKey }); } catch { /* no plan */ }
   if (plan && plan.files?.length) {
     const spec = buildPlanSpec(plan);
+    // Build + scaffolding is engineering work: hand it off to the software
+    // engineer. The PM announces the handoff in the lead chat; the build plan
+    // and its "Build it" approval live in the engineer's chat.
+    const swe = await ensureBuildAgent(projectId);
+    if (swe && swe.id !== project.leadAgentId) {
+      appendTurn(swe.id, 'assistant', spec);
+      setLastSpec(swe.id, JSON.parse(spec));
+      setKickoff(projectId, { status: 'build_pending', buildAgentId: swe.id });
+      emitDelegate(projectId, project.leadAgentId, swe.id, 'Build plan & scaffolding');
+      emitStatus(projectId, swe.id, 'idle');
+      emitActivity(projectId, `${swe.name}: build plan ready`, swe.id, { awaitKind: 'reply' });
+      const roleLabel = getRole('sw_engineer')?.label || 'Software Engineer';
+      const handoff = closingSpec(
+        `The build plan and scaffolding are engineering work, so I've handed this off to ` +
+        `**${swe.name}** (${roleLabel}). Open ${swe.name}'s screen to review the build plan and start the build.`);
+      appendTurn(project.leadAgentId, 'assistant', handoff);
+      emitNotification({ kind: 'info', projectId, title: 'Build handed to engineering',
+                         body: `${swe.name} has the build plan for ${project.name}.` });
+      return { handled: true, intent: 'build_handoff', spec: handoff };
+    }
+    // No separate engineer available — keep the plan in the lead chat (fallback).
     appendTurn(project.leadAgentId, 'assistant', spec);
-    setKickoff(projectId, { status: 'build_pending' });
+    setKickoff(projectId, { status: 'build_pending', buildAgentId: project.leadAgentId });
     emitActivity(projectId, 'PM: build plan ready', project.leadAgentId, { awaitKind: 'reply' });
     return { handled: true, intent: 'build_plan', spec };
   }
@@ -153,10 +222,15 @@ export async function callOpenRouterText({ apiKey, model, prompt, timeoutMs = PL
       body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
       signal: ctrl.signal,
     });
-    if (!r.ok) return '';
+    if (!r.ok) {
+      console.warn(`[openrouter] ${model} → HTTP ${r.status}: ${(await r.text().catch(() => '')).slice(0, 300)}`);
+      return '';
+    }
     const data = await r.json();
-    return data?.choices?.[0]?.message?.content || '';
-  } catch { return ''; }
+    const content = data?.choices?.[0]?.message?.content || '';
+    if (!content) console.warn(`[openrouter] ${model} → empty content (finish_reason: ${data?.choices?.[0]?.finish_reason || '?'})`);
+    return content;
+  } catch (err) { console.warn(`[openrouter] ${model} → ${err?.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : (err?.message || err)}`); return ''; }
   finally { clearTimeout(timer); }
 }
 
@@ -419,6 +493,7 @@ function questionSpec(question, n, total) {
     intent: 'answer', template: 'reader', context: counter, title: 'Kickoff',
     body,
     actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+    skippable: true,
   };
   if (options.length) spec.choices = options.slice(0, 4);
   return JSON.stringify(spec);
@@ -532,15 +607,16 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     const questions = k.questions || [];
     const answered = questions[k.qIdx ?? 0];
     // Fold this Q→answer into open-questions.md as a resolved decisions log.
-    if (answered && text.trim()) {
+    // "Skip for now" advances without recording an answer.
+    if (answered && text.trim() && !isSkip(text)) {
       const qDir = (typeof answered === 'string') ? answered : (answered.q || '');
       const qa = [...(getKickoff(projectId).qa || []), { q: qDir, a: text.trim() }];
       setKickoff(projectId, { qa });
       writeDecisionsDoc(projectId, qa);
     }
     // If the question being answered was a "clarify" for a specific role, the
-    // user's answer becomes that role's starting task.
-    if (answered?.role && text.trim()) {
+    // user's answer becomes that role's starting task (skip leaves it gap-filled).
+    if (answered?.role && text.trim() && !isSkip(text)) {
       const next = (getKickoff(projectId).assignments || []).filter(x => x.role !== answered.role);
       next.push({ role: answered.role, task: text.trim().slice(0, 400) });
       setKickoff(projectId, { assignments: next });
@@ -559,17 +635,14 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     const ct = opts.callText || callOpenRouterText;
     const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
     startTeamReview(projectId);
-    const first = currentReviewAgent(projectId);
+    const first = await nextTeamReviewQuestion(projectId, ct, apiKey);
     if (first) {
-      const total = getProject(projectId).teamReview.order.length;
-      const tq = await teamReviewQuestion(projectId, first.id, { callText: ct, apiKey });
-      const spec = teamReviewQuestionSpec(first, tq, 1, total);
-      appendTurn(project.leadAgentId, 'assistant', spec);
+      appendTurn(project.leadAgentId, 'assistant', first.spec);
       setKickoff(projectId, { status: 'team_review' });
-      emitActivity(projectId, `${first.name}: has a question`, project.leadAgentId, { awaitKind: 'reply' });
-      return { handled: true, intent: 'team_review_question', spec };
+      emitActivity(projectId, `${first.agent.name}: has a question`, project.leadAgentId, { awaitKind: 'reply' });
+      return { handled: true, intent: 'team_review_question', spec: first.spec };
     }
-    // No specialists on the team → straight to the build plan.
+    // No specialists with a usable question → straight to the build plan.
     return await proposeBuildOrClose(projectId, ct, apiKey, project, opts);
   }
 
@@ -582,17 +655,17 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     const ct = opts.callText || callOpenRouterText;
     const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
     const agent = currentReviewAgent(projectId);
-    if (agent && text.trim()) {
+    if (agent && isSkip(text)) {
+      // Skip: advance the review queue (mark captured) without writing a plan doc.
+      recordPlan(projectId, agent.id, '', { answered: true });
+    } else if (agent && text.trim()) {
       recordPlan(projectId, agent.id, `# ${agent.name} — planning input\n\n${text.trim()}\n`, { answered: true });
     }
-    const next = currentReviewAgent(projectId);
+    const next = await nextTeamReviewQuestion(projectId, ct, apiKey);
     if (next) {
-      const tr = getProject(projectId).teamReview;
-      const tq = await teamReviewQuestion(projectId, next.id, { callText: ct, apiKey });
-      const spec = teamReviewQuestionSpec(next, tq, tr.idx + 1, tr.order.length);
-      appendTurn(project.leadAgentId, 'assistant', spec);
-      emitActivity(projectId, `${next.name}: has a question`, project.leadAgentId, { awaitKind: 'reply' });
-      return { handled: true, intent: 'team_review_question', spec };
+      appendTurn(project.leadAgentId, 'assistant', next.spec);
+      emitActivity(projectId, `${next.agent.name}: has a question`, project.leadAgentId, { awaitKind: 'reply' });
+      return { handled: true, intent: 'team_review_question', spec: next.spec };
     }
     // Everyone has weighed in → commit the planning notes, then propose the build.
     const repo = getProject(projectId)?.repoPath;
@@ -600,17 +673,24 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     return await proposeBuildOrClose(projectId, ct, apiKey, project, opts);
   }
 
-  // Build-plan approval: "Build it" → scaffold the repo; the result is posted back.
+  // Build-plan approval: "Build it" → scaffold the repo; the result is posted
+  // back in the build owner's (software engineer's) chat.
   if (k.status === 'build_pending') {
     const project = getProject(projectId);
     if (!project) return { handled: false };
-    appendTurn(project.leadAgentId, 'user', text);
+    const buildAgentId = k.buildAgentId || project.leadAgentId;
+    // Only the build owner drives this phase; a message from anyone else (e.g.
+    // the PM) falls through to a normal reply.
+    if ((opts.agentId || buildAgentId) !== buildAgentId) return { handled: false };
+    const sweName = project.agents.find(a => a.id === buildAgentId)?.name || 'Engineer';
     if (!isBuildApproval(text)) {
-      // "Hold off / adjust" → keep waiting; the normal /interpret reply handles it.
+      // "Hold off / adjust" → let the normal /interpret reply handle it (it
+      // appends the user turn and generates the engineer's conversational reply).
       return { handled: true, intent: 'build_hold', awaiting: true };
     }
-    emitStatus(projectId, project.leadAgentId, 'coding');
-    emitActivity(projectId, 'PM: scaffolding…', project.leadAgentId);
+    appendTurn(buildAgentId, 'user', text);
+    emitStatus(projectId, buildAgentId, 'coding');
+    emitActivity(projectId, `${sweName}: scaffolding…`, buildAgentId);
     const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
     let r;
     try { r = await runScaffold(projectId, { callText: opts.callText || callOpenRouterText, apiKey }); }
@@ -621,45 +701,55 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     if (r.ok) {
       const body = `Done — scaffolded ${r.fileCount} file${r.fileCount === 1 ? '' : 's'} and committed them (${r.commitSha}).${issueNote} Want me to install, build, and test it in a sandbox to make sure it runs?`;
       const spec = JSON.stringify({ intent: 'answer', template: 'reader', context: 'Scaffold', title: 'Scaffolded', body, choices: RUN_CHOICES });
-      appendTurn(project.leadAgentId, 'assistant', spec);
+      appendTurn(buildAgentId, 'assistant', spec);
       setKickoff(projectId, { status: 'run_pending' });
-      emitStatus(projectId, project.leadAgentId, 'idle');
-      emitActivity(projectId, 'PM: scaffold complete — offered to run', project.leadAgentId, { awaitKind: 'reply' });
+      emitStatus(projectId, buildAgentId, 'idle');
+      emitActivity(projectId, `${sweName}: scaffold complete — offered to run`, buildAgentId, { awaitKind: 'reply' });
       return { handled: true, intent: 'scaffolded', spec };
     }
-    // failure case stays as-is (closingSpec, status build_pending, intent 'scaffold_failed')
+    // failure case (closingSpec, status build_pending, intent 'scaffold_failed')
     const spec = closingSpec(`Scaffold didn't complete: ${r.reason || 'unknown error'}. The plan is still ready — say "Build it" to retry.`);
-    appendTurn(project.leadAgentId, 'assistant', spec);
+    appendTurn(buildAgentId, 'assistant', spec);
     setKickoff(projectId, { status: 'build_pending' });
-    emitStatus(projectId, project.leadAgentId, 'idle');
-    emitActivity(projectId, 'PM: scaffold failed', project.leadAgentId);
+    emitStatus(projectId, buildAgentId, 'idle');
+    emitActivity(projectId, `${sweName}: scaffold failed`, buildAgentId);
     return { handled: true, intent: 'scaffold_failed', spec };
   }
 
-  // Run the project in a sandbox: install/build/test, fix failures, report.
+  // Run the project in a sandbox: install/build/test, fix failures, report —
+  // driven from the build owner's (software engineer's) chat.
   if (k.status === 'run_pending') {
     const project = getProject(projectId);
     if (!project) return { handled: false };
-    appendTurn(project.leadAgentId, 'user', text);
+    const buildAgentId = k.buildAgentId || project.leadAgentId;
+    if ((opts.agentId || buildAgentId) !== buildAgentId) return { handled: false };
+    const sweName = project.agents.find(a => a.id === buildAgentId)?.name || 'Engineer';
+    appendTurn(buildAgentId, 'user', text);
     if (!isRunApproval(text)) {
       const spec = closingSpec("No problem — the code's committed in the project repo. Ask me anything from here.");
-      appendTurn(project.leadAgentId, 'assistant', spec);
+      appendTurn(buildAgentId, 'assistant', spec);
       setKickoff(projectId, { status: 'done' });
       return { handled: true, intent: 'run_declined', spec };
     }
-    emitStatus(projectId, project.leadAgentId, 'testing');
-    emitActivity(projectId, 'PM: running install / build / test…', project.leadAgentId);
+    emitStatus(projectId, buildAgentId, 'testing');
+    emitActivity(projectId, `${sweName}: running install / build / test…`, buildAgentId);
     const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
     const r = await runAndFix(projectId, { callText: opts.callText || callOpenRouterText, runner: opts.runner, apiKey });
     let body;
     if (r.daemonDown) body = "I couldn't reach the Docker engine — start it (e.g. `colima start`) and say \"Run it\" again.";
     else if (r.ok) body = `✅ It runs — install, build, and tests all pass${r.rounds ? ` (after ${r.rounds} fix round${r.rounds === 1 ? '' : 's'})` : ''}. Everything's committed in the project repo.`;
-    else body = `Couldn't get it green after ${r.rounds} round${r.rounds === 1 ? '' : 's'} — the \`${r.lastStep}\` step still fails. Latest output:\n\n\`\`\`\n${String(r.lastOutput || '').slice(-1200)}\n\`\`\`\n\nSay "Run it" to try again.`;
+    else {
+      const cls = classifyFailure(r.lastStep, r.lastOutput);
+      const note = cls.kind === 'environment'
+        ? ` This looks like ${cls.hint} — I've adjusted the sandbox setup; another "Run it" may clear it.`
+        : cls.kind === 'dependency' ? ` This looks like ${cls.hint}.` : '';
+      body = `Couldn't get it green after ${r.rounds} round${r.rounds === 1 ? '' : 's'} — the \`${r.lastStep}\` step still fails.${note} Latest output:\n\n\`\`\`\n${String(r.lastOutput || '').slice(-1200)}\n\`\`\`\n\nSay "Run it" to try again.`;
+    }
     const spec = closingSpec(body);
-    appendTurn(project.leadAgentId, 'assistant', spec);
+    appendTurn(buildAgentId, 'assistant', spec);
     setKickoff(projectId, { status: r.ok ? 'verified' : (r.daemonDown ? 'run_pending' : 'built') });
-    emitStatus(projectId, project.leadAgentId, 'idle');
-    emitActivity(projectId, r.ok ? 'PM: build + test green' : 'PM: still failing', project.leadAgentId);
+    emitStatus(projectId, buildAgentId, 'idle');
+    emitActivity(projectId, r.ok ? `${sweName}: build + test green` : `${sweName}: still failing`, buildAgentId);
     return { handled: true, intent: r.ok ? 'verified' : 'run_failed', spec };
   }
 

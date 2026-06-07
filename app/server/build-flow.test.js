@@ -34,3 +34,53 @@ test('build_pending + "Hold off" does not scaffold', async () => {
     assert.ok(!existsSync(resolve(getProject(p.id).build.repoPath, 'a.js')), 'nothing scaffolded');
   } finally { deleteProject(p.id); }
 });
+
+import { getContext } from './scratchpad.js';
+import { startTeamReview } from './team-review.js';
+
+test('team round completion hands the build off to the software engineer', async () => {
+  const p = await createProject({ name: 'Round Handoff', goal: 'g', roleIds: ['pm', 'sw_engineer'], topology: 'hub-and-spoke' });
+  try {
+    writeNote(p.id, 'PRD', '# PRD\n');
+    const swe = getProject(p.id).agents.find(a => a.role === 'sw_engineer');
+    startTeamReview(p.id);
+    setKickoff(p.id, { status: 'team_review' });
+    // callText returns a build plan; as a "question" it has no `question` field,
+    // so the specialist is skipped → round ends → build plan → handoff.
+    const planJson = async () => JSON.stringify({ stack: 'node', summary: 's', files: [{ path: 'a.js', purpose: 'x' }] });
+    const r = await handleLeadMessageDuringKickoff(p.id, 'my input', { callText: planJson });
+    assert.equal(r.intent, 'build_handoff');
+    assert.equal(getProject(p.id).kickoff.status, 'build_pending');
+    assert.equal(getProject(p.id).kickoff.buildAgentId, swe.id);
+    assert.ok(getContext(swe.id).messages.some(m => /Build plan/.test(m.content)), 'build plan in engineer chat');
+    assert.ok(getContext(getProject(p.id).leadAgentId).messages.some(m => /handed this off/.test(m.content)), 'PM handoff in lead chat');
+  } finally { deleteProject(p.id); }
+});
+
+test('build handoff: scaffold runs in the engineer chat, lead chat stays clean', async () => {
+  const p = await createProject({ name: 'Handoff Build', goal: 'g', roleIds: ['pm', 'sw_engineer'], topology: 'hub-and-spoke' });
+  try {
+    writeNote(p.id, 'PRD', '# PRD\n');
+    const swe = getProject(p.id).agents.find(a => a.role === 'sw_engineer');
+    await generateBuildPlan(p.id, { callText: async () => JSON.stringify({ stack: 'node', summary: 's', files: [{ path: 'src/index.js', purpose: 'entry' }] }) });
+    setKickoff(p.id, { status: 'build_pending', buildAgentId: swe.id });
+    const r = await handleLeadMessageDuringKickoff(p.id, 'Build it', { agentId: swe.id, callText: async () => 'console.log(1)\n' });
+    assert.equal(r.intent, 'scaffolded');
+    assert.equal(getProject(p.id).kickoff.status, 'run_pending');
+    assert.ok(getContext(swe.id).messages.some(m => /Scaffolded/.test(m.content)), 'scaffold result in engineer chat');
+    assert.ok(!getContext(getProject(p.id).leadAgentId).messages.some(m => /Scaffolded/.test(m.content)), 'lead chat clean of scaffold');
+  } finally { deleteProject(p.id); }
+});
+
+test('build phase ignores messages from a non-owner (the PM)', async () => {
+  const p = await createProject({ name: 'Owner Gate', goal: 'g', roleIds: ['pm', 'sw_engineer'], topology: 'hub-and-spoke' });
+  try {
+    writeNote(p.id, 'PRD', '# PRD\n');
+    const swe = getProject(p.id).agents.find(a => a.role === 'sw_engineer');
+    await generateBuildPlan(p.id, { callText: async () => JSON.stringify({ stack: 'node', summary: 's', files: [{ path: 'a.js', purpose: 'x' }] }) });
+    setKickoff(p.id, { status: 'build_pending', buildAgentId: swe.id });
+    const r = await handleLeadMessageDuringKickoff(p.id, 'Build it', { agentId: getProject(p.id).leadAgentId, callText: async () => 'x' });
+    assert.equal(r.handled, false);
+    assert.equal(getProject(p.id).kickoff.status, 'build_pending');
+  } finally { deleteProject(p.id); }
+});

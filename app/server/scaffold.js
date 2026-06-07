@@ -10,6 +10,19 @@ import { getModelForRole } from './models.js';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
+/* The scaffold is verified in an OFFLINE sandbox (Phase B): `npm install`,
+ * build, and test run in a throwaway Linux container with no network services
+ * and no external database. Every prompt carries this so the generated code is
+ * self-contained and actually runnable there. */
+const SANDBOX_GUIDANCE =
+  'The project is verified in an OFFLINE sandbox: `npm install`, build, and ' +
+  'test run in a throwaway Linux container with NO network access, NO external ' +
+  'database, and NO other services. Make it self-contained and runnable there: ' +
+  'if it needs a database or ORM, default to SQLite (no server). A Prisma schema ' +
+  'MUST include complete `generator` and `datasource` blocks with ' +
+  'provider = "sqlite" and url = "file:./dev.db". Never require a service that ' +
+  '`npm test` does not start itself.';
+
 /** Post-scaffold static check: syntax-check generated JS (`node --check`, no
  * execution — safe). Returns [{path, error}] for files that fail to parse. This
  * is the "observe" first step of a feedback loop; the full run/test/fix loop is
@@ -58,6 +71,7 @@ export async function generateBuildPlan(projectId, { callText, apiKey } = {}) {
   const prompt =
     `You are the engineering lead for project "${p.name}". Goal: "${p.goal}".\n` +
     `Captured planning docs:\n${docs}\n\n` +
+    `${SANDBOX_GUIDANCE}\n\n` +
     `Propose an initial code scaffold. Output ONLY JSON: ` +
     `{"stack": "<short stack name>", "summary": "<one line>", "files": [{"path": "<repo-relative path>", "purpose": "<one line>"}]}. ` +
     `8-20 files, real source files (no node_modules). No prose outside the JSON.`;
@@ -76,6 +90,7 @@ async function generateFile(callText, project, plan, file, docs, apiKey) {
   const prompt =
     `Project "${project.name}" (goal: "${project.goal}", stack: ${plan.stack}). ` +
     `Write the complete contents of ONE file. PATH:${file.path} — purpose: ${file.purpose}. ` +
+    `${SANDBOX_GUIDANCE}\n\n` +
     `Context docs:\n${docs}\n\nOutput ONLY the raw file contents, no markdown fences, no commentary.`;
   const raw = await callText({ apiKey, model: getModelForRole('sw_engineer'), prompt, timeoutMs: 30_000 });
   return { path: file.path, contents: String(raw ?? '') };
@@ -86,6 +101,7 @@ async function regenerateFile(callText, project, plan, file, error, docs, apiKey
   const prompt =
     `The file ${file.path} in project "${project.name}" (stack: ${plan.stack}) has a syntax error:\n${error}\n\n` +
     `Rewrite the COMPLETE corrected contents of ${file.path} (purpose: ${file.purpose || 'source file'}). ` +
+    `${SANDBOX_GUIDANCE}\n\n` +
     `Context docs:\n${docs}\n\nOutput ONLY the raw file contents — no markdown fences, no commentary.`;
   const raw = await callText({ apiKey, model: getModelForRole('sw_engineer'), prompt, timeoutMs: 30_000 });
   return { path: file.path, contents: String(raw ?? '') };

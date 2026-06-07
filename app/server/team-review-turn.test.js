@@ -67,11 +67,32 @@ test('interactive team round: each specialist asks a question, then build plan',
     startTeamReview(p.id);
     // post first question manually via the handler path: simulate being in team_review
     setKickoff(p.id, { status: 'team_review' });
+    // Specialist questions are JSON {question, options}.
+    const qJson = async () => JSON.stringify({ question: 'Q?', options: ['a', 'b'] });
     // answer specialist 1 → should ask specialist 2 (another question)
-    const r1 = await handleLeadMessageDuringKickoff(p.id, 'use a clean minimal UI', { callText: async () => 'Q? | a | b' });
+    const r1 = await handleLeadMessageDuringKickoff(p.id, 'use a clean minimal UI', { callText: qJson });
     assert.equal(r1.intent, 'team_review_question');
-    // answer specialist 2 → round done → build plan attempt (stub non-JSON → close)
-    const r2 = await handleLeadMessageDuringKickoff(p.id, 'node + sqlite', { callText: async () => 'Q? | a | b' });
+    // answer specialist 2 → round done → build plan attempt (stub isn't a valid plan → close)
+    const r2 = await handleLeadMessageDuringKickoff(p.id, 'node + sqlite', { callText: qJson });
     assert.ok(['build_plan', 'questions_done'].includes(r2.intent));
+  } finally { deleteProject(p.id); }
+});
+
+test('teamReviewQuestion: parses JSON, retries, and returns null (skip) when unusable', async () => {
+  const { teamReviewQuestion, parseReviewQuestion, startTeamReview, currentReviewAgent } = await import('./team-review.js');
+  // pure parser
+  assert.deepEqual(parseReviewQuestion('```json\n{"question":"What DB?","options":["sqlite","postgres"]}\n```'), { q: 'What DB?', options: ['sqlite', 'postgres'] });
+  assert.equal(parseReviewQuestion('not json at all'), null);
+  assert.equal(parseReviewQuestion('{"question":"","options":[]}'), null);   // empty question → null
+  const p = await createProject({ name: 'Q Skip', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    startTeamReview(p.id);
+    const a = currentReviewAgent(p.id);
+    // a real JSON question parses
+    const ok = await teamReviewQuestion(p.id, a.id, { callText: async () => '{"question":"Scope?","options":["x","y"]}' });
+    assert.deepEqual(ok, { q: 'Scope?', options: ['x', 'y'] });
+    // a non-JSON / empty reply → null after retry (caller will skip the agent)
+    assert.equal(await teamReviewQuestion(p.id, a.id, { callText: async () => 'sorry, no idea' }), null);
+    assert.equal(await teamReviewQuestion(p.id, a.id, { callText: async () => '' }), null);
   } finally { deleteProject(p.id); }
 });

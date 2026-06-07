@@ -132,7 +132,7 @@ The server defaults `LOCAL_STT_URL` to `http://127.0.0.1:8123/transcribe`. Requi
 
 ### Code execution sandbox (optional — for the build/run loop)
 
-After kickoff the PM can **scaffold and run** real code (the **"Build it" → "Run it"** flow). Scaffolding writes/commits files to the project repo and needs nothing extra. **Running** (install/build/test + auto-fix) executes inside a throwaway container, so it needs the `docker` **CLI** plus a reachable Docker **daemon**. Bridge shells out to the `docker` CLI only — it does **not** depend on Docker Desktop; any daemon provider works.
+After kickoff the PM hands engineering work to the **software engineer**, who **scaffolds and runs** real code from their own chat (the **"Build it" → "Run it"** flow). Scaffolding writes/commits files to the project repo and needs nothing extra. **Running** (install/build/test + auto-fix) executes inside a throwaway container, so it needs the `docker` **CLI** plus a reachable Docker **daemon**. Bridge shells out to the `docker` CLI only — it does **not** depend on Docker Desktop; any daemon provider works.
 
 Recommended (CLI-only, no GUI app) — **Colima**:
 

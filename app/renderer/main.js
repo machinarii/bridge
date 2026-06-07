@@ -2474,7 +2474,7 @@ async function kickoffDecide(which, agent) {
  * bubble. The user toggles one or more (Space / Enter / ✕), then a Submit
  * button below-right sends the chosen set as the next message. Reachable via
  * the bubble's keyboard/gamepad model (cycleBubbleAction). */
-function buildChoiceList(choices, agent, picked) {
+function buildChoiceList(choices, agent, picked, skippable = false) {
   // `picked` (an array) → memorialized/read-only: a past question whose answer
   // we replay as the displayed selection. Otherwise the list is interactive.
   const memorial = Array.isArray(picked);
@@ -2537,13 +2537,27 @@ function buildChoiceList(choices, agent, picked) {
   const hint = document.createElement('span');
   hint.className = 'bubble-choices-hint';
   hint.textContent = 'Select one or more with ←/→';
+  // Right-side action group: [Skip for now] [Submit]. Skip precedes Submit in
+  // the DOM so the bubble nav model (cycleBubbleAction → document order) reaches
+  // it just left of Submit, matching its visual position.
+  const actions = document.createElement('div');
+  actions.className = 'bubble-choices-actions';
+  if (skippable) {
+    const skip = document.createElement('button');
+    skip.type = 'button';
+    skip.className = 'choice-skip';
+    skip.textContent = 'Skip for now';
+    skip.addEventListener('click', (e) => { e.stopPropagation(); skipChoices(wrap, agent); });
+    actions.appendChild(skip);
+  }
   const submit = document.createElement('button');
   submit.type = 'button';
   submit.className = 'choice-submit role-confirm is-disabled';   // disabled until a pick
   submit.setAttribute('aria-disabled', 'true');
   submit.textContent = 'Submit';
   submit.addEventListener('click', (e) => { e.stopPropagation(); submitChoices(wrap, agent); });
-  submitRow.append(hint, submit);
+  actions.appendChild(submit);
+  submitRow.append(hint, actions);
   wrap.appendChild(submitRow);
 
   return wrap;
@@ -2584,6 +2598,14 @@ function submitChoices(wrap, agent) {
   if (!picked.length) return;          // nothing selected → no-op
   leaveBubbleFocus();
   submitIntent(picked.join('; '));     // the chosen option(s) become the next message
+}
+/* "Skip for now": advance past the question without answering. The server
+ * recognizes this exact literal (kickoff.js SKIP_TOKEN) and moves to the next
+ * question without recording an answer. Always available — no pick required. */
+function skipChoices(wrap, agent) {
+  if (currentAgent()?.id !== agent.id) return;
+  leaveBubbleFocus();
+  submitIntent('Skip for now');
 }
 
 /* Selectable chat bubbles: each prompt / response is a tabbable
@@ -2840,6 +2862,7 @@ async function renderChatHistory(container, agent) {
       let actionsTaken = null;
       let isKickoffPlan = false;
       let choices = null;
+      let skippable = false;
       if (!isUser) {
         try {
           const parsed = JSON.parse(body.replace(/^```(?:json)?/i,'').replace(/```$/, '').trim());
@@ -2848,6 +2871,7 @@ async function renderChatHistory(container, agent) {
           if (Array.isArray(parsed?.actions_taken)) actionsTaken = parsed.actions_taken;
           if (Array.isArray(parsed?.actions) && parsed.actions.some(a => (a.action?.type || a.type) === 'approve_kickoff')) isKickoffPlan = true;
           if (Array.isArray(parsed?.choices) && parsed.choices.length) choices = parsed.choices.slice(0, 4);
+          if (parsed?.skippable) skippable = true;
         } catch { /* leave body as-is */ }
       }
       // Strip the "[team-voice] " prefix added by the team driver so the
@@ -2892,7 +2916,7 @@ async function renderChatHistory(container, agent) {
         const picked = answer != null
           ? answer.split(/;\s*/).map(s => s.trim()).filter(Boolean)
           : undefined;
-        bubble.appendChild(buildChoiceList(choices, agent, picked));
+        bubble.appendChild(buildChoiceList(choices, agent, picked, skippable));
       }
 
       // Timestamp + retry / edit only render on user-authored bubbles.

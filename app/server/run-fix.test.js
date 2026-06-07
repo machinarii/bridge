@@ -85,3 +85,15 @@ test('runAndFix: stops immediately on a stopped daemon', async () => {
     assert.equal(r.rounds, 0);
   } finally { deleteProject(p.id); }
 });
+
+import { classifyFailure } from './run-fix.js';
+
+test('classifyFailure: environment vs dependency vs code', () => {
+  const env = classifyFailure('install', 'prisma:warn Prisma failed to detect the libssl/openssl version');
+  assert.equal(env.kind, 'environment');
+  const dep = classifyFailure('test', "Error: Cannot find module 'left-pad'");
+  assert.equal(dep.kind, 'dependency');
+  const code = classifyFailure('build', 'SyntaxError: Unexpected token');
+  assert.equal(code.kind, 'code');
+  assert.match(code.hint, /build/);
+});

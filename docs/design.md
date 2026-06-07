@@ -721,16 +721,28 @@ tool exposure is a follow-up.
 ### 12.5.5 Code generation & the execution sandbox
 
 Kickoff doesn't stop at planning — it scaffolds and **runs** real code
-(§15.12, steps 6–7). Two server modules own this:
+(§15.12). Build + scaffolding is engineering work, so it's **handed off to the
+software engineer** (§15.12): the **"Build it" / "Run it"** flow lives in that
+agent's chat. Two server modules own the work:
 
-- **Scaffold (`scaffold.js` / `workspace.js`).** On **"Build it"** the PM
+- **Scaffold (`scaffold.js` / `workspace.js`).** On **"Build it"** the engineer
   generates a build plan and an initial source tree under the project's repo
   (`~/bridge-projects/<slug>/`, code at the root, planning docs under `docs/`),
   writing files **path-safely** (escapes rejected), committing atomically, and
   running a `node --check` syntax-fix pass before reporting the file count + SHA.
+  Every generation prompt carries a shared **`SANDBOX_GUIDANCE`**: the app must be
+  **self-contained and offline-runnable** — default to **SQLite** (no DB server),
+  and any Prisma schema must include complete `generator` + `datasource` blocks
+  (`provider = "sqlite"`, `url = "file:./dev.db"`). This is what makes a scaffold
+  actually verifiable in the throwaway container.
 - **Run-fix loop (`sandbox.js` → `verify.js` → `run-fix.js`).** On **"Run it"**
   the repo is installed/built/tested **in a throwaway container**, and failures
-  drive a bounded model-fix loop (`runAndFix`).
+  drive a bounded model-fix loop (`runAndFix`). The fix prompt tells the model it
+  may edit **any** file (including `package.json`, config, an ORM schema) to keep
+  the app self-contained. A persistent failure is **classified** (`classifyFailure`
+  → `environment` / `dependency` / `code`) so the user gets a diagnosis, not a raw
+  dump (e.g. *"a missing system library — I've adjusted the sandbox; another 'Run
+  it' may clear it"*).
 
 **The sandbox (`sandbox.js`) is the *only* place Bridge touches a container
 engine.** Design points:
@@ -749,6 +761,11 @@ engine.** Design points:
   start the engine instead of failing opaquely. It **never rejects** — outcomes
   are returned. `verifyProject` marks `install`/`build`/`test` steps with
   `@@STEP` markers to identify the failing step.
+- **Stack-aware provisioning.** `node:20-slim` is bare, so `verifyProject`
+  inspects the project's `package.json` deps (`systemPackages` / `provisionScript`)
+  and prepends an apt install for stacks that need a system library — e.g. Prisma
+  → `openssl` — before npm runs. This turns an otherwise-unwinnable environment
+  failure (the model can't `apt-get` from a file edit) into a non-issue.
 - **DI seams** (`_bin`, `image`, injected `runner`/`callText`) make the whole
   pipeline unit-testable **without Docker or network** — the live path defaults
   to `runInContainer` + OpenRouter.
@@ -990,9 +1007,19 @@ activity live. Mapping at a glance:
   - **Multi-select:** toggle one or more with **Enter / ✕** (Space is *not* a
     toggle). A **"Other — Hold to talk"** button (always appended) starts
     push-to-talk for a free-form answer, playing the standard mic wave inside
-    itself. A **"Select one or more with ←/→"** hint sits bottom-left; **Submit** sits
-    bottom-right and is **grayed out until at least one option is selected**.
-    Submitting sends the chosen option(s) as the user's next message.
+    itself. A **"Select one or more with ←/→"** hint sits bottom-left; the
+    bottom-right action group holds **Submit** — **grayed out until at least one
+    option is selected** — and, on **question** bubbles, a **"Skip for now"**
+    button to its left. Submitting sends the chosen option(s) as the next message.
+  - **Skip for now:** question specs (`skippable: true` — the PM's kickoff
+    questions and the specialists' team-planning questions) render a **"Skip for
+    now"** button left of Submit, **same height + width** (equal-`1fr` grid
+    columns), always enabled. It sits **before Submit in the DOM** so the nav
+    model (`cycleBubbleAction`, document-order) reaches it just left of Submit for
+    keyboard and gamepad alike. It submits the literal `"Skip for now"`, which the
+    server (`SKIP_TOKEN` / `isSkip`) advances past the question **without recording
+    an answer** (a kickoff Q is left gap-filled; a specialist's turn is captured so
+    the round still completes).
   - **Entrance:** buttons stagger in one-by-one (like Layer 1 tiles).
   - **Auto-focus on arrival:** when a **new** question bubble lands (e.g. right
     after you submit the previous answer), focus drops straight onto its **first
@@ -1139,19 +1166,33 @@ a plan to **running, tested code** in the project repo:
    needed). Each Q→answer is folded into `open-questions.md` as a decisions log.
    The PM reads **Waiting for response** between questions.
 5. **`team_review`** → a **team planning round**: each specialist asks the user
-   **one** question in turn (so every role shapes the plan before any code is
-   written). Answers are recorded as that agent's planning notes and committed
-   (*"Add team planning notes"*).
-6. **`build_pending`** → the PM proposes a **build plan** with choices
-   *"Build it"* / *"Hold off — let me adjust"* (`BUILD_CHOICES`). **"Build it"**
-   → `runScaffold` generates the initial source tree and **commits** it
-   (with a syntax-fix pass via `node --check`); the reply reports the file count
-   and commit SHA.
-7. **`run_pending`** → after a successful scaffold the PM offers *"Run it"* /
-   *"Not now"* (`RUN_CHOICES`). **"Run it"** → `runAndFix` (B3): install → build
-   → test the repo **in a throwaway sandbox container** (§12.5.5), and on failure
-   feed the failing step + repo files to the model, apply its edits, commit, and
-   re-verify — bounded by `maxRounds`. Outcomes:
+   **one** real, domain-specific question in turn (so every role shapes the plan
+   before any code is written), labeled by role (*"Iris (Designer) asks: …"*).
+   The question is model-generated as **structured JSON** (`{question, options}`),
+   grounded in the role's persona + the captured docs, parsed tolerantly and
+   **retried** on an empty/unparseable reply; failures are logged (never silently
+   swallowed). If a specialist's call still yields nothing usable, their turn is
+   **skipped** (captured so the round completes) rather than showing a hollow,
+   generic bubble — skip is a true last resort, not the default. Answers are
+   recorded as that agent's planning notes and committed (*"Add team planning
+   notes"*).
+6. **`build_pending`** → **build + scaffolding is handed off to the software
+   engineer** (`ensureBuildAgent` finds one or adds it; `kickoff.buildAgentId`
+   records the owner). The PM posts a **handoff message** in the lead chat
+   (*"…handed this off to **Kade** (Software Engineer) — open their screen…"*);
+   the **build plan** choice bubble *"Build it"* / *"Hold off — let me adjust"*
+   (`BUILD_CHOICES`) lands in the **engineer's** chat (their tile lights up via a
+   delegate event). **"Build it"** (from the engineer) → `runScaffold` generates
+   the initial source tree and **commits** it (syntax-fix pass via `node --check`);
+   the reply — in the engineer's chat — reports the file count and commit SHA.
+7. **`run_pending`** → after a successful scaffold the engineer offers *"Run it"* /
+   *"Not now"* (`RUN_CHOICES`). **"Run it"** → `runAndFix`: install → build → test
+   the repo **in a throwaway sandbox container** (§12.5.5), and on failure feed the
+   failing step + repo files to the model, apply its edits, commit, and re-verify —
+   bounded by `maxRounds`. The whole build/run conversation stays in the engineer's
+   chat; the interpret endpoint routes the **build owner's** messages to the
+   handler during these phases (a message from anyone else falls through to a
+   normal reply). Outcomes:
    - green → **`verified`** (*"✅ It runs…"*);
    - still failing after the rounds → **`built`** (reports the failing step + tail
      of output; *"Run it"* retries);

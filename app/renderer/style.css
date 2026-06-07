@@ -3049,15 +3049,58 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   color: var(--fg-dim);
 }
 .agent-view .bubble.agent .bubble-choices-submit .choice-submit {
-  flex: 0 0 auto;
+  width: 100%;               /* fill its equal-width grid cell (matches Skip's width) */
   min-width: 0;
+  white-space: nowrap;
   font-size: 0.66rem;
-  padding: 0.4rem 1.32rem;   /* ~20% wider than before */
+  padding: 0.4rem 1.32rem;
 }
 /* Grayed out until at least one option is selected. */
 .agent-view .bubble.agent .bubble-choices-submit .choice-submit.is-disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+/* Right-aligned action group: [Skip for now] [Submit]. Equal-width columns size
+   both buttons to the wider label ("Skip for now"), so Submit matches Skip. */
+.agent-view .bubble.agent .bubble-choices-submit .bubble-choices-actions {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+/* "Skip for now" — a quiet ghost button left of Submit. Same height/width as
+   Submit (min-height + grid cell), just a subtler fill. */
+.agent-view .bubble.agent .bubble-choices-actions .choice-skip {
+  width: 100%;
+  min-height: var(--steam-button-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.66rem;
+  color: var(--fg-dim);
+  background: transparent;
+  border: 1.5px solid rgba(255,255,255,0.16);
+  border-radius: var(--steam-radius);
+  padding: 0.4rem 1.1rem;
+  transition: background 120ms, border-color 120ms, color 120ms;
+}
+.agent-view .bubble.agent .bubble-choices-actions .choice-skip:hover {
+  color: var(--fg);
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.32);
+}
+.agent-view .bubble.agent .bubble-choices-actions .choice-skip:focus,
+.agent-view .bubble.agent .bubble-choices-actions .choice-skip:focus-visible {
+  outline: none;
+  color: var(--fg);
+  border-color: rgba(255,255,255,0.55);
+  box-shadow: 0 0 0 2px var(--focus, #ffffff), 0 0 12px 2px rgba(255,255,255,0.22);
 }
 
 /* "Other" choice — hold to dictate. Inherits the choice-btn look but stacks a
