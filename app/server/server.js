@@ -528,10 +528,14 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
   const regenerate = Number(req.body?.regenerate) || 0;
   const effort = String(req.body?.effort || 'high');
   try {
-    // During an awaiting kickoff, a message to the lead may approve it.
+    // During an awaiting kickoff, a message to the lead may approve it. Once the
+    // build is handed to the software engineer, their "Build it" / "Run it"
+    // messages drive the build/run phases from their own chat.
     const project0 = getProject(pid);
-    if (project0 && aid === project0.leadAgentId) {
-      const ko = await handleLeadMessageDuringKickoff(pid, text);
+    const ko0 = project0?.kickoff;
+    const onBuildAgent = ko0 && aid === ko0.buildAgentId && ['build_pending', 'run_pending'].includes(ko0.status);
+    if (project0 && (aid === project0.leadAgentId || onBuildAgent)) {
+      const ko = await handleLeadMessageDuringKickoff(pid, text, { agentId: aid });
       // The Q&A flow (one question at a time) and approval both hand back a
       // spec to surface directly as the PM's reply.
       if (ko.handled && ko.spec) {

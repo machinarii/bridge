@@ -94,24 +94,53 @@ export async function maybeFinishTeamReview(projectId, { callText, apiKey } = {}
   return generateBuildPlan(projectId, { callText, apiKey });
 }
 
+/** Parse a specialist question reply: tolerant JSON ({question, options}) —
+ * handles fenced blocks and surrounding prose. Returns {q, options} with a
+ * real, non-empty question, or null if there's nothing usable. */
+export function parseReviewQuestion(raw) {
+  const s = String(raw || '');
+  const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const cand = fenced ? fenced[1]
+    : (s.indexOf('{') >= 0 ? s.slice(s.indexOf('{'), s.lastIndexOf('}') + 1) : '');
+  try {
+    const o = JSON.parse(cand);
+    const q = String(o?.question || '').trim();
+    if (!q) return null;
+    const options = Array.isArray(o?.options)
+      ? o.options.map(x => String(x).trim()).filter(Boolean).slice(0, 4)
+      : [];
+    return { q, options };
+  } catch { return null; }
+}
+
 /** Generate ONE focused domain question (with 2-4 short options) from a
- * specialist, to ask the user during the round. Returns { q, options }. */
-export async function teamReviewQuestion(projectId, agentId, { callText, apiKey } = {}) {
+ * specialist, to ask the user during the round. Returns {q, options} on success,
+ * or null when the model yields nothing usable — the caller then SKIPS this
+ * specialist rather than showing a hollow, generic bubble. Retries once on an
+ * empty/unparseable reply and logs failures (never silently degrades). */
+export async function teamReviewQuestion(projectId, agentId, { callText, apiKey, retries = 2 } = {}) {
   const p = getProject(projectId);
   const agent = p?.agents.find(a => a.id === agentId);
   if (!agent) return null;
-  const roleLabel = getRole(agent.role)?.label || agent.role;
+  const role = getRole(agent.role);
+  const roleLabel = role?.label || agent.role;
+  const persona = role?.personaSeed ? `\nYour perspective as ${roleLabel}: ${role.personaSeed}` : '';
   const prompt =
-    `You are ${agent.name}, the ${roleLabel} on project "${p.name}" (goal: "${p.goal}"). ` +
-    `Based on the captured docs, ask the user ONE focused question you genuinely need answered to do ` +
-    `your part well, with 2-4 short, distinct options. Output ONE line only: ` +
-    `"Question? | option one | option two | option three" — no preamble, no numbering.\n\n` +
-    `Docs:\n${reviewDocs(projectId)}`;
-  let raw = '';
-  try { raw = String(await callText({ apiKey, model: getModelForRole(agent.role), prompt, timeoutMs: 30_000 }) || ''); } catch { raw = ''; }
-  const parts = (raw.split('\n').find(l => l.includes('|')) || raw.split('\n')[0] || '')
-    .split('|').map(s => s.replace(/^\s*[-*\d.)]+\s*/, '').trim()).filter(Boolean);
-  const q = parts[0] || `What matters most for the ${roleLabel.toLowerCase()} work?`;
-  const options = parts.slice(1, 5);
-  return { q, options: options.length ? options : ['Sounds good — your call', 'Let me give detail'] };
+    `You are ${agent.name}, the ${roleLabel} on project "${p.name}".\nGoal: "${p.goal}".${persona}\n\n` +
+    `Here is everything the team has planned so far:\n${reviewDocs(projectId) || '(no docs yet)'}\n\n` +
+    `As the ${roleLabel}, there is a REAL, concrete decision you need from the user before you can do ` +
+    `your part well. Ask the single most important such question — specific to THIS project and YOUR ` +
+    `domain (never generic, never "what matters most"). Give 2-4 short, distinct answer options that ` +
+    `are genuine, mutually-exclusive choices. Output ONLY JSON: ` +
+    `{"question": "<your specific question>", "options": ["<choice>", "<choice>", ...]}. No prose.`;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let raw = '';
+    try { raw = String(await callText({ apiKey, model: getModelForRole(agent.role), prompt, timeoutMs: 30_000 }) || ''); }
+    catch (err) { console.warn(`[team-review] question call failed for ${agent.name} (${agent.role}):`, err?.message || err); continue; }
+    const parsed = parseReviewQuestion(raw);
+    if (parsed) return parsed;
+    if (attempt < retries) console.warn(`[team-review] empty/unparseable question for ${agent.name} (${agent.role}); retrying`);
+  }
+  console.warn(`[team-review] no usable question for ${agent.name} (${agent.role}); skipping their turn`);
+  return null;
 }

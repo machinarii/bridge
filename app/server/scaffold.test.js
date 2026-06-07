@@ -10,6 +10,21 @@ const { createProject, getProject, deleteProject } = await import('./projects.js
 const { writeNote } = await import('./backends/notes.js');
 const { generateBuildPlan } = await import('./scaffold.js');
 
+test('generateBuildPlan prompt instructs a self-contained, SQLite-default scaffold', async () => {
+  const p = await createProject({ name: 'Plan SQLite', goal: 'a prisma app', roleIds: ['pm', 'sw_engineer'], topology: 'hub-and-spoke' });
+  try {
+    let seenPrompt = '';
+    const callText = async ({ prompt }) => {
+      seenPrompt = prompt;
+      return JSON.stringify({ stack: 'node+prisma', summary: 's', files: [{ path: 'package.json', purpose: 'm' }] });
+    };
+    await generateBuildPlan(p.id, { callText });
+    assert.match(seenPrompt, /offline sandbox/i);
+    assert.match(seenPrompt, /sqlite/i);
+    assert.match(seenPrompt, /provider = "sqlite"/);
+  } finally { deleteProject(p.id); }
+});
+
 test('generateBuildPlan parses a plan, persists it, and sets phase=build_pending', async () => {
   const p = await createProject({ name: 'Plan Gen', goal: 'a todo app', roleIds: ['pm', 'sw_engineer'], topology: 'hub-and-spoke' });
   try {

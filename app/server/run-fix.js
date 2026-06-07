@@ -52,9 +52,27 @@ export async function proposeFixes(projectId, result, callText, { apiKey } = {})
     `The project's ${result.step} step failed:\n\n${String(result.output || '').slice(-4000)}\n\n` +
     `Current files:\n${block}\n\n` +
     `Return ONLY JSON {"files":[{"path":"<repo-relative>","contents":"<full corrected file>"}]} with the ` +
-    `COMPLETE corrected contents of every file you need to change. No prose.`;
+    `COMPLETE corrected contents of every file you need to change. No prose.\n\n` +
+    `This runs in an OFFLINE sandbox (a throwaway Linux container, no network ` +
+    `services, no external database). You may edit ANY file — including ` +
+    `package.json (scripts/deps), config, or an ORM schema. Keep it ` +
+    `self-contained: prefer SQLite over a database server; a Prisma schema must ` +
+    `have complete generator + datasource blocks (provider "sqlite", ` +
+    `url "file:./dev.db"). Don't require services that npm test doesn't start.`;
   const raw = await callText({ apiKey, model: getModelForRole('sw_engineer'), prompt, timeoutMs: 60_000 });
   return parseEdits(raw);
+}
+
+/** Classify a failing verify result so the user gets a diagnosis, not just a
+ * raw dump. `environment` = a missing system lib (not fixable by editing files
+ * alone); `dependency` = a missing/misdeclared package; otherwise the step name. */
+export function classifyFailure(step, output) {
+  const o = String(output || '');
+  if (/libssl|openssl|\blib[\w.+-]*\.so(?:\.\d+)*\b|GLIBC_|error while loading shared libraries/i.test(o))
+    return { kind: 'environment', hint: 'a missing system library in the sandbox image' };
+  if (/Cannot find module|MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND/i.test(o))
+    return { kind: 'dependency', hint: 'a missing or misdeclared dependency' };
+  return { kind: 'code', hint: `the ${step || 'build'} step` };
 }
 
 /** Verify → fix → re-verify until green or maxRounds. Each fix round applies the
