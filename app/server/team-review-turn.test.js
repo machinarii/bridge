@@ -1,12 +1,13 @@
 // app/server/team-review-turn.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, existsSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 process.env.BRIDGE_STATE_DIR = mkdtempSync(join(tmpdir(), 'bridge-state-'));
 process.env.BRIDGE_PROJECTS_BASE = mkdtempSync(join(tmpdir(), 'bridge-test-'));
 const { createProject, getProject, deleteProject, docsDir } = await import('./projects.js');
+const { charterFileNameFor } = await import('./charters.js');
 const { startTeamReview, currentReviewAgent, teamReviewReady, planAgentTurn } = await import('./team-review.js');
 
 test('planAgentTurn generates a plan for the current agent, records it, advances', async () => {
@@ -17,7 +18,8 @@ test('planAgentTurn generates a plan for the current agent, records it, advances
     let seenModel = null;
     const callText = async ({ model }) => { seenModel = model; return '# Plan\n\nmy domain plan\n'; };
     await planAgentTurn(p.id, a0.id, { callText });
-    assert.ok(existsSync(resolve(docsDir(p.id), `plan-${a0.role}.md`)), 'plan doc written');
+    const roleFile = resolve(docsDir(p.id), 'roles', charterFileNameFor(a0.role));
+    assert.ok(existsSync(roleFile) && /## Plan/.test(readFileSync(roleFile, 'utf8')), 'plan section written into role file');
     assert.equal(getProject(p.id).teamReview.captured[a0.id].planned, true);
     assert.notEqual(currentReviewAgent(p.id)?.id, a0.id, 'advanced past a0');
     assert.ok(seenModel, 'used a role model');
@@ -95,4 +97,24 @@ test('teamReviewQuestion: parses JSON, retries, and returns null (skip) when unu
     assert.equal(await teamReviewQuestion(p.id, a.id, { callText: async () => 'sorry, no idea' }), null);
     assert.equal(await teamReviewQuestion(p.id, a.id, { callText: async () => '' }), null);
   } finally { deleteProject(p.id); }
+});
+
+import { annotateAgentMentions } from './kickoff.js';
+
+test('annotateAgentMentions: tags a mentioned teammate with their role', () => {
+  const agents = [
+    { id: 'p__pm', role: 'pm', name: 'Cassidy' },
+    { id: 'p__marketing', role: 'marketing', name: 'Brio' },
+    { id: 'p__legal', role: 'legal', name: 'Hollis' },
+  ];
+  // Brio (the asker) mentions Hollis → Hollis gets role-tagged, Brio does not.
+  assert.equal(
+    annotateAgentMentions('How do I stay legally honest with Hollis?', agents, 'p__marketing'),
+    'How do I stay legally honest with Hollis (Legal)?'
+  );
+  // Already-tagged names and the asker's own name are left alone (no doubling).
+  assert.equal(
+    annotateAgentMentions('Brio asks Hollis (Legal) for review', agents, 'p__marketing'),
+    'Brio asks Hollis (Legal) for review'
+  );
 });

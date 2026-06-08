@@ -19,11 +19,16 @@ export function buildFileTree(pid) {
         return entry(resolve(rolesDir, f), 'charter', { roleId: agent?.role || null, agentName: agent?.name || '' });
       }).filter(c => c.roleId)
     : [];
+  // Top-level docs (PRD, milestones, …) — .md directly under docs/, excluding
+  // project.md. Specialist plans live inside the role files (roles/ section),
+  // not as separate plan-*.md, so there's no Plans group.
   const notes = existsSync(docs)
     ? readdirSync(docs).filter(f => f.endsWith('.md') && f !== 'project.md')
         .sort().reverse().map(f => entry(resolve(docs, f), 'note'))
     : [];
-  return { projectMd: 'docs/project.md', charters, notes };
+  // project.md is legacy (new projects seed PRD.md instead); show it only if present.
+  const projectMd = existsSync(resolve(docs, 'project.md')) ? 'docs/project.md' : null;
+  return { projectMd, charters, notes };
 }
 
 export function readProjectFile(pid, rel) {

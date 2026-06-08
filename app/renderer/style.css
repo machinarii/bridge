@@ -1353,6 +1353,19 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   letter-spacing: 0.01em;
   margin-top: 0.15rem;
 }
+/* L2 status line — small text directly below the role (top-left). Mirrors the
+   L1 tile label so an agent awaiting the user never reads as idle while viewed. */
+.agent-view .agent-header .agent-title .agent-status {
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--fg-dim);
+}
+.agent-view .agent-header .agent-title .agent-status:empty { display: none; }
+.agent-view .agent-header .agent-title .agent-status[data-await="reply"] {
+  color: var(--warn, #ffb86b);   /* same orange as the tile's "Waiting for response" */
+}
 .agent-view .agent-header .nav-hint {
   margin-left: auto; font-size: 0.75em; color: var(--fg-dim);
   display: inline-flex; align-items: center; gap: 12px;

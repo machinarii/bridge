@@ -1090,9 +1090,11 @@ prompts):
 
 - **Push-to-talk only.** Hold **V** (keyboard) or **R2** (gamepad) to talk;
   release to transcribe. Copy is "Hold V to talk" everywhere.
-- **Local Parakeet only** — never the browser engine. A failure surfaces
-  **visibly** (red message in the capture mic area + status indicator), never
-  silent.
+- **Local Parakeet only** — never the browser engine. Any failure (sidecar down,
+  or a blob ffmpeg can't decode) surfaces as **one clean message** — *"Cannot
+  connect to speech to text model"* — never the raw ffmpeg banner and never
+  silently downgraded to "no speech"; the underlying cause is console-logged. It
+  works or it doesn't.
 - **Live partials:** while holding on a capture screen, the audio-so-far is
   re-transcribed (~450ms) so words appear as you speak.
 - **Wave** shows only while holding; the mic opens only during a hold.
@@ -1111,9 +1113,15 @@ chip — no duplicate action-bar Back. Entrance animates on screen transitions
 Left drawers, mutually exclusive: **Explorer**, **Activity**, **Memory**. They
 share a common **width** (320px) and **header style** (drawer label, weight 400).
 
-- **Explorer** — project `.md` files (the code/build folder is hidden), grouped
-  into collapsible folders (Roles, Notes, …). Keyboard/gamepad **and mouse**:
-  clicking a file opens it in the viewer; clicking a folder header toggles it.
+- **Explorer** — project `.md` files (the code/build folder is hidden). A single
+  collapsible **Roles** folder (the `docs/roles/role-<slug>.md` charters, each of
+  which now also carries the specialist's `## Plan` section); everything else —
+  `PRD.md`, `milestones.md`, `op-notes.md`, `open-questions.md`, and legacy
+  `project.md` if present — renders **loose at the top level** (no "Notes"
+  folder, no "Plans" folder). Entry labels are the **bare filename with `.md`**
+  (never the directory path). Keyboard/gamepad **and mouse**: clicking a file
+  opens it in the viewer (`buildFileTree` / `readProjectFile`); clicking a folder
+  header toggles it.
 - **Activity** — always the **cross-project** feed, the same from Layer 0/1/2
   (header reads just "Activity"). Lists **agent responses across every project**,
   most-recent first, each as a card: **project name** (heading) → **agent name ·
@@ -1148,17 +1156,25 @@ suffix is only a last resort if both pools are fully exhausted.
 
 On project create the PM auto-kicks-off (`app/server/kickoff.js`), a
 plan-first state machine on `project.kickoff.status` that runs all the way from
-a plan to **running, tested code** in the project repo:
+a plan to **running, tested code** in the project repo. `startKickoff` is
+**idempotent** — it claims the `idle`→`drafting` transition synchronously before
+any await, so a double create-POST (or any re-trigger) can never post a second
+plan. Project creation also **clears the scratchpad** for the (deterministic)
+agent ids, so a reused id (same name → same date-based id) never inherits an
+old project's chat.
 
 1. **`drafting`** → PM writes a plan-first message; its tile reads **Drafting**.
 2. **`awaiting_approval`** → the plan posts as a **choice bubble** (§15.4), not
    Approve/Reject buttons: *"Go ahead with this plan"* / *"Go ahead, but ask me
    clarifying questions first"* / *"Let me adjust the plan first"*. The first two
    proceed; the third holds so you can steer. The plan bubble auto-focuses on open.
-3. On an approving choice → **`running`**: PM writes the 4 starter docs (PRD,
-   roadmap, operating notes, open questions) into `<repo>/docs/`, then assigns
-   work. Assignment is **role-based** via the PM model — it may pick roles **not
-   yet on the team**.
+   The plan message is **plan-only** — the model is told not to embed or end with
+   a question; any clarifying questions come later (step 4), one at a time.
+3. On an approving choice → **`running`**: PM writes the starter docs (roadmap,
+   operating notes, open questions) and **expands `PRD.md`** — which was seeded at
+   project creation with the goal, top features, team, and topology — into a full
+   PRD. (New projects seed **`PRD.md`**, not `project.md`.) Then it assigns work,
+   **role-based** via the PM model — it may pick roles **not yet on the team**.
 4. **`asking`** → the PM asks its kickoff questions **one at a time**, numbered
    **"Q1: …"**, each as a multi-select choice bubble (§15.4). A role the PM
    couldn't confidently task becomes a **clarify question** whose answer becomes
@@ -1173,9 +1189,11 @@ a plan to **running, tested code** in the project repo:
    **retried** on an empty/unparseable reply; failures are logged (never silently
    swallowed). If a specialist's call still yields nothing usable, their turn is
    **skipped** (captured so the round completes) rather than showing a hollow,
-   generic bubble — skip is a true last resort, not the default. Answers are
-   recorded as that agent's planning notes and committed (*"Add team planning
-   notes"*).
+   generic bubble — skip is a true last resort, not the default. Teammates
+   mentioned *inside* a question are role-tagged too (*"…with Hollis (Legal)?"*).
+   Each answer is recorded as a **`## Plan` section inside that agent's role
+   charter** (`docs/roles/role-<slug>.md`) — not a separate `plan-*.md` — and
+   committed.
 6. **`build_pending`** → **build + scaffolding is handed off to the software
    engineer** (`ensureBuildAgent` finds one or adds it; `kickoff.buildAgentId`
    records the owner). The PM posts a **handoff message** in the lead chat

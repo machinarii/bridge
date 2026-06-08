@@ -2,11 +2,32 @@
  * each enabled specialist (non-lead) records a domain plan before the PM
  * proposes a build plan. Deterministic state machine only — model-driven plan
  * generation and live kickoff wiring land in Plan 4. */
-import { getProject, setProjectState } from './projects.js';
-import { writeNote, listNotes, readNote } from './backends/notes.js';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { getProject, setProjectState, rolesDir } from './projects.js';
+import { listNotes, readNote } from './backends/notes.js';
 import { getModelForRole } from './models.js';
 import { getRole } from './roles.js';
+import { charterFileNameFor } from './charters.js';
 import { generateBuildPlan } from './scaffold.js';
+
+/* A specialist's domain plan lives as a "## Plan" section INSIDE its role
+ * charter file (docs/roles/role-<slug>.md) — not a separate plan-*.md. */
+function roleFilePath(projectId, roleId) {
+  return resolve(rolesDir(projectId), charterFileNameFor(roleId));
+}
+function upsertPlanSection(projectId, roleId, planMarkdown) {
+  const path = roleFilePath(projectId, roleId);
+  let content = existsSync(path) ? readFileSync(path, 'utf8') : `# ${getRole(roleId)?.label || roleId}\n`;
+  content = content.replace(/\n*## Plan\b[\s\S]*$/i, '').replace(/\s+$/, '');   // drop any prior Plan (update-in-place)
+  writeFileSync(path, `${content}\n\n## Plan\n\n${String(planMarkdown).trim()}\n`, 'utf8');
+}
+function readPlanSection(projectId, roleId) {
+  const path = roleFilePath(projectId, roleId);
+  if (!existsSync(path)) return '';
+  const m = readFileSync(path, 'utf8').match(/\n## Plan\b\s*([\s\S]*)$/i);
+  return m ? m[1].trim() : '';
+}
 
 /** The enabled, non-lead agents in tile order — the round's queue. */
 export function teamReviewAgents(projectId) {
@@ -54,7 +75,7 @@ export function recordPlan(projectId, agentId, planMarkdown, { answered = false 
   const tr = p?.teamReview;
   if (!tr || !tr.captured[agentId]) return null;
   const agent = p.agents.find(a => a.id === agentId);
-  if (planMarkdown && agent) writeNote(projectId, `plan-${agent.role}`, planMarkdown);
+  if (planMarkdown && agent) upsertPlanSection(projectId, agent.role, planMarkdown);
   tr.captured[agentId] = { planned: true, answered: !!answered };
   if (tr.order[tr.idx] === agentId) tr.idx += 1;
   setProjectState(projectId, { teamReview: tr });
@@ -63,9 +84,12 @@ export function recordPlan(projectId, agentId, planMarkdown, { answered = false 
 
 /** Captured planning docs as model context. */
 function reviewDocs(projectId) {
-  return listNotes(projectId)
-    .map(n => `### ${n.id}\n${readNote(projectId, n.id) || ''}`)
-    .join('\n\n');
+  const notes = listNotes(projectId).map(n => `### ${n.id}\n${readNote(projectId, n.id) || ''}`);
+  // Prior specialists' plans now live in their role files — surface them too.
+  const plans = (getProject(projectId)?.agents || [])
+    .map(a => { const p = readPlanSection(projectId, a.role); return p ? `### ${a.name} (${getRole(a.role)?.label || a.role}) plan\n${p}` : ''; })
+    .filter(Boolean);
+  return [...notes, ...plans].join('\n\n');
 }
 
 /** Generate one agent's domain plan from the captured docs and record it. */

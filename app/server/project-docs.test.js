@@ -25,15 +25,16 @@ test('docsDir/rolesDir resolve under the project repo and exist', async () => {
   }
 });
 
-test('createProject writes project.md and charters into <repo>/docs', async () => {
+test('createProject seeds PRD.md and charters into <repo>/docs', async () => {
   const base = mkdtempSync(join(tmpdir(), 'bridge-ws-'));
   const prev = process.env.BRIDGE_PROJECTS_BASE;
   process.env.BRIDGE_PROJECTS_BASE = base;
   const p = await createProject({ name: 'Repo Docs', goal: 'build it', roleIds: ['pm', 'sw_engineer'], topology: 'hub-and-spoke' });
   try {
     const repo = join(base, 'repo-docs');
-    assert.ok(existsSync(join(repo, 'docs', 'project.md')));
-    assert.match(readFileSync(join(repo, 'docs', 'project.md'), 'utf8'), /# Repo Docs/);
+    assert.ok(existsSync(join(repo, 'docs', 'PRD.md')));
+    assert.ok(!existsSync(join(repo, 'docs', 'project.md')), 'no legacy project.md');
+    assert.match(readFileSync(join(repo, 'docs', 'PRD.md'), 'utf8'), /# Repo Docs — PRD/);
     const roles = join(repo, 'docs', 'roles');
     assert.ok(existsSync(roles));
     assert.ok(readdirSync(roles).filter(f => f.endsWith('.md')).length >= 1);
@@ -63,5 +64,18 @@ test('notes write/read under <repo>/docs and listNotes excludes project.md', asy
     rmSync(base, { recursive: true, force: true });
     if (prev === undefined) delete process.env.BRIDGE_PROJECTS_BASE;
     else process.env.BRIDGE_PROJECTS_BASE = prev;
+  }
+});
+
+test('clearContext wipes an agent scratchpad (used on create/delete to stop id reuse inheriting chats)', async () => {
+  const { appendTurn, getContext, clearContext } = await import('./scratchpad.js');
+  const id = '__test-clear__agent-xyz';
+  try {
+    appendTurn(id, 'assistant', 'stale kickoff plan');
+    assert.equal(getContext(id).messages.length, 1);
+    clearContext(id);
+    assert.equal(getContext(id).messages.length, 0);   // fresh — no inherited turns
+  } finally {
+    clearContext(id);   // cleanup (getContext above re-creates an empty record)
   }
 });

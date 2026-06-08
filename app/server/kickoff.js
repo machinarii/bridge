@@ -8,7 +8,7 @@ import { getProject, setKickoff, getKickoff, TOPOLOGIES, addAgent } from './proj
 import { appendTurn, getContext, setLastSpec } from './scratchpad.js';
 import { getModelForRole, getRouterModel } from './models.js';
 import { emitNotification, emitActivity, emitDelegate, emitStatus, publish as publishEvent } from './events.js';
-import { writeNote } from './backends/notes.js';
+import { writeNote, readNote } from './backends/notes.js';
 import { commitIfChanged } from './workspace.js';
 import { generateBuildPlan, runScaffold } from './scaffold.js';
 import { startTeamReview, currentReviewAgent, recordPlan, teamReviewQuestion } from './team-review.js';
@@ -40,21 +40,38 @@ function buildPlanSpec(plan) {
 
 /** A team-planning turn: one specialist's question relayed to the user, as a
  * choice bubble (n of total for the round). */
-function teamReviewQuestionSpec(agent, tq, n, total) {
+/** Annotate any teammate's bare name in `text` with their role, so a mention
+ * reads "Hollis (Legal)" not just "Hollis". Skips the asker (already labeled in
+ * the prefix) and names already followed by "(". */
+export function annotateAgentMentions(text, agents = [], askerId = null) {
+  let out = String(text || '');
+  for (const a of agents) {
+    if (a.id === askerId) continue;
+    const label = getRole(a.role)?.label;
+    if (!label || !a.name) continue;
+    const name = a.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`\\b${name}\\b(?!\\s*\\()`, 'g'), `${a.name} (${label})`);
+  }
+  return out;
+}
+
+function teamReviewQuestionSpec(agent, tq, n, total, agents = []) {
   // Another agent is asking — name them by role ("Iris (Designer) asks: …") so
-  // the user knows which specialist needs input.
+  // the user knows which specialist needs input. Teammates mentioned INSIDE the
+  // question are likewise role-tagged ("…honest with Hollis (Legal)?").
   const roleLabel = getRole(agent.role)?.label;
   const who = `**${agent.name}**${roleLabel ? ` (${roleLabel})` : ''}`;
+  const q = annotateAgentMentions(tq?.q || 'Anything I should know for my part?', agents, agent.id);
   const spec = {
     intent: 'answer', template: 'reader',
     context: total > 1 ? `Team planning · ${n} of ${total}` : 'Team planning',
     title: 'Team planning',
-    body: `${who} asks: ${tq?.q || 'Anything I should know for my part?'}`,
+    body: `${who} asks: ${q}`,
     skippable: true,
   };
   // Only real, model-produced options become buttons — no hollow placeholders.
   // With none, the bubble is a plain question answered by typing / "Other".
-  if (tq?.options?.length) spec.choices = tq.options.slice(0, 4);
+  if (tq?.options?.length) spec.choices = tq.options.map(o => annotateAgentMentions(o, agents, agent.id)).slice(0, 4);
   return JSON.stringify(spec);
 }
 
@@ -67,8 +84,8 @@ async function nextTeamReviewQuestion(projectId, ct, apiKey) {
   while (agent) {
     const tq = await teamReviewQuestion(projectId, agent.id, { callText: ct, apiKey });
     if (tq) {
-      const tr = getProject(projectId).teamReview;
-      return { agent, spec: teamReviewQuestionSpec(agent, tq, tr.idx + 1, tr.order.length) };
+      const proj = getProject(projectId);
+      return { agent, spec: teamReviewQuestionSpec(agent, tq, proj.teamReview.idx + 1, proj.teamReview.order.length, proj.agents) };
     }
     // No usable question → skip this specialist (capture their turn, advance).
     recordPlan(projectId, agent.id, '', { answered: true });
@@ -111,9 +128,15 @@ async function proposeBuildOrClose(projectId, ct, apiKey, project, opts) {
       emitStatus(projectId, swe.id, 'idle');
       emitActivity(projectId, `${swe.name}: build plan ready`, swe.id, { awaitKind: 'reply' });
       const roleLabel = getRole('sw_engineer')?.label || 'Software Engineer';
-      const handoff = closingSpec(
-        `The build plan and scaffolding are engineering work, so I've handed this off to ` +
-        `**${swe.name}** (${roleLabel}). Open ${swe.name}'s screen to review the build plan and start the build.`);
+      // `handoffTo` makes the renderer add a "Talk to <name> (<role>)" button on
+      // the bubble (bottom-right) that jumps straight to the engineer's chat.
+      const handoff = JSON.stringify({
+        intent: 'answer', template: 'reader', context: 'Kickoff', title: 'Handoff',
+        body: `The build plan and scaffolding are engineering work, so I've handed this off to ` +
+              `**${swe.name}** (${roleLabel}). Open ${swe.name}'s screen to review the build plan and start the build.`,
+        handoffTo: { agentId: swe.id, label: `${swe.name} (${roleLabel})` },
+        actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+      });
       appendTurn(project.leadAgentId, 'assistant', handoff);
       emitNotification({ kind: 'info', projectId, title: 'Build handed to engineering',
                          body: `${swe.name} has the build plan for ${project.name}.` });
@@ -194,17 +217,24 @@ function roster(project) {
     .join('\n') || '(no other agents)';
 }
 
+/** The user-stated top features as a prompt line, or '' if none were given. */
+function featuresLine(project) {
+  return project.features ? `Top features the user asked for: "${project.features}".\n` : '';
+}
+
 export function buildPlanPrompt(project) {
   const lead = project.agents.find(a => a.id === project.leadAgentId);
   return (
     `You are ${lead?.name || 'the PM'}, the Product Manager and lead of project "${project.name}".\n` +
     `Project goal: "${project.goal}".\n` +
+    featuresLine(project) +
     `Team:\n${roster(project)}\n\n` +
     `Write a SHORT kickoff plan (2-4 sentences, first person, speakable) telling the user how you'll start: ` +
     `you'll draft a PRD plus a roadmap, team operating notes, and an open-questions doc, then assign a starting ` +
-    `task to each relevant teammate. If the goal is vague, instead ask 1-2 clarifying questions. ` +
-    `Do NOT list lettered options or ask which doc to start with — the user picks from buttons ` +
-    `shown below your message. Plain prose only — no JSON, no markdown headings.` +
+    `task to each relevant teammate. ` +
+    `Do NOT ask the user any question in this message and do NOT end with a question — this bubble is the plan only. ` +
+    `The user will pick from the approval buttons below; any clarifying questions you have get asked AFTERWARD, ` +
+    `one at a time. No lettered options, no JSON, no markdown headings. Plain prose only.` +
     RESPONSE_STYLE
   );
 }
@@ -262,6 +292,11 @@ function planSpec(body, choices = PLAN_CHOICES) {
 export async function startKickoff(projectId, opts = {}) {
   const project = getProject(projectId);
   if (!project) return;
+  // Idempotency: kickoff posts exactly one plan, ever. A double create-POST (or
+  // any re-trigger) must not post a second plan. Claim the slot SYNCHRONOUSLY
+  // (before the first await) so concurrent calls can't both pass the check.
+  if (getKickoff(projectId).status !== 'idle') return;
+  setKickoff(projectId, { status: 'drafting' });
   const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
   // Only check the key when callText is NOT overridden (i.e. a real network call
   // would be made). When the caller injects callText, they own the whole call path.
@@ -297,13 +332,17 @@ export async function startKickoff(projectId, opts = {}) {
 }
 
 function docPrompt(kind, project) {
-  const head = `Project "${project.name}". Goal: "${project.goal}". Team: ${roster(project).replace(/\n- /g, ', ').replace(/^- /, '')}.`;
+  const head = `Project "${project.name}". Goal: "${project.goal}". ${project.features ? `Top features: "${project.features}". ` : ''}Team: ${roster(project).replace(/\n- /g, ', ').replace(/^- /, '')}.`;
   const topo = project.topology ? TOPOLOGIES[project.topology] : null;
   switch (kind) {
-    case 'prd':
-      return `${head}\nWrite a concise PRD in markdown with sections: Problem, Goals / Non-goals, Scope (in/out), Milestones, Success metrics. Be specific to the goal. Markdown only.`;
+    case 'prd': {
+      const seed = readNote(project.id, 'PRD') || '';
+      return `${head}\n` +
+        (seed ? `Here is the current PRD seed — KEEP its Goal, Top features, and Team sections, then expand:\n\n${seed}\n\n` : '') +
+        `Write the complete PRD in markdown: keep Goal / Top features / Team, and add Problem, Goals / Non-goals, Scope (in/out), Milestones, Success metrics. Be specific to the goal. Markdown only.`;
+    }
     case 'roadmap':
-      return `${head}\nWrite a short markdown roadmap: 3-5 milestones with one-line descriptions and rough sequencing. Markdown only.`;
+      return `${head}\nWrite a short markdown roadmap: 3-5 milestones with one-line descriptions, ordered by sequence only. Do NOT assign week numbers, dates, or durations — assume the whole project fits in roughly 1-2 weeks. Markdown only.`;
     case 'operating':
       return `${head}\nTeam operating model: ${topo ? topo.label + ' — ' + topo.rule : 'standard PM-led'}. Write short markdown operating notes describing how this team coordinates and who owns what. Markdown only.`;
     case 'questions':
