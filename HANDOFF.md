@@ -4,9 +4,9 @@ Snapshot for whoever picks this up next. Pairs with `README.md` (product + dev s
 
 ## TL;DR
 
-- **Repo:** `main` is current and pushed to `origin` (`github.com/machinarii/bridge`). Working tree clean.
-- **Runtime:** an Express server (`app/server/server.js`) on **:4317** + a local **Parakeet** STT sidecar on **:8123**. The renderer is vanilla JS served statically from `app/renderer/`.
-- **To run:** see "Running it" below. Voice needs the Parakeet sidecar up; agents need `OPENROUTER_API_KEY` in `app/server/.env`.
+- **Repo:** active branch is **`feat/scaffold-phase-a`** (Phase A scaffold + Phase B execution loop + a long tail of UX work). Commit before switching away.
+- **Runtime:** an Express server (`app/server/server.js`) on **:4317** + a local **Parakeet** STT sidecar on **:8123**. The renderer is vanilla JS served statically from `app/renderer/`. The build/run sandbox shells out to the **`docker` CLI** (any daemon — **Colima** recommended, no Docker Desktop).
+- **To run:** see "Running it" below. Voice needs the Parakeet sidecar up; agents need `OPENROUTER_API_KEY` in `app/server/.env`; the "Run it" build loop needs a Docker daemon (`colima start`).
 
 ## Running it
 
@@ -17,15 +17,18 @@ cd app/server && npm install && cd ../..
 
 # 2. config — app/server/.env (git-ignored)
 #    OPENROUTER_API_KEY=sk-or-...        (required for agent replies + kickoff)
-#    OPENROUTER_MODEL=anthropic/claude-sonnet-4.6
+#    OPENROUTER_MODEL=anthropic/claude-opus-4.8   (default if unset)
 #    (LOCAL_STT_URL defaults to http://127.0.0.1:8123/transcribe)
 
-# 3. Parakeet STT sidecar (required for voice) — needs ffmpeg on PATH
+# 3. Parakeet STT sidecar (required for voice) — needs ffmpeg on PATH (8.x is fine)
 python3 -m venv app/stt/.venv
 app/stt/.venv/bin/pip install -r app/stt/requirements.txt
 HF_HOME="$PWD/build/hf-cache" npm run stt        # model is cached there (~600MB)
 
-# 4. the app
+# 4. (optional) Docker daemon for the "Build it → Run it" sandbox — Colima, no GUI
+brew install colima && colima start
+
+# 5. the app
 npm run server     # web server on :4317 (open in Chrome)
 #   – or –
 npm run dev        # Electron window (its own Chromium)
@@ -36,7 +39,21 @@ Notes:
 - `npm run stt` does **not** set `HF_HOME`; without the `HF_HOME=…/build/hf-cache` prefix it re-downloads the model. (Worth folding into the npm script.)
 - Voice is **Parakeet-only** — it never falls back to the browser engine. If the sidecar is down, voice shows a visible STT error.
 
-## What's new this session
+## What's new (latest session)
+
+Code generation/execution loop + a long tail of doc/UX fixes on `feat/scaffold-phase-a`. Highlights:
+
+- **Phase A scaffold + Phase B execution loop.** After planning, the PM **hands build/scaffolding off to the software engineer** (`ensureBuildAgent`; `kickoff.buildAgentId`): the PM posts a handoff bubble in its chat (with a **"Talk to <name> (<role>)"** button → jumps to that agent), and the build plan + **"Build it" / "Run it"** live in the engineer's chat. "Build it" → `runScaffold` (generate + commit a source tree, `node --check` fix pass). "Run it" → `runAndFix`: install/build/test **in a throwaway Docker container** (`sandbox.js`/`verify.js`/`run-fix.js`), model-fix loop on failure, `classifyFailure` diagnosis. The interpret endpoint routes the build owner's messages during `build_pending`/`run_pending`.
+- **Sandbox = `docker` CLI only, no Docker Desktop.** Any daemon works (Colima recommended). Stack-aware provisioning (Prisma → `apt-get openssl`); scaffolds are made self-contained via `SANDBOX_GUIDANCE` (SQLite default, complete Prisma datasource). See `docs/design.md §12.5.5`.
+- **Single source-of-truth doc.** New projects seed **`PRD.md`** (not `project.md`); the kickoff **expands** that seed into a full PRD. Specialist plans now live as a **`## Plan` section inside each role charter** (`docs/roles/role-<slug>.md`) — no `plan-*.md`, no Plans folder. Explorer shows **basename labels with `.md`**, no "Notes" folder (top-level docs are loose), and `project.md` (legacy) opens. milestones carry **no week timing**.
+- **One question at a time, reliably.** The kickoff **plan bubble is plan-only** (no embedded questions; clarifying questions come as one-at-a-time follow-ups). `startKickoff` is **idempotent** (synchronous claim — never posts two plans). `createProject`/`deleteProject` **clear the scratchpad** for the (deterministic) agent ids, so a reused id (same name → same date-based id) never inherits an old chat. Specialist team-planning questions are real JSON questions (retry, skip-as-last-resort), role-tagged ("Iris (Designer) asks…"), and mentioned teammates are role-tagged too ("Hollis (Legal)").
+- **Question bubbles.** "Skip for now" button (left of Submit, equal size, correct kb/gamepad nav order) — advances without recording.
+- **Create-flow.** New **"Top features"** step after the objective (threaded into the project + PRD/plan prompts). Project **names are Title Cased**. `/ Type prompt` chip on the name + objective + features capture screens; typed text lands in the box for review (no auto-advance/auto-create).
+- **Default model → `anthropic/claude-opus-4.8`** (`models.js` + `server.js`).
+- **L2 agent status** shown below the role (top-left, small) — "Waiting for your response" (orange) when a question is pending, work verb when busy.
+- **STT failure is clean.** Any transcribe failure shows one toast — **"Cannot connect to speech to text model"** — instead of dumping ffmpeg's banner. Still Parakeet-only (no browser fallback); raw cause is console-logged.
+
+### Earlier in the branch (already committed)
 
 Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 
@@ -48,7 +65,7 @@ Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 - **Agent grounding.** `RESPONSE_STYLE` now hard-grounds output to markdown docs + code (no Figma/external tools, channels, ETAs). `ROLE_GUIDANCE` adds per-role workflow (e.g. Designer: principles/guidelines/direction/system design → confirm → use cases/flows → confirm → build in code).
 - **Delegated task = handoff bubble.** `interpretIntent({ handoff })` records a delegated kickoff task as a PM→agent handoff turn, not a right-aligned "you" bubble.
 - **Chat motion.** "…" thinking across agents, typewriter reveal for scripted bubbles, slide-up arrival (current + new), staggered choice entrance, new-bubble highlight.
-- **Model defaults.** Reasoning effort defaults to **high**, base temperature **0.8**, default model **opus-4.7** (`.env`), richer per-role persona seeds.
+- **Model defaults.** Reasoning effort defaults to **high**, base temperature **0.8**, richer per-role persona seeds. (Default model is now **opus-4.8** — see latest session.)
 - **Create-flow / nav polish** — topology screen footer reachable (Down from Back row), L0 chips trimmed (no Hold-to-talk / Type-prompt / notification bell / Memory), role-screen "Select" relabel, etc.
 - **Activity feed = cross-project everywhere.** Opening Activity from any layer (header just "Activity") lists agent responses across all projects as cards: project → agent · role → response summary; click opens that project/agent. Streamed-reply activity now carries a body snippet. **Explorer** entries (files + folder headers) are now mouse-clickable. Drawer headers share one weight.
 
@@ -66,7 +83,7 @@ Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 
 ## Tests
 
-`cd app/server && node --test` (per-file is most reliable, e.g. `node --test kickoff.test.js`). Kickoff: **10/10**. Two **pre-existing** failures unrelated to this work: `listRoles returns all 14 roles` (catalog is 11) and `createProject writes charter markdown for each role` — neither touches files this work changed.
+`cd app/server && node --test` → currently **106/107 pass**; the **one** failure is pre-existing and unrelated: `listRoles returns all 14 roles` (the catalog has fewer). Hermeticity rule: tests MUST set `BRIDGE_STATE_DIR` + `BRIDGE_PROJECTS_BASE` to throwaway temp dirs before importing `projects.js` — never touch real `app/state/projects.json` or `~/bridge-projects` (a past test wiped real data). Sanity-check: `shasum app/state/projects.json` is byte-identical before/after a full run.
 
 ## Known gaps / follow-ups
 
@@ -75,7 +92,9 @@ Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 - **"Task complete" clears on view**, "Waiting for response" clears on reply — verify this matches expectations across non-kickoff replies too.
 - **`npm run stt`** should set `HF_HOME=build/hf-cache` (and ideally one launch script starts web + STT together).
 - **`app/renderer/speech.js`** (browser Web Speech) is now dead code — voice is Parakeet-only.
-- Two **pre-existing** test failures unrelated to this work (`listRoles returns all 14 roles` — catalog is 11; `createProject writes charter markdown for each role`).
+- **Scratchpad isolation in tests.** `scratchpad.js` stores at `app/state/scratchpad.json` and does **not** honor `BRIDGE_STATE_DIR`, so tests that `appendTurn` write to the real file. Honoring `BRIDGE_STATE_DIR` (lazily, like `projects.js`) is a worthwhile follow-up.
+- **Project id reuse.** Ids are date+slug based; a same-day, same-name project reuses the id (and agent ids). `createProject`/`deleteProject` now clear the scratchpad to compensate, but a counter/random suffix on collision would be cleaner.
+- One **pre-existing** test failure unrelated to this work (`listRoles returns all 14 roles`).
 - The app is **unsigned/un-notarized** if packaged — rebuild from `main` to ship these changes; sign with team `935434BZ22` for distribution.
 
 ## Design docs

@@ -102,7 +102,7 @@ cd app/server && npm install && cd ../..
 # 2. add your OpenRouter key (or set it later in the in-app Settings)
 #    cp app/server/.env.example app/server/.env   # then edit:
 #      OPENROUTER_API_KEY=sk-or-...
-#      OPENROUTER_MODEL=anthropic/claude-sonnet-4.6
+#      OPENROUTER_MODEL=anthropic/claude-opus-4.8   # default if unset
 #    (.env is git-ignored — never commit personal credentials)
 
 # 3. run the app

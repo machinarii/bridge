@@ -137,7 +137,7 @@ app.get('/settings', (_req, res) => {
   res.json({
     OPENROUTER_API_KEY: maskKey(process.env.OPENROUTER_API_KEY || ''),
     OPENROUTER_API_KEY_SET: !!process.env.OPENROUTER_API_KEY,
-    OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.7',
+    OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.8',
     OPENROUTER_MODEL_BY_ROLE: parseJsonEnv('OPENROUTER_MODEL_BY_ROLE', {}),
     OPENROUTER_ROUTER_MODEL: getRouterModel(),  // resolved (defaults to the fast router model)
     MCP_PLUGINS: parseJsonEnv('MCP_PLUGINS', []),
@@ -325,7 +325,7 @@ async function shortenViaLLM(name) {
   if (!apiKey || apiKey.includes('replace-me')) {
     return { name: name.slice(0, NAME_LIMIT).trim(), shortened: false, reason: 'no_key' };
   }
-  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.7';
+  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.8';
   const prompt =
     `Rewrite this project name so it is ${NAME_LIMIT} characters or fewer ` +
     `while preserving its meaning. Output only the rewritten name — ` +
@@ -369,8 +369,8 @@ app.post('/projects/shorten-name', async (req, res) => {
 
 app.post('/projects', async (req, res) => {
   try {
-    const { name, goal, roleIds, topology } = req.body || {};
-    const p = await createProject({ name, goal, roleIds, topology });
+    const { name, goal, features, roleIds, topology } = req.body || {};
+    const p = await createProject({ name, goal, features, roleIds, topology });
     initProjectRepo(p.id).then(() => notifyStateChange(p.id, 'Project created'));
     publishEvent({
       type: 'notification',

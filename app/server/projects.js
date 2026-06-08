@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { getRole, listRoles, FALLBACK_NAMES } from './roles.js';
 import { generateProjectCharters, charterFileNameFor, legacyCharterFileNames } from './charters.js';
 import { resolveRepoPath, ensureRepo, commitIfChanged } from './workspace.js';
+import { clearContext } from './scratchpad.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Resolved lazily so tests can redirect ALL project state to a throwaway dir via
@@ -166,7 +167,7 @@ export function rolesDir(id) {
   return dir;
 }
 
-export async function createProject({ name, goal, roleIds, topology }) {
+export async function createProject({ name, goal, features, roleIds, topology }) {
   if (!name) throw new Error('name required');
   if (!goal) throw new Error('goal required');
   if (!Array.isArray(roleIds) || roleIds.length === 0) throw new Error('at least one role required');
@@ -199,9 +200,14 @@ export async function createProject({ name, goal, roleIds, topology }) {
     };
   });
 
+  // Agent ids are deterministic (`${id}__${role}`); if a same-named project was
+  // created before (same date → same id), wipe any stale scratchpad so the new
+  // project starts with empty chats (no inherited kickoff turns).
+  for (const a of agents) clearContext(a.id);
+
   const leadAgentId = agents.find(a => a.role === 'pm').id;
 
-  const project = { id, name, goal, topology: topo ? topology : null, createdAt: Date.now(), leadAgentId, agents };
+  const project = { id, name, goal, features: (features || '').trim(), topology: topo ? topology : null, createdAt: Date.now(), leadAgentId, agents };
 
   // The project repo is the single home for docs + (later) code.
   const repoPath = resolveRepoPath(name);
@@ -210,9 +216,11 @@ export async function createProject({ name, goal, roleIds, topology }) {
   const docs = resolve(repoPath, 'docs');
   mkdirSync(resolve(docs, 'roles'), { recursive: true });
   const topoSection = topo ? `\n\n## Work topology\n**${topo.label}** — ${topo.rule}` : '';
+  // PRD.md is the project's single source-of-truth doc: seeded here with the
+  // known facts, then expanded by the PM during kickoff (no separate project.md).
   writeFileSync(
-    resolve(docs, 'project.md'),
-    `# ${name}\n\n## Goal\n${goal}\n\n## Team\n${agents.map(a => `- ${a.name} — ${getRole(a.role).label}`).join('\n')}${topoSection}\n\n## Created\n${new Date(project.createdAt).toISOString()}\n`,
+    resolve(docs, 'PRD.md'),
+    `# ${name} — PRD\n\n## Goal\n${goal}\n${project.features ? `\n## Top features\n${project.features}\n` : ''}\n## Team\n${agents.map(a => `- ${a.name} — ${getRole(a.role).label}`).join('\n')}${topoSection}\n\n## Created\n${new Date(project.createdAt).toISOString()}\n\n_The PM will expand this into a full PRD during kickoff._\n`,
     'utf8'
   );
 
@@ -319,8 +327,11 @@ export function deleteProject(id) {
       );
     }
   } catch {}
-  // Remove only Bridge's internal state for the project (registry folder / scratchpad).
+  // Remove only Bridge's internal state for the project (registry folder /
+  // scratchpad). The scratchpad is keyed by agent id in one shared file, so
+  // clear each agent's entry explicitly — otherwise a reused id inherits it.
   try { rmSync(resolve(stateDir(), id), { recursive: true, force: true }); } catch {}
+  for (const a of (removed.agents || [])) { try { clearContext(a.id); } catch {} }
   return { ok: true, id, name: removed.name };
 }
 

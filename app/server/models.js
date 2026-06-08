@@ -2,7 +2,7 @@
  * process.env so settings changes via PUT /settings take effect
  * immediately. */
 
-const DEFAULT_MODEL = 'anthropic/claude-opus-4.7';
+const DEFAULT_MODEL = 'anthropic/claude-opus-4.8';
 
 export function getDefaultModel() {
   return process.env.OPENROUTER_MODEL || DEFAULT_MODEL;

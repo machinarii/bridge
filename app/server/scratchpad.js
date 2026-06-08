@@ -51,6 +51,14 @@ function record(agentId) {
 
 export function getContext(agentId) { return record(agentId); }
 
+/** Drop an agent's entire scratchpad (chat history, lastSpec, notes). Used when
+ * a project is created or deleted so a reused agent id (same name → same date-
+ * based id) never inherits a prior project's turns. */
+export function clearContext(agentId) {
+  const data = load();
+  if (data[agentId]) { delete data[agentId]; save(); }
+}
+
 /** Most recent updatedAt across the given agent ids. Returns null if
  *  none of those agents have a scratchpad record yet (i.e. no
  *  activity since project creation). */

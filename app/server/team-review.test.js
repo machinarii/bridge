@@ -7,9 +7,10 @@ process.env.BRIDGE_STATE_DIR = mkdtempSync(join(tmpdir(), 'bridge-state-'));
 process.env.BRIDGE_PROJECTS_BASE = mkdtempSync(join(tmpdir(), 'bridge-test-'));
 const { createProject, getProject, deleteProject } = await import('./projects.js');
 const { startTeamReview, currentReviewAgent, teamReviewReady } = await import('./team-review.js');
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 const { docsDir } = await import('./projects.js');
+const { charterFileNameFor } = await import('./charters.js');
 const { recordPlan } = await import('./team-review.js');
 
 test('startTeamReview orders enabled non-lead agents; readiness flips when all captured', async () => {
@@ -43,7 +44,8 @@ test('recordPlan writes the plan doc, marks captured, advances, and completes th
     startTeamReview(p.id);
     const a0 = currentReviewAgent(p.id);
     recordPlan(p.id, a0.id, '# Plan\n\ndesign the thing\n');
-    assert.ok(existsSync(resolve(docsDir(p.id), `plan-${a0.role}.md`)));
+    const roleFile = resolve(docsDir(p.id), 'roles', charterFileNameFor(a0.role));
+    assert.ok(existsSync(roleFile) && /## Plan/.test(readFileSync(roleFile, 'utf8')), 'plan section written into role file');
     let tr = getProject(p.id).teamReview;
     assert.equal(tr.captured[a0.id].planned, true);
     assert.equal(tr.idx, 1);

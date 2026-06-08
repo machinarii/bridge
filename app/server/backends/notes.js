@@ -1,9 +1,9 @@
 /* Bridge — project-scoped markdown notes. One file per note under
  * <repo>/docs/ (the project's git repo). */
 
-import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { docsDir } from '../projects.js';
 
 function notesDir(projectId) {
@@ -46,9 +46,15 @@ export function appendNote(projectId, body) {
 }
 
 /* Write (or overwrite) a note with a stable, human-readable filename — used by
- * the kickoff so docs land as PRD.md, milestones.md, … instead of timestamps. */
+ * the kickoff so docs land as PRD.md, milestones.md, … instead of timestamps.
+ * A "/" in `name` nests the note one folder deep (e.g. "plans/plan-foo" →
+ * docs/plans/plan-foo.md). Filenames never contain underscores (→ dashes). */
 export function writeNote(projectId, name, body) {
-  const id = String(name).replace(/\.md$/i, '').replace(/[^a-z0-9._-]/gi, '-').replace(/^-+|-+$/g, '') || 'note';
-  writeFileSync(join(notesDir(projectId), `${id}.md`), body, 'utf8');
+  const clean = (s) => String(s).replace(/\.md$/i, '').replace(/_/g, '-')
+    .replace(/[^a-z0-9.-]/gi, '-').replace(/^-+|-+$/g, '');
+  const id = String(name).split('/').map(clean).filter(Boolean).join('/') || 'note';
+  const file = join(notesDir(projectId), `${id}.md`);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, body, 'utf8');
   return { id, label: deriveLabel(body) };
 }

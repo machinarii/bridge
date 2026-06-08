@@ -641,6 +641,7 @@ const MODE_NEW_PROJ_ROLES    = 'new_project_roles';    // create-flow step 1
 const MODE_NEW_PROJ_TOPOLOGY = 'new_project_topology'; // create-flow step 2
 const MODE_NEW_PROJ_NAME     = 'new_project_name';     // create-flow step 3
 const MODE_NEW_PROJ_GOAL     = 'new_project_goal';     // create-flow step 4
+const MODE_NEW_PROJ_FEATURES = 'new_project_features'; // create-flow step 5
 const MODE_GRID             = 'grid';              // L1 (project grid)
 const MODE_ZOOM             = 'zoom';              // L2 (agent zoom)
 const MODE_ADD_AGENT        = 'add_agent';         // L1 → add-agent role picker
@@ -727,6 +728,7 @@ let newProjRoleIds  = [];                // toggled during step 1
 let newProjTopology = null;   // chosen during step 2 (no default selection)
 let newProjName     = '';                // captured during step 3
 let newProjGoal     = '';                // captured during step 4
+let newProjFeatures = '';                // captured during step 5
 
 // Work topologies offered after role selection. Display copy lives here; the
 // operating rule written into project.md lives server-side (projects.js).
@@ -1157,6 +1159,7 @@ function dispatchHomeUtterance(text) {
     newProjTopology = null;
     newProjName = '';
     newProjGoal = '';
+    newProjFeatures = '';
     renderNewProjectRoles();
     return;
   }
@@ -1273,6 +1276,7 @@ async function openFocused() {
     newProjTopology = null;
     newProjName = '';
     newProjGoal = '';
+    newProjFeatures = '';
     zoomStack.push(sourceRect);
     await forwardMorph(sourceTile, sourceRect, targetRect, () => renderNewProjectRoles());
     return;
@@ -1670,7 +1674,8 @@ function topoFocusBack() { ring.index = TOPOLOGIES.length; ring.paint(); }
 function topoFocusCards() { if (ring.index >= TOPOLOGIES.length) { ring.index = 0; ring.paint(); } }
 
 function goBackInCreateFlow() {
-  if (mode === MODE_NEW_PROJ_GOAL) renderNewProjectName();
+  if (mode === MODE_NEW_PROJ_FEATURES) { stopMicVisualizer(); renderNewProjectGoal(); }
+  else if (mode === MODE_NEW_PROJ_GOAL) renderNewProjectName();
   else if (mode === MODE_NEW_PROJ_NAME) { stopMicVisualizer(); renderNewProjectTopology(); }
   else if (mode === MODE_NEW_PROJ_TOPOLOGY) renderNewProjectRoles();
   else { stopMicVisualizer(); renderProjects(); }
@@ -1705,9 +1710,13 @@ async function confirmCapture() {
     } else {
       newProjName = raw;
     }
+    newProjName = titleCaseName(newProjName);   // normalize (covers the shorten/truncate paths)
     renderNewProjectGoal();
   } else if (mode === MODE_NEW_PROJ_GOAL) {
     if (!newProjGoal.trim()) { setIndicator('error', 'Speak or type a goal'); return; }
+    renderNewProjectFeatures();
+  } else if (mode === MODE_NEW_PROJ_FEATURES) {
+    if (!newProjFeatures.trim()) { setIndicator('error', 'Speak or type the top features'); return; }
     finalizeNewProject();
   }
 }
@@ -1852,6 +1861,9 @@ function renderNewProjectName() {
   // and swaps to the live wave only while holding (driven by setPttHeld).
   renderActionBar([]); // Back shown once via setShortcuts' Esc chip below
   setShortcuts([
+    // Keyboard-only "/" type-prompt, mirroring L2: opens the typed input; Enter
+    // there routes through submitTypedText → sets newProjName → goal step.
+    { keyboard: '/', label: 'Type prompt', action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
@@ -1879,7 +1891,7 @@ function renderNewProjectGoal() {
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
       <button type="button" class="role-cancel role-back" id="capture-back">Back</button>
       <button type="button" class="role-cancel role-redo" id="capture-redo" title="Clear the objective and say it again" aria-label="Clear objective">Clear</button>
-      <button type="button" class="role-confirm" id="capture-done">Create project</button>
+      <button type="button" class="role-confirm" id="capture-done">Continue</button>
     </div>`;
   surfaceEl.appendChild(t);
   const tryCancelGoalCapture = () => {
@@ -1907,14 +1919,72 @@ function renderNewProjectGoal() {
   // The mic-stack swaps the hold hint for the live wave only while holding.
   renderActionBar([]); // Back shown once via setShortcuts' Esc chip below
   setShortcuts([
+    // Keyboard-only "/" type-prompt, mirroring L2: opens the typed input; Enter
+    // there routes through submitTypedText → sets newProjGoal → stays for review.
+    { keyboard: '/', label: 'Type prompt', action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => confirmCapture() });
   const goalRing = [goalCancelEl, goalBackEl, goalRedoEl, goalDoneEl].filter(Boolean);
   ring.set(goalRing);
-  // Create project focused by default — the primary action.
+  // Continue focused by default — the primary action.
   ring.index = Math.max(0, goalRing.indexOf(goalDoneEl));
+  ring.paint();
+}
+
+function renderNewProjectFeatures() {
+  const entering = mode !== MODE_NEW_PROJ_FEATURES;  // animate only on screen transitions, not internal re-renders
+  mode = MODE_NEW_PROJ_FEATURES;
+  setBreadcrumbs([{ label: 'Projects' }, { label: 'New project' }, { label: 'Features' }]);
+  surfaceEl.innerHTML = '';
+  const t = document.createElement('section');
+  t.className = 'capture-tile' + (entering ? ' capture-enter' : '');
+  t.innerHTML = `
+    <h2>What are the top features?</h2>
+    <div class="capture-value ${newProjFeatures ? 'has-value' : ''}">${captureValueInner(newProjFeatures)}</div>
+    <div class="role-confirm-row">
+      <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
+      <button type="button" class="role-cancel role-back" id="capture-back">Back</button>
+      <button type="button" class="role-cancel role-redo" id="capture-redo" title="Clear the features and say them again" aria-label="Clear features">Clear</button>
+      <button type="button" class="role-confirm" id="capture-done">Create project</button>
+    </div>`;
+  surfaceEl.appendChild(t);
+  const tryCancelFeaturesCapture = () => {
+    maybeConfirmCancel(!!newProjFeatures.trim(), () => { stopMicVisualizer(); renderProjects(); });
+  };
+  const featBackEl   = t.querySelector('#capture-back');
+  const featCancelEl = t.querySelector('#capture-cancel');
+  const featRedoEl   = t.querySelector('#capture-redo');
+  const featDoneEl   = t.querySelector('#capture-done');
+  if (featDoneEl) featDoneEl.disabled = !newProjFeatures.trim();
+  featBackEl?.addEventListener('click', () => {
+    stopMicVisualizer();
+    renderNewProjectGoal();
+  });
+  // Clear the captured features and re-render so the user can say them again.
+  featRedoEl?.addEventListener('click', () => {
+    stopMicVisualizer();
+    newProjFeatures = '';
+    renderNewProjectFeatures();
+  });
+  featCancelEl?.addEventListener('click', tryCancelFeaturesCapture);
+  featDoneEl?.addEventListener('click', () => confirmCapture());
+  surfaceEl.appendChild(createSurfaceCloseButton(tryCancelFeaturesCapture));
+  // Push-to-talk: hold V / R2 to dictate the features, release to transcribe.
+  renderActionBar([]); // Back shown once via setShortcuts' Esc chip below
+  setShortcuts([
+    // Keyboard-only "/" type-prompt, mirroring L2: opens the typed input; Enter
+    // there routes through submitTypedText → sets newProjFeatures → stays for review.
+    { keyboard: '/', label: 'Type prompt', action: () => { typedWrap.hidden = false; typedInput.focus(); } },
+    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
+  ]);
+  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
+                       action: () => confirmCapture() });
+  const featRing = [featCancelEl, featBackEl, featRedoEl, featDoneEl].filter(Boolean);
+  ring.set(featRing);
+  // Create project focused by default — the primary action.
+  ring.index = Math.max(0, featRing.indexOf(featDoneEl));
   ring.paint();
 }
 
@@ -2367,6 +2437,7 @@ function renderZoom(specOverride) {
       <div class="agent-title">
         <span class="name-large">${escapeHtml(agent.name)}</span>
         <span class="role-large">${escapeHtml(roleLabel(agent.role))}</span>
+        <span class="agent-status" data-await="${agentPending.get(agent.id) === 'reply' ? 'reply' : ''}">${escapeHtml(agentStatusLabel(agent.id))}</span>
       </div>
     </div>
     <div class="chat-scroll"></div>
@@ -2445,6 +2516,21 @@ function buildKickoffApproval(agent, bubble) {
   // the plan bubble is focused, Left/Right cycle into them (cycleBubbleAction
   // recognizes .bubble-kickoff-actions), Cross/Enter activates, and Up still
   // walks up the bubbles to the × close. No separate ring.
+  return row;
+}
+
+/* A handoff bubble's bottom-right "Talk to <name> (<role>)" button. Reuses the
+ * kickoff action-row layout so it's reachable via the bubble's keyboard/gamepad
+ * model (cycleBubbleAction recognizes .bubble-kickoff-actions button). */
+function buildHandoffButton(handoffTo) {
+  const row = document.createElement('div');
+  row.className = 'bubble-kickoff-actions';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'role-confirm';
+  btn.textContent = `Talk to ${handoffTo.label}`;
+  btn.addEventListener('click', (e) => { e.stopPropagation(); openAgentById(handoffTo.agentId); });
+  row.appendChild(btn);
   return row;
 }
 
@@ -2863,6 +2949,7 @@ async function renderChatHistory(container, agent) {
       let isKickoffPlan = false;
       let choices = null;
       let skippable = false;
+      let handoffTo = null;
       if (!isUser) {
         try {
           const parsed = JSON.parse(body.replace(/^```(?:json)?/i,'').replace(/```$/, '').trim());
@@ -2872,6 +2959,7 @@ async function renderChatHistory(container, agent) {
           if (Array.isArray(parsed?.actions) && parsed.actions.some(a => (a.action?.type || a.type) === 'approve_kickoff')) isKickoffPlan = true;
           if (Array.isArray(parsed?.choices) && parsed.choices.length) choices = parsed.choices.slice(0, 4);
           if (parsed?.skippable) skippable = true;
+          if (parsed?.handoffTo?.agentId) handoffTo = parsed.handoffTo;
         } catch { /* leave body as-is */ }
       }
       // Strip the "[team-voice] " prefix added by the team driver so the
@@ -2917,6 +3005,13 @@ async function renderChatHistory(container, agent) {
           ? answer.split(/;\s*/).map(s => s.trim()).filter(Boolean)
           : undefined;
         bubble.appendChild(buildChoiceList(choices, agent, picked, skippable));
+      }
+
+      // Handoff bubble → a "Talk to <name> (<role>)" button (bottom-right) that
+      // jumps straight to that teammate's chat. Shown only while the target
+      // teammate still exists on the project.
+      if (!isUser && handoffTo && activeProject?.agents?.some(a => a.id === handoffTo.agentId)) {
+        bubble.appendChild(buildHandoffButton(handoffTo));
       }
 
       // Timestamp + retry / edit only render on user-authored bubbles.
@@ -3489,6 +3584,17 @@ function cycleProject(delta) {
   });
 }
 
+/* Jump straight to a specific agent's L2 chat (used by handoff bubbles). */
+function openAgentById(agentId) {
+  if (!activeProject) return;
+  const i = activeProject.agents.findIndex(a => a.id === agentId);
+  if (i < 0 || i === zoomedIndex) return;
+  if (inflightController) { inflightController.abort(); inflightController = null; }
+  stopSpeaking();
+  _focusLastOnNextChatRender = true;   // land on the target agent's last bubble
+  slideAgent(i > zoomedIndex ? 1 : -1, () => { zoomedIndex = i; renderZoom(); });
+}
+
 function cycleAgent(delta) {
   if (mode !== MODE_ZOOM || !activeProject) return;
   const n = activeProject.agents.length;
@@ -3629,7 +3735,7 @@ async function executeAction(action, sourceSpec) {
 }
 
 /* ---------- PTT + intent submission ---------- */
-const PTT_MODES = new Set([MODE_PROJECTS, MODE_ZOOM, MODE_GRID, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL]);
+const PTT_MODES = new Set([MODE_PROJECTS, MODE_ZOOM, MODE_GRID, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL, MODE_NEW_PROJ_FEATURES]);
 
 /* If LOCAL_STT_URL is configured on the server, mic capture goes
  * through MediaRecorder and POSTs to /transcribe. Otherwise we fall
@@ -3805,7 +3911,7 @@ async function startLocalRecording() {
       // in the box as the user speaks (capture screens only). Best-effort; the
       // final transcribe on release (onstop) is authoritative.
       if (pttActive && localRecChunks.length &&
-          (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL)) {
+          (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL || mode === MODE_NEW_PROJ_FEATURES)) {
         postPartialTranscript(new Blob(localRecChunks, { type: mime }));
       }
     };
@@ -3874,10 +3980,12 @@ async function postLocalTranscript(blob) {
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
-      // Local STT failed (Parakeet sidecar down/unreachable). We never switch
-      // to the browser engine — surface the error and keep using Parakeet.
+      // Local STT failed (sidecar down or couldn't decode). We never switch to
+      // the browser engine — show one clean message (the raw upstream/ffmpeg
+      // output is logged below, not shown to the user).
+      console.warn('[stt] transcribe failed:', r.status, data?.error || '');
       clearPendingBubble();
-      showSttFailure(data?.error ? `STT failed: ${data.error}` : `Speech-to-text failed (Parakeet ${r.status}) — is it running?`);
+      showSttFailure('Cannot connect to speech to text model');
       return;
     }
     const text = (data?.text || '').trim();
@@ -3888,8 +3996,9 @@ async function postLocalTranscript(blob) {
     dispatchTranscript(text);
   } catch (err) {
     // Don't fall back to the browser engine — keep using Parakeet.
+    console.warn('[stt] transcribe unreachable:', err?.message || err);
     clearPendingBubble();
-    showSttFailure(`Speech-to-text failed — Parakeet unreachable (${err.message})`);
+    showSttFailure('Cannot connect to speech to text model');
     setTimeout(() => setIndicator('idle', 'Connected'), 2000);
   }
 }
@@ -3903,10 +4012,18 @@ function stripNamePunct(s) {
   return String(s).replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
 }
 
+/* Project names display in Title Case (e.g. "My Stock Trading Mobile App").
+ * Uppercase the first letter of each word; leave the rest as entered so typed
+ * acronyms (REST, API) are preserved. */
+function titleCaseName(s) {
+  return String(s).replace(/\b\p{L}/gu, c => c.toUpperCase());
+}
+
 function dispatchTranscript(text) {
   if (editBubbleOpen) { editBubbleTextEl.value = text; return; }
-  if (mode === MODE_NEW_PROJ_NAME) { newProjName = stripNamePunct(text); renderNewProjectName(); return; }
+  if (mode === MODE_NEW_PROJ_NAME) { newProjName = titleCaseName(stripNamePunct(text)); renderNewProjectName(); return; }
   if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = text; renderNewProjectGoal(); return; }
+  if (mode === MODE_NEW_PROJ_FEATURES) { newProjFeatures = text; renderNewProjectFeatures(); return; }
   if (mode === MODE_ZOOM) { submitIntent(text); return; }
   if (mode === MODE_GRID) { submitTeamIntent(text); return; }
   if (mode === MODE_PROJECTS) { dispatchHomeUtterance(text); return; }
@@ -3926,8 +4043,9 @@ speech.addEventListener('partial', (e) => {
   // Continue gate (confirmCapture) sees the same value the user sees — even
   // when the recognizer never emits a final result before 'end' fires.
   if (e.detail && e.detail.trim()) {
-    if (mode === MODE_NEW_PROJ_NAME) newProjName = e.detail.trim();
+    if (mode === MODE_NEW_PROJ_NAME) newProjName = titleCaseName(e.detail.trim());
     else if (mode === MODE_NEW_PROJ_GOAL) newProjGoal = e.detail.trim();
+    else if (mode === MODE_NEW_PROJ_FEATURES) newProjFeatures = e.detail.trim();
   }
 });
 speech.addEventListener('end', (e) => {
@@ -3949,7 +4067,7 @@ speech.addEventListener('end', (e) => {
     return;
   }
   if (mode === MODE_NEW_PROJ_NAME) {
-    newProjName = text;
+    newProjName = titleCaseName(stripNamePunct(text));
     renderNewProjectName();
     setIndicator('idle', 'Connected');
     return;
@@ -3957,6 +4075,12 @@ speech.addEventListener('end', (e) => {
   if (mode === MODE_NEW_PROJ_GOAL) {
     newProjGoal = text;
     renderNewProjectGoal();
+    setIndicator('idle', 'Connected');
+    return;
+  }
+  if (mode === MODE_NEW_PROJ_FEATURES) {
+    newProjFeatures = text;
+    renderNewProjectFeatures();
     setIndicator('idle', 'Connected');
     return;
   }
@@ -4184,7 +4308,8 @@ function toggleActivityDrawer() {
   // add-agent). Disabled during the new-project create flow.
   if (mode === MODE_NEW_PROJ_ROLES ||
       mode === MODE_NEW_PROJ_NAME ||
-      mode === MODE_NEW_PROJ_GOAL) return;
+      mode === MODE_NEW_PROJ_GOAL ||
+      mode === MODE_NEW_PROJ_FEATURES) return;
   if (activityDrawerOpen) { closeActivityDrawer(); return; }
   openActivityDrawer();
 }
@@ -4297,7 +4422,28 @@ async function openProjectFromActivityEntry(entry) {
 /* Live-update an individual agent tile's status label + busy state. The pending
  * states ("Waiting for response" / "Task complete") show only while idle —
  * during drafting/analyzing the work verb wins. */
+/** The human label for an agent's current state — shared by the L1 tile and the
+ * L2 header. A pending question ("reply") wins over the idle verb so an agent
+ * awaiting the user never reads as idle. */
+function agentStatusLabel(agentId) {
+  const verb = agentStatus[agentId] || (agentBusy[agentId] ? 'drafting' : 'idle');
+  const pending = verb === 'idle' ? agentPending.get(agentId) : null;
+  if (pending === 'reply') return 'Waiting for your response';
+  if (pending === 'view')  return 'Task complete';
+  return verb !== 'idle' ? verbLabel(verb) : '';
+}
+
 function paintAgentStatus(agentId) {
+  // L2 header (when this agent is the one being viewed) — keep its status line
+  // in sync with live SSE updates, so a handoff's pending question shows here too.
+  if (mode === MODE_ZOOM && currentAgent()?.id === agentId) {
+    const sEl = surfaceEl.querySelector('.agent-view .agent-status');
+    if (sEl) {
+      const waiting = (agentStatus[agentId] || 'idle') === 'idle' && agentPending.get(agentId) === 'reply';
+      sEl.textContent = agentStatusLabel(agentId);
+      sEl.dataset.await = waiting ? 'reply' : '';
+    }
+  }
   const tile = document.querySelector(`.agent-tile[data-agent-id="${agentId}"]`);
   if (!tile) return;
   const verb = agentStatus[agentId] || 'idle';
@@ -4862,7 +5008,7 @@ let fileTree = null;
 let fileFocus = 0;
 let fileEntries = [];
 let explorerFocused = false; // true while keyboard nav is inside the explorer
-let folderState = { charters: true, notes: true }; // default open
+let folderState = { charters: true }; // default open
 let userFolders = []; // [{ key: 'user_<ts>', label: 'Name' }] — client-side
 /* v2 §5 — shared project Memory drawer. Replaces the now-defunct
  * Skills drawer (S binding). Reuses the existing notes backend:
@@ -5071,15 +5217,11 @@ function rebuildFileEntries() {
     }
   };
 
+  // Entry labels are the bare filename (with .md) — never the directory path.
+  const base = (p) => String(p).split('/').pop();
   addFolder('charters', 'Roles', fileTree.charters, (li, c) => {
-    // Show the actual on-disk filename (role-<label>.md, no underscores).
-    const fname = c.path.replace(/^roles\//, '');
-    li.innerHTML = `<span>${escapeHtml(fname)}</span><span class="who">${escapeHtml(c.agentName)}</span>`;
+    li.innerHTML = `<span>${escapeHtml(base(c.path))}</span><span class="who">${escapeHtml(c.agentName)}</span>`;
     li.dataset.path = c.path;
-  });
-  addFolder('notes', 'Notes', fileTree.notes, (li, n) => {
-    li.textContent = n.path.replace(/^notes\//,'').replace(/\.md$/,'');
-    li.dataset.path = n.path;
   });
   // User-created folders (client-side, no contents yet).
   for (const uf of userFolders) {
@@ -5099,12 +5241,25 @@ function rebuildFileEntries() {
     }
   }
 
-  const pm = document.createElement('div');
-  pm.className = 'file-entry';
-  pm.textContent = 'project.md';
-  pm.dataset.path = 'project.md';
-  fileTreeEl.appendChild(pm);
-  fileEntries.push(pm);
+  // Top-level docs (PRD, milestones, …) — loose, no "Notes" wrapper folder.
+  for (const n of (fileTree.notes || [])) {
+    const li = document.createElement('div');
+    li.className = 'file-entry';
+    li.textContent = base(n.path);
+    li.dataset.path = n.path;
+    fileTreeEl.appendChild(li);
+    fileEntries.push(li);
+  }
+
+  // project.md is legacy; only older projects still have it.
+  if (fileTree.projectMd) {
+    const pm = document.createElement('div');
+    pm.className = 'file-entry';
+    pm.textContent = 'project.md';
+    pm.dataset.path = fileTree.projectMd;
+    fileTreeEl.appendChild(pm);
+    fileEntries.push(pm);
+  }
 
   // Mouse: clicking an entry focuses it then runs the same open/toggle path as
   // Enter/✕ — a file opens in the viewer, a folder header expands/collapses.
@@ -5556,7 +5711,7 @@ gp.addEventListener('press', (e) => {
     else if (b === 'circle')     renderGrid();
     return;
   }
-  if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
+  if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL || mode === MODE_NEW_PROJ_FEATURES) {
     if (b === 'left')        ring.move(-1);
     else if (b === 'right')  ring.move(+1);
     else if (b === 'up')     focusSurfaceClose();
@@ -6437,7 +6592,7 @@ window.addEventListener('keydown', (e) => {
       }
     }
     else if (e.key === 'Escape')  { e.preventDefault(); renderGrid(); }
-  } else if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL) {
+  } else if (mode === MODE_NEW_PROJ_NAME || mode === MODE_NEW_PROJ_GOAL || mode === MODE_NEW_PROJ_FEATURES) {
     // Action-row buttons (Cancel · Back · Continue/Create) form the
     // ring. Left/Right walks them; Enter activates the focused one.
     if (e.key === 'ArrowLeft')  { e.preventDefault(); ring.move(-1); return; }
@@ -6599,8 +6754,12 @@ window.addEventListener('keydown', (e) => {
 
 function submitTypedText(text) {
   if (mode === MODE_PROJECTS) { dispatchHomeUtterance(text); return; }
-  if (mode === MODE_NEW_PROJ_NAME) { newProjName = text; renderNewProjectGoal(); return; }
-  if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = text; finalizeNewProject(); return; }
+  // Capture screens: a typed value lands in the box above (like a voice
+  // transcript) and re-renders the SAME screen so the user can review it and
+  // press Continue / Done — it must NOT silently auto-advance or auto-create.
+  if (mode === MODE_NEW_PROJ_NAME) { newProjName = titleCaseName(text.trim()); renderNewProjectName(); return; }
+  if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = text.trim(); renderNewProjectGoal(); return; }
+  if (mode === MODE_NEW_PROJ_FEATURES) { newProjFeatures = text.trim(); renderNewProjectFeatures(); return; }
   if (mode === MODE_ZOOM) { submitIntent(text); return; }
   if (mode === MODE_GRID) { submitTeamIntent(text); return; }
 }
@@ -6718,14 +6877,17 @@ function showTeamSummary(spec) {
   setTimeout(() => banner.remove(), 25_000);
 }
 
+let _creatingProject = false;
 async function finalizeNewProject() {
+  if (_creatingProject) return;   // guard against a double-submit (two POSTs → two kickoffs)
+  _creatingProject = true;
   stopMicVisualizer();
   setIndicator('thinking', 'Customizing team charters…');
   try {
     const r = await fetch('/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newProjName.trim(), goal: newProjGoal.trim(), roleIds: newProjRoleIds, topology: newProjTopology }),
+      body: JSON.stringify({ name: newProjName.trim(), goal: newProjGoal.trim(), features: newProjFeatures.trim(), roleIds: newProjRoleIds, topology: newProjTopology }),
     });
     if (!r.ok) throw new Error(`server ${r.status}: ${await r.text()}`);
     const project = await r.json();
@@ -6741,6 +6903,8 @@ async function finalizeNewProject() {
   } catch (err) {
     setIndicator('error', 'Create failed');
     console.error(err);
+  } finally {
+    _creatingProject = false;   // allow the next project to be created
   }
 }
 window.addEventListener('keyup', (e) => {
