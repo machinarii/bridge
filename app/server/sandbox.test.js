@@ -25,6 +25,26 @@ test('dockerArgs defaults the image to node:20-slim', () => {
   assert.ok(args.includes('node:20-slim'));
 });
 
+test('dockerArgs applies safe-by-default hardening (pids-limit, no-new-privileges)', () => {
+  const args = dockerArgs('/r', { script: 'echo hi' });
+  assert.ok(args.some(a => a.startsWith('--pids-limit')), 'fork-bomb guard');
+  const j = args.join(' ');
+  assert.match(j, /--security-opt no-new-privileges/);
+  // network/user are opt-in — off by default so installs/provisioning still work.
+  assert.ok(!args.includes('--network'));
+  assert.ok(!args.includes('--user'));
+});
+
+test('dockerArgs honors opt-in network isolation and non-root user', () => {
+  const args = dockerArgs('/r', { script: 'echo hi', network: 'none', user: '1000:1000' });
+  const j = args.join(' ');
+  assert.match(j, /--network none/);
+  assert.match(j, /--user 1000:1000/);
+  // hardening flags still precede the image; run command is unchanged
+  const i = args.indexOf('node:20-slim');
+  assert.deepEqual(args.slice(i), ['node:20-slim', 'sh', '-lc', 'echo hi']);
+});
+
 import { runInContainer } from './sandbox.js';
 
 test('runInContainer captures combined output and the exit code', async () => {

@@ -7,14 +7,24 @@ import { spawn } from 'node:child_process';
 
 const DEFAULT_IMAGE = 'node:20-slim';
 
-/** Build the `docker run` argv (pure — unit-tested without Docker). */
-export function dockerArgs(repoPath, { image = DEFAULT_IMAGE, script = '' } = {}) {
+/** Build the `docker run` argv (pure — unit-tested without Docker).
+ * Hardening that is always safe (doesn't break apt/npm provisioning) is on by
+ * default: a PID cap (fork-bomb guard) and no-new-privileges (block setuid
+ * escalation). `network`/`user` are OPT-IN — forcing `--network=none` or a
+ * non-root user would break the install/provision phases that need network and
+ * root (apt-get, global npm), so callers that don't install can pass
+ * `network: 'none'` / `user: '…'` to tighten further. */
+export function dockerArgs(repoPath, { image = DEFAULT_IMAGE, script = '', network, user } = {}) {
   return [
     'run', '--rm',
     '-v', `${repoPath}:/app`,
     '-v', '/app/node_modules',           // container-only node_modules overlay
     '-w', '/app',
     '--memory=2g', '--cpus=2',
+    '--pids-limit=1024',                 // fork-bomb guard
+    '--security-opt', 'no-new-privileges', // block setuid privilege escalation
+    ...(network ? ['--network', network] : []),  // opt-in isolation (e.g. 'none')
+    ...(user ? ['--user', user] : []),           // opt-in non-root
     image, 'sh', '-lc', script,
   ];
 }
@@ -25,9 +35,9 @@ const DAEMON_DOWN_RE = /cannot connect to the docker daemon|is the docker daemon
  * Never rejects — failures are reported in the result. `_bin`/`_args` override the
  * docker invocation for tests. */
 export function runInContainer(repoPath, {
-  image, script, timeoutMs = 600_000, _bin = 'docker', _args,
+  image, script, network, user, timeoutMs = 600_000, _bin = 'docker', _args,
 } = {}) {
-  const args = _args || dockerArgs(repoPath, { image, script });
+  const args = _args || dockerArgs(repoPath, { image, script, network, user });
   return new Promise((resolve) => {
     let output = '';
     let timedOut = false;
