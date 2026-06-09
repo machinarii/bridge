@@ -21,10 +21,20 @@
 let _nextId = 1;
 const subscribers = new Set(); // each: { projectId | null, write(ev) }
 
+// Recent Activity-feed events (activity + delegate only) kept for backfill, so a
+// freshly-connected or reloaded client isn't blank — SSE has no history of its
+// own. Status/token/note events are live-only and NOT buffered.
+const FEED_BUFFER = [];
+const FEED_BUFFER_MAX = 200;
+
 /** publish(event) — broadcast to every interested subscriber. */
 export function publish(event) {
   if (!event || typeof event !== 'object') return;
   const out = { id: _nextId++, at: Date.now(), ...event };
+  if (out.type === 'activity' || out.type === 'delegate') {
+    FEED_BUFFER.push(out);
+    if (FEED_BUFFER.length > FEED_BUFFER_MAX) FEED_BUFFER.shift();
+  }
   for (const sub of subscribers) {
     // null projectId on the subscriber means "all projects"; otherwise
     // only forward events for that project (or project-less ones).
@@ -37,9 +47,20 @@ export function publish(event) {
  *  an unsubscribe fn. projectId === null means "all projects". */
 export function subscribe(projectId, write) {
   const sub = { projectId: projectId || null, write };
+  // Backfill the recent feed (chronological) so the client's Activity panel is
+  // populated on connect. Flagged backfill:true so the renderer only feeds the
+  // panel and skips live side effects (notifications, zoom refresh). Each event
+  // keeps its id so the renderer dedupes on reconnect.
+  for (const ev of FEED_BUFFER) {
+    if (sub.projectId && ev.projectId && sub.projectId !== ev.projectId) continue;
+    try { write({ ...ev, backfill: true }); } catch { /* route handles cleanup */ }
+  }
   subscribers.add(sub);
   return () => subscribers.delete(sub);
 }
+
+/** Test/diagnostic helper: the current feed-buffer length. */
+export function _feedBufferSize() { return FEED_BUFFER.length; }
 
 /** Convenience helpers used by the orchestrator + team driver so
  *  callers don't have to remember the exact event shape. */
