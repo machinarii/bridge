@@ -38,6 +38,7 @@ Notes:
 - **Server code loads once at startup** — restart `npm run server` after any `app/server/**` change. The renderer (`app/renderer/**`) is served fresh, so a browser **hard-refresh (Cmd-Shift-R)** picks up frontend changes.
 - `npm run stt` does **not** set `HF_HOME`; without the `HF_HOME=…/build/hf-cache` prefix it re-downloads the model. (Worth folding into the npm script.)
 - Voice is **Parakeet-only** — it never falls back to the browser engine. If the sidecar is down, voice shows a visible STT error.
+- **QA shortcut:** `npm run qa:new -- trading` (or `recipes` / `iot`) seeds a fully-formed project from prefilled name/objective/features and kicks off — skips the capture UI. Prefilled copy-paste text for the capture screens + a flow walkthrough live in **`QA-GUIDE.md`**.
 
 ## What's new (latest session)
 

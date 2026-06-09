@@ -6,6 +6,7 @@
   "main": "app/electron/main.js",
   "scripts": {
     "server": "node app/server/server.js",
+    "qa:new": "bash scripts/qa-new-project.sh",
     "stt": "bash -c 'export HF_HUB_CACHE=\"$PWD/build/hf-cache/hub\" && source app/stt/.venv/bin/activate && python app/stt/parakeet_server.py'",
     "electron": "electron .",
     "dev": "electron .",
