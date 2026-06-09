@@ -4211,6 +4211,10 @@ function handleBridgeEvent(ev) {
       // filters by activeProject at render time; the L0 cross-project
       // feed shows everything.
       pushActivityEntry(ev);
+      // Backfill (replayed on connect) only feeds the Activity panel — skip the
+      // live side effects below so a reconnect doesn't resurrect stale pending
+      // states, re-scroll the chat, etc.
+      if (ev.backfill) break;
       // Set the agent's L1 pending state from the event's awaitKind:
       //   'reply' → "Waiting for response", 'view' → "Task complete",
       //   anything else → clear. (delegate/assignment carries no awaitKind.)
@@ -4281,7 +4285,10 @@ async function refreshFileExplorer() {
 }
 
 function pushActivityEntry(ev) {
+  // Dedupe by server id so backfill replays on reconnect don't double-add.
+  if (ev.id != null && allActivity.some(e => e.id === ev.id)) return;
   const entry = {
+    id: ev.id,
     at: ev.at || Date.now(),
     projectId: ev.projectId,
     kind: ev.type, // 'activity' | 'delegate'
@@ -4365,11 +4372,12 @@ function repaintActivityList() {
   // where the drawer is opened: agent responses, grouped project → agent · role
   // → summary, most-recent first.
   const crossProject = true;
-  const entries = allActivity.filter(e => e.kind === 'activity' && e.agentId);
+  // Agent responses (activity with an agent) AND task delegations (PM → agent).
+  const entries = allActivity.filter(e => (e.kind === 'activity' && e.agentId) || e.kind === 'delegate');
   if (entries.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'activity-empty';
-    empty.textContent = 'No agent responses yet.';
+    empty.textContent = 'No activity yet.';
     list.appendChild(empty);
     return;
   }
@@ -4385,13 +4393,27 @@ function repaintActivityList() {
     if (crossProject) {
       // View-only: no click / keyboard open — the feed is for glancing only.
       const proj = projects.find(p => p.id === entry.projectId);
-      const agent = proj?.agents?.find(a => a.id === entry.agentId);
-      const agentName = agent?.name || agentNameForProjectAgent(entry.projectId, entry.agentId);
-      const role = agent ? roleLabel(agent.role) : '';
-      // Strip a leading "<Name>: " prefix — the name is shown separately.
+      let authorText = '';
       let summary = String(entry.text || '');
-      if (agentName && summary.startsWith(agentName)) {
-        summary = summary.slice(agentName.length).replace(/^\s*[:\-–—]\s*/, '');
+      if (entry.kind === 'delegate') {
+        // "<PM> → <agent> · <role>" with the task as the summary.
+        const toAgent = proj?.agents?.find(a => a.id === entry.toAgentId);
+        const fromName = agentNameForProjectAgent(entry.projectId, entry.fromAgentId);
+        const toName = toAgent?.name || agentNameForProjectAgent(entry.projectId, entry.toAgentId);
+        const toRole = toAgent ? roleLabel(toAgent.role) : '';
+        authorText = `${fromName} → ${toName}${toRole ? ` · ${toRole}` : ''}`;
+        // entry.text is "From → To: task" — keep just the task for the summary.
+        const ci = summary.indexOf(':');
+        if (ci >= 0) summary = summary.slice(ci + 1).trim();
+      } else {
+        const agent = proj?.agents?.find(a => a.id === entry.agentId);
+        const agentName = agent?.name || agentNameForProjectAgent(entry.projectId, entry.agentId);
+        const role = agent ? roleLabel(agent.role) : '';
+        authorText = agentName + (role ? ` · ${role}` : '');
+        // Strip a leading "<Name>: " prefix — the name is shown separately.
+        if (agentName && summary.startsWith(agentName)) {
+          summary = summary.slice(agentName.length).replace(/^\s*[:\-–—]\s*/, '');
+        }
       }
 
       const projEl = document.createElement('div');
@@ -4399,7 +4421,7 @@ function repaintActivityList() {
       projEl.textContent = proj?.name || 'Project';
       const authorEl = document.createElement('div');
       authorEl.className = 'activity-author';
-      authorEl.textContent = agentName + (role ? ` · ${role}` : '');
+      authorEl.textContent = authorText;
       const sumEl = document.createElement('div');
       sumEl.className = 'activity-summary';
       sumEl.textContent = summary;
