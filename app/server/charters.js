@@ -84,8 +84,12 @@ export function loadBaseCharter(roleId) {
     }
   }
   const path = resolve(CHARTERS_DIR, fname);
-  if (!existsSync(path)) throw new Error(`missing base charter: ${fname}`);
-  return readFileSync(path, 'utf8');
+  if (existsSync(path)) return readFileSync(path, 'utf8');
+  // Last resort: a minimal VALID stub (3 required headings) so charter writing
+  // never hard-fails. All 11 active baselines ship committed, so this is
+  // effectively unreachable — it only guards a deleted/corrupt bundled file.
+  console.warn(`[charters] missing bundled charter ${fname}; using minimal stub`);
+  return `# ${role.label}\n\n## Role\n_(charter unavailable)_\n\n## Typical tasks\n- _(to be defined)_\n\n## Areas of expertise\n- _(to be defined)_\n`;
 }
 
 export function validateCharterMarkdown(md) {
