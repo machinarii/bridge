@@ -3173,7 +3173,7 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   border-radius: 1px;
 }
 .agent-view .bubble.agent .bubble-choices .choice-other.talking {
-  align-items: center;
+  align-items: flex-start;   /* wave sits at the button's left edge, not centered */
 }
 .agent-view .bubble.agent .bubble-choices .choice-other.talking .choice-other-label,
 .agent-view .bubble.agent .bubble-choices .choice-other.talking .choice-other-sub {
@@ -3181,4 +3181,7 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
 }
 .agent-view .bubble.agent .bubble-choices .choice-other.talking .choice-other-wave {
   display: inline-flex;
+  /* Slightly larger, anchored to the left so it grows rightward, not centered. */
+  transform: scale(1.2);
+  transform-origin: left center;
 }
