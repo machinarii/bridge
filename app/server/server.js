@@ -625,7 +625,11 @@ migrateLegacyOnce();
 rescheduleAutosave();
 migrateCharterFilenames();
 
-app.listen(PORT, () => {
-  console.log(`[bridge] orchestrator listening on http://localhost:${PORT}`);
-  console.log(`[bridge] renderer at http://localhost:${PORT}/`);
+// Bind to loopback only: the API is unauthenticated and some endpoints lead to
+// code execution (scaffold → Docker), so it must not be reachable from the LAN.
+// The renderer loads http://127.0.0.1:${PORT}/ (see app/electron/main.js), so
+// loopback binding is transparent to the app.
+app.listen(PORT, '127.0.0.1', () => {
+  console.log(`[bridge] orchestrator listening on http://127.0.0.1:${PORT}`);
+  console.log(`[bridge] renderer at http://127.0.0.1:${PORT}/`);
 });
