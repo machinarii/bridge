@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRole } from './roles.js';
+import { getModelForRole } from './models.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CHARTERS_DIR = resolve(__dirname, 'role-charters');
@@ -94,9 +95,9 @@ export function validateCharterMarkdown(md) {
   return { ok: true };
 }
 
-async function callOpenRouter({ apiKey, model, prompt }) {
+async function callOpenRouter({ apiKey, model, prompt, timeoutMs = CHARTER_TIMEOUT_MS }) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), CHARTER_TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const resp = await fetch(OPENROUTER_URL, {
       method: 'POST',
@@ -197,4 +198,80 @@ export function readProjectCharter(projectId, roleId) {
   const path = resolve(STATE_DIR, projectId, 'roles', charterFileNameFor(roleId));
   if (existsSync(path)) return readFileSync(path, 'utf8');
   return loadBaseCharter(roleId);
+}
+
+const DEEPEN_TIMEOUT_MS = 30_000;
+
+/* Split a role file into its charter body and any trailing "## Plan" section
+ * (written by team-review). Lets the deep pass rewrite the charter while
+ * preserving a specialist's plan. Returns plan WITHOUT a leading blank line. */
+function splitPlan(content) {
+  const m = content.match(/\n## Plan\b[\s\S]*$/i);
+  if (!m) return { body: content.replace(/\s+$/, ''), plan: '' };
+  return { body: content.slice(0, m.index).replace(/\s+$/, ''), plan: m[0].replace(/^\n+/, '') };
+}
+
+function buildDeepenPrompt({ agentName, roleLabel, projectName, goal, features, prd, current }) {
+  return (
+    `${agentName} is the ${roleLabel} on project "${projectName}" (goal: "${goal}").\n` +
+    (features ? `Top features: ${features}\n` : '') +
+    `Here is the project's PRD:\n\n${prd}\n\n` +
+    `Here is ${agentName}'s current charter:\n\n${current}\n\n` +
+    `Rewrite the charter so the three sections are concretely tailored to THIS ` +
+    `project and THIS role's part in it. Keep the exact markdown structure — the ` +
+    `headings ## Role, ## Typical tasks, ## Areas of expertise must remain. Replace ` +
+    `generic items with project-specific ones drawn from the PRD. 220 words max. ` +
+    `Output only markdown — no code fences, no commentary.`
+  );
+}
+
+/* String-returning wrapper over the module's callOpenRouter, so deepenCharters
+ * has a no-arg default while staying injectable (tests pass their own callText). */
+async function defaultCallText({ apiKey, model, prompt, timeoutMs }) {
+  const r = await callOpenRouter({ apiKey, model, prompt, timeoutMs });
+  return r.ok ? r.content : '';
+}
+
+/** Re-tailor each agent's charter using the full PRD as context, AFTER the PRD
+ *  exists (kickoff). Overwrites the three charter sections in place, preserving
+ *  any "## Plan" section. Per-role failures keep the existing charter unchanged
+ *  (never clobber with garbage). Empty/"not generated" PRD -> no-op. Returns a
+ *  per-agent result list ({agentId, roleId, deepened}). */
+export async function deepenCharters(project, { prd, callText, apiKey, agents } = {}) {
+  const text = String(prd || '').trim();
+  if (!text || /^_?not generated_?$/i.test(text)) return [];   // no useful context -> keep baselines
+  const key = apiKey != null ? apiKey : process.env.OPENROUTER_API_KEY;
+  const call = callText || defaultCallText;
+  const targets = agents || project.agents;
+  const rolesDir = resolve(project.repoPath, 'docs', 'roles');
+  mkdirSync(rolesDir, { recursive: true });
+  const results = [];
+  for (const a of targets) {
+    const role = getRole(a.role);
+    const path = resolve(rolesDir, charterFileName(role));
+    const current = existsSync(path) ? readFileSync(path, 'utf8') : loadBaseCharter(a.role);
+    const { body, plan } = splitPlan(current);
+    let md = '';
+    try {
+      md = String(await call({
+        apiKey: key, model: getModelForRole(a.role), timeoutMs: DEEPEN_TIMEOUT_MS,
+        prompt: buildDeepenPrompt({
+          agentName: a.name, roleLabel: role?.label || a.role,
+          projectName: project.name, goal: project.goal, features: project.features,
+          prd: text, current: body,
+        }),
+      }) || '').trim();
+    } catch (err) {
+      console.warn(`[charters] deepen failed for ${a.name} (${a.role}): ${err.message}`);
+      md = '';
+    }
+    if (md && validateCharterMarkdown(md).ok) {
+      const out = plan ? `${md}\n\n${plan}\n` : `${md}\n`;
+      writeFileSync(path, out, 'utf8');
+      results.push({ agentId: a.id, roleId: a.role, deepened: true });
+    } else {
+      results.push({ agentId: a.id, roleId: a.role, deepened: false });   // leave file untouched
+    }
+  }
+  return results;
 }
