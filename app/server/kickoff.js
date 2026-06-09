@@ -765,7 +765,7 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
       return { handled: true, intent: 'build_hold', awaiting: true };
     }
     appendTurn(buildAgentId, 'user', text);
-    emitStatus(projectId, buildAgentId, 'coding');
+    emitStatus(projectId, buildAgentId, 'scaffolding');
     emitActivity(projectId, `${sweName}: scaffolding…`, buildAgentId);
     const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
     let r;

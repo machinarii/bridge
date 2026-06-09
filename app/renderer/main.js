@@ -666,6 +666,7 @@ const VERB_LABELS = {
   analyzing: 'Analyzing',
   drafting: 'Drafting',
   coding: 'Coding',
+  scaffolding: 'Scaffolding',
   prototyping: 'Prototyping',
   documenting: 'Documenting',
   reviewing: 'Reviewing',
