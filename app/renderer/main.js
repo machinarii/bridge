@@ -3848,13 +3848,18 @@ function endPTT() {
  * chip's V keycap and R2 icon; whichever is visible for the current input mode
  * shows. Hidden/absent glyphs are harmlessly no-ops. */
 function setPttHeld(on) {
+  // Dictation started from the on-screen "Other" button shouldn't light the footer
+  // shortcut reference (V / R2 keycaps) or the footer Hold-to-talk chip — the user
+  // is holding the on-screen control, not pressing the keyboard/gamepad shortcut.
+  // Only the Other button's own wave reacts. footer always clears on release.
+  const footerOn = on && !_otherDictateBtn;
   document.querySelectorAll('.glyph.for-gamepad[data-glyph="r2"]')
-    .forEach(g => g.classList.toggle('held', on));
+    .forEach(g => g.classList.toggle('held', footerOn));
   document.querySelectorAll('.glyph.for-keyboard')
-    .forEach(g => { if (g.textContent.trim() === 'V') g.classList.toggle('held', on); });
+    .forEach(g => { if (g.textContent.trim() === 'V') g.classList.toggle('held', footerOn); });
   // Swap the Hold-to-talk label for a live mic visualizer while holding.
   const chips = document.querySelectorAll('.sc.ptt-chip');
-  chips.forEach(c => c.classList.toggle('talking', on));
+  chips.forEach(c => c.classList.toggle('talking', footerOn));
   // An "Other" choice button — pointer-held, or focused while holding V/R2 —
   // plays the same mic-reactive wave inside itself (its label hides).
   const otherBtn = _otherDictateBtn ||
