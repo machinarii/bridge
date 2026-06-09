@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, existsSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createProject, deleteProject, docsDir, rolesDir } from './projects.js';
+import { createProject, deleteProject, docsDir, rolesDir, addAgent } from './projects.js';
 process.env.BRIDGE_STATE_DIR = mkdtempSync(join(tmpdir(), "bridge-state-")); // isolate state — never touch app/state
 
 test('docsDir/rolesDir resolve under the project repo and exist', async () => {
@@ -104,5 +104,51 @@ test('clearContext wipes an agent scratchpad (used on create/delete to stop id r
     assert.equal(getContext(id).messages.length, 0);   // fresh — no inherited turns
   } finally {
     clearContext(id);   // cleanup (getContext above re-creates an empty record)
+  }
+});
+
+test('addAgent writes the baseline when no PRD exists yet', async () => {
+  const base = mkdtempSync(join(tmpdir(), 'bridge-ws-'));
+  const prev = process.env.BRIDGE_PROJECTS_BASE;
+  process.env.BRIDGE_PROJECTS_BASE = base;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = () => { throw new Error('no network'); };
+  let p;
+  try {
+    p = await createProject({ name: 'Add NoPrd', goal: 'g', roleIds: ['pm'], topology: 'hub-and-spoke' });
+    // Remove the seeded PRD.md so "no PRD" holds.
+    rmSync(join(base, 'add-noprd', 'docs', 'PRD.md'), { force: true });
+    await addAgent(p.id, 'designer');
+    assert.match(readFileSync(join(base, 'add-noprd', 'docs', 'roles', 'role-designer.md'), 'utf8'), /## Role/);
+  } finally {
+    globalThis.fetch = realFetch;
+    if (p) deleteProject(p.id);
+    rmSync(base, { recursive: true, force: true });
+    if (prev === undefined) delete process.env.BRIDGE_PROJECTS_BASE; else process.env.BRIDGE_PROJECTS_BASE = prev;
+  }
+});
+
+test('addAgent tailors the new agent from the PRD when one exists', async () => {
+  const base = mkdtempSync(join(tmpdir(), 'bridge-ws-'));
+  const prev = process.env.BRIDGE_PROJECTS_BASE;
+  process.env.BRIDGE_PROJECTS_BASE = base;
+  // Stub the OpenRouter HTTP call so the deepen branch writes a tailored charter
+  // (the seeded PRD.md exists at creation, so addAgent takes the deepen path).
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ choices: [{ message: { content:
+      '# Designer\n## Role\nTAILORED-FROM-PRD\n## Typical tasks\n- t\n## Areas of expertise\n- e\n' } }] }),
+  });
+  let p;
+  try {
+    p = await createProject({ name: 'Add WithPrd', goal: 'g', roleIds: ['pm'], topology: 'hub-and-spoke' });
+    await addAgent(p.id, 'designer');
+    assert.match(readFileSync(join(base, 'add-withprd', 'docs', 'roles', 'role-designer.md'), 'utf8'), /TAILORED-FROM-PRD/);
+  } finally {
+    globalThis.fetch = realFetch;
+    if (p) deleteProject(p.id);
+    rmSync(base, { recursive: true, force: true });
+    if (prev === undefined) delete process.env.BRIDGE_PROJECTS_BASE; else process.env.BRIDGE_PROJECTS_BASE = prev;
   }
 });
