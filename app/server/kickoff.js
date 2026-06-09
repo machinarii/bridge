@@ -245,12 +245,16 @@ export function buildPlanPrompt(project) {
     `Project goal: "${project.goal}".\n` +
     featuresLine(project) +
     `Team:\n${roster(project)}\n\n` +
-    `Write a SHORT kickoff plan (2-4 sentences, first person, speakable) telling the user how you'll start: ` +
-    `you'll draft a PRD plus a roadmap, team operating notes, and an open-questions doc, then assign a starting ` +
-    `task to each relevant teammate. ` +
+    `Write a SHORT kickoff plan (first person, speakable). Format it as:\n` +
+    `1) One or two sentences: you'll draft a PRD, a roadmap, team operating notes, and an open-questions doc.\n` +
+    `2) A lead-in line like "Then I'll set a starting task for each teammate:" followed by a MARKDOWN BULLET LIST — ` +
+    `one "- " bullet per teammate, each formatted "<Name>: <one short task clause>". Do NOT pack the per-teammate ` +
+    `tasks into a run-on sentence.\n` +
+    `3) Optionally one closing sentence flagging the single biggest risk or gating concern.\n` +
     `Do NOT ask the user any question in this message and do NOT end with a question — this bubble is the plan only. ` +
     `The user will pick from the approval buttons below; any clarifying questions you have get asked AFTERWARD, ` +
-    `one at a time. No lettered options, no JSON, no markdown headings. Plain prose only.` +
+    `one at a time. No lettered options, no JSON, no markdown headings. Use the bullet list ONLY for the ` +
+    `per-teammate tasks; everything else is plain prose.` +
     RESPONSE_STYLE
   );
 }

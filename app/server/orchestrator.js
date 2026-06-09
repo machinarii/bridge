@@ -13,7 +13,8 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 export const RESPONSE_STYLE = `
 ## How you write
 - Make thinking legible: state decision criteria early.
-- Bullet lists, concise sentences. Telegraphic style allowed — drop "the"/"a" to cut scan time. Fewer words = faster to scan.
+- Any list of 3+ items (per-person tasks, options, steps, findings) MUST be a markdown bullet list — never packed into one run-on sentence. Concise sentences otherwise; telegraphic style allowed — drop "the"/"a" to cut scan time. Fewer words = faster to scan.
+- When prose runs long (roughly 4+ sentences) and isn't a list, break it into short paragraphs separated by a blank line — never one dense block of text.
 - **Bold** for emphasis is fine. No italics (harder to read).
 - Emoji only paired with text when delivering feedback on a result AND your confidence is ≥ 0.9. Never decoration.
 
