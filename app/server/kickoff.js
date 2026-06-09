@@ -11,6 +11,7 @@ import { emitNotification, emitActivity, emitDelegate, emitStatus, publish as pu
 import { writeNote, readNote } from './backends/notes.js';
 import { commitIfChanged } from './workspace.js';
 import { generateBuildPlan, runScaffold } from './scaffold.js';
+import { deepenCharters } from './charters.js';
 import { startTeamReview, currentReviewAgent, recordPlan, teamReviewQuestion } from './team-review.js';
 import { runAndFix, classifyFailure } from './run-fix.js';
 
@@ -365,6 +366,15 @@ export async function generateKickoffDocs(projectId, opts = {}) {
     const body = `# ${title}\n\n${md.replace(/^#+\s.*\n+/, '')}`;
     const note = writeNote(projectId, DOC_FILENAMES[kind], body);
     publishEvent({ type: 'note_added', projectId, noteId: note.id });
+  }
+  // Deepen each role's charter now that the PRD exists — the richest context
+  // we'll have. Per-role failures keep the baseline; an empty PRD is a no-op.
+  const fresh = getProject(projectId);
+  if (fresh) {
+    try {
+      const prd = readNote(projectId, DOC_FILENAMES.prd);   // DOC_FILENAMES.prd === 'PRD'
+      await deepenCharters(fresh, { prd, callText, apiKey });
+    } catch (err) { console.warn(`[kickoff] deepenCharters failed: ${err.message}`); }
   }
   // Commit the planning docs so the repo keeps clean history.
   try { const repo = getProject(projectId)?.repoPath; if (repo) commitIfChanged(repo, 'Add kickoff planning docs'); } catch {}

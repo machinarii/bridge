@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { classifyApproval, topologyGuidance, DOC_TITLES, buildPlanPrompt, startKickoff, executeKickoff, handleLeadMessageDuringKickoff } from './kickoff.js';
-import { createProject, getKickoff, setKickoff, deleteProject } from './projects.js';
+import { createProject, getKickoff, setKickoff, deleteProject, rolesDir } from './projects.js';
 import { getContext } from './scratchpad.js';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 // Isolate state + repos to throwaway temp dirs — never touch app/state or ~/bridge-projects.
@@ -118,6 +118,21 @@ test('executeKickoff runs once and is idempotent', async () => {
     const second = await executeKickoff(p.id, deps);
     assert.equal(second.ran, false);
     assert.equal(listNotes(p.id).length, 4);
+  } finally { deleteProject(p.id); }
+});
+
+test('generateKickoffDocs deepens charters using the generated PRD', async () => {
+  const p = await createProject({ name: 'Deepen KO', goal: 'do Z', roleIds: ['pm'], topology: 'hub-and-spoke' });
+  try {
+    // callText returns the PRD/doc bodies AND a valid tailored charter — the same
+    // injected fn services both doc generation and the deepen pass.
+    const callText = async ({ prompt }) =>
+      /Rewrite the charter/.test(prompt)
+        ? '# Product Manager\n## Role\nDEEPENED\n## Typical tasks\n- t\n## Areas of expertise\n- e\n'
+        : 'PRD body about the product';
+    await generateKickoffDocs(p.id, { apiKey: 'k', callText });
+    const md = readFileSync(join(rolesDir(p.id), 'role-pm.md'), 'utf8');
+    assert.match(md, /DEEPENED/);
   } finally { deleteProject(p.id); }
 });
 
