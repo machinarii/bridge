@@ -23,6 +23,33 @@ test('build_pending + "Build it" scaffolds, commits, and marks built', async () 
   } finally { deleteProject(p.id); }
 });
 
+test('build_pending + a natural "Yes" scaffolds (not just the exact "Build it")', async () => {
+  const p = await createProject({ name: 'Build Yes', goal: 'g', roleIds: ['pm', 'sw_engineer'], topology: 'hub-and-spoke' });
+  try {
+    writeNote(p.id, 'PRD', '# PRD\n');
+    await generateBuildPlan(p.id, { callText: async () => JSON.stringify({ stack: 'node', summary: 's', files: [{ path: 'src/index.js', purpose: 'entry' }] }) });
+    setKickoff(p.id, { status: 'build_pending' });
+    const r = await handleLeadMessageDuringKickoff(p.id, 'Yes.', { callText: async () => 'console.log(1)\n' });
+    assert.equal(r.intent, 'scaffolded', '"Yes." triggers the real scaffold');
+    assert.ok(existsSync(resolve(getProject(p.id).build.repoPath, 'src/index.js')), 'file scaffolded');
+    // The scaffold-done spec carries the run choices ("Want me to: Run it / Not now").
+    const spec = JSON.parse(r.spec);
+    assert.deepEqual(spec.choices, ['Run it', 'Not now']);
+  } finally { deleteProject(p.id); }
+});
+
+test('build_pending + "no" does not scaffold (negation guard)', async () => {
+  const p = await createProject({ name: 'Build No', goal: 'g', roleIds: ['pm', 'sw_engineer'], topology: 'hub-and-spoke' });
+  try {
+    writeNote(p.id, 'PRD', '# PRD\n');
+    await generateBuildPlan(p.id, { callText: async () => JSON.stringify({ stack: 'node', summary: 's', files: [{ path: 'b.js', purpose: 'x' }] }) });
+    setKickoff(p.id, { status: 'build_pending' });
+    const r = await handleLeadMessageDuringKickoff(p.id, 'no, hold on', { callText: async () => 'x' });
+    assert.equal(r.intent, 'build_hold');
+    assert.ok(!existsSync(resolve(getProject(p.id).build.repoPath, 'b.js')), 'nothing scaffolded');
+  } finally { deleteProject(p.id); }
+});
+
 test('build_pending + "Hold off" does not scaffold', async () => {
   const p = await createProject({ name: 'Build Hold', goal: 'g', roleIds: ['pm', 'sw_engineer'], topology: 'hub-and-spoke' });
   try {

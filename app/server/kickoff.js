@@ -17,10 +17,19 @@ import { runAndFix, classifyFailure } from './run-fix.js';
 
 // After kickoff Q&A, the PM proposes a build plan as a selectable question.
 const BUILD_CHOICES = ['Build it', 'Hold off — let me adjust'];
-function isBuildApproval(text) { return String(text || '').trim() === BUILD_CHOICES[0]; }
+// Accept the exact choice OR a natural affirmative ("yes", "go", "do it", …) so
+// a typed/spoken "Yes" actually scaffolds instead of falling through to a prose
+// reply. AFFIRM/NEGATE are defined below (resolved at call time, not load time).
+function isBuildApproval(text) {
+  const t = String(text || '').trim();
+  return t === BUILD_CHOICES[0] || (AFFIRM.test(t) && !NEGATE.test(t));
+}
 
 const RUN_CHOICES = ['Run it', 'Not now'];
-function isRunApproval(text) { return String(text || '').trim() === RUN_CHOICES[0]; }
+function isRunApproval(text) {
+  const t = String(text || '').trim();
+  return t === RUN_CHOICES[0] || (AFFIRM.test(t) && !NEGATE.test(t));
+}
 
 // "Skip for now" on a question bubble: advance past the question without
 // recording an answer. The client sends this exact literal; question specs flag
