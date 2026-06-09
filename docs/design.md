@@ -1235,3 +1235,21 @@ old project's chat.
 - **Arrival:** new turns rise + fade in at the bottom while older content slides
   up; only genuinely-new bubbles animate (tracked per agent). The newest agent
   bubble flashes a highlight; choice buttons stagger in like Layer 1 tiles.
+
+### Charter baseline sources
+
+Baseline role charters (`app/server/role-charters/role-*.md`) are written verbatim at project creation (instant, no API call) and then deep-tailored from the PRD during kickoff (`deepenCharters`, which preserves any `## Plan` section a specialist later appends). An optional `BRIDGE_CHARTERS_DIR` env var points at a drop-in folder of charter-format override files (validated; invalid/missing → bundled template). The baselines below were distilled once, at authoring time, from best-in-class Claude skills where one fits the role; the rest are hand-authored to the same standard. This table is the authoritative provenance/attribution record.
+
+| Role (id) | Charter file | Distilled from | On-disk source | License / attribution |
+|---|---|---|---|---|
+| Product Manager (`pm`) | `role-pm.md` | jobs-to-be-done, opportunity-solution-tree, roadmap-planning, prioritization-advisor, problem-framing-canvas | `~/.claude/plugins/cache/pm-skills/*` | per-skill |
+| Designer (`designer`) | `role-designer.md` | impeccable, layout, typeset, polish, critique | `~/.claude/skills/*` | **impeccable: Apache 2.0, "Based on Anthropic's frontend-design skill" (see its NOTICE.md)** |
+| Researcher (`ux_research`) | `role-researcher.md` | discovery-process, customer-journey-mapping-workshop, jobs-to-be-done, problem-statement | `~/.claude/plugins/cache/pm-skills/*` | per-skill |
+| Marketing (`marketing`) | `role-marketing.md` | positioning-statement, positioning-workshop, acquisition-channel-advisor | `~/.claude/plugins/cache/pm-skills/*` | per-skill |
+| Copywriter (`copywriter`) | `role-copywriter.md` | distill, clarify, quieter | `~/.claude/skills/*` | per-skill |
+| Legal (`legal`) | `role-legal.md` | provisional-patent (IP) + hand-authored (privacy, ToS, compliance, licensing) | `~/.claude/skills/provisional-patent` | per-skill |
+| Software Engineer (`sw_engineer`) | `role-sw-eng.md` | hand-authored (no skill match) | — | — |
+| Hardware Engineer (`hw_engineer`) | `role-hw-eng.md` | hand-authored | — | — |
+| QA (`qa`) | `role-qa.md` | hand-authored | — | — |
+| Data Scientist (`data_sci`) | `role-ds.md` | hand-authored | — | — |
+| Security (`security`) | `role-security.md` | hand-authored (no security skill is installed) | — | — |
