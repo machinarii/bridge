@@ -67,6 +67,33 @@ test('notes write/read under <repo>/docs and listNotes excludes project.md', asy
   }
 });
 
+test('createProject writes baseline charters WITHOUT any model call', async () => {
+  const base = mkdtempSync(join(tmpdir(), 'bridge-ws-'));
+  const prev = process.env.BRIDGE_PROJECTS_BASE;
+  process.env.BRIDGE_PROJECTS_BASE = base;
+  // Set a key so this is a real guard: the OLD code path (generateProjectCharters
+  // → customizeCharter) would attempt a fetch when a key is present, and the
+  // throwing stub below would fail the test. Baseline-only creation makes no
+  // call regardless, so it passes — proving creation is unconditionally network-free.
+  const prevKey = process.env.OPENROUTER_API_KEY;
+  process.env.OPENROUTER_API_KEY = 'test-key-should-not-be-used';
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = () => { throw new Error('no network at create'); };
+  let p;
+  try {
+    p = await createProject({ name: 'Baseline Create', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+    const roles = join(base, 'baseline-create', 'docs', 'roles');
+    assert.match(readFileSync(join(roles, 'role-pm.md'), 'utf8'), /## Role/);
+    assert.match(readFileSync(join(roles, 'role-designer.md'), 'utf8'), /## Areas of expertise/);
+  } finally {
+    globalThis.fetch = realFetch;
+    if (prevKey === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = prevKey;
+    if (p) deleteProject(p.id);
+    rmSync(base, { recursive: true, force: true });
+    if (prev === undefined) delete process.env.BRIDGE_PROJECTS_BASE; else process.env.BRIDGE_PROJECTS_BASE = prev;
+  }
+});
+
 test('clearContext wipes an agent scratchpad (used on create/delete to stop id reuse inheriting chats)', async () => {
   const { appendTurn, getContext, clearContext } = await import('./scratchpad.js');
   const id = '__test-clear__agent-xyz';
