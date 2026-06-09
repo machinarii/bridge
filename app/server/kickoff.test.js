@@ -83,7 +83,20 @@ test('startKickoff with no api key skips and marks skipped_no_key', async () => 
 });
 
 import { generateKickoffDocs, assignKickoffTasks } from './kickoff.js';
-import { listNotes } from './backends/notes.js';
+import { listNotes, readNote } from './backends/notes.js';
+
+test('generateKickoffDocs preserves the seeded PRD when the model returns empty', async () => {
+  const p = await createProject({ name: 'Seed KO', goal: 'shippable goal XYZ', features: 'feat one; feat two', roleIds: ['pm'], topology: 'hub-and-spoke' });
+  try {
+    // createProject seeds PRD.md with goal/features/team; the model now returns
+    // nothing for every doc — the seeded PRD must survive (not become "_not generated_").
+    await generateKickoffDocs(p.id, { apiKey: 'k', callText: async () => '' });
+    const prd = readNote(p.id, 'PRD');
+    assert.match(prd, /shippable goal XYZ/, 'seeded goal preserved');
+    assert.match(prd, /feat one/, 'seeded features preserved');
+    assert.doesNotMatch(prd, /_not generated_/, 'seed not clobbered by the empty-response sentinel');
+  } finally { deleteProject(p.id); }
+});
 
 test('generateKickoffDocs writes four titled notes', async () => {
   const p = await createProject({ name: 'Docs KO', goal: 'do Z', roleIds: ['pm', 'designer'], topology: 'feature-teams' });
