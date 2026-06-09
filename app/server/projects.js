@@ -13,7 +13,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, renameSync 
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRole, listRoles, FALLBACK_NAMES } from './roles.js';
-import { generateProjectCharters, charterFileNameFor, legacyCharterFileNames } from './charters.js';
+import { writeBaselineCharters, generateProjectCharters, charterFileNameFor, legacyCharterFileNames } from './charters.js';
 import { resolveRepoPath, ensureRepo, commitIfChanged } from './workspace.js';
 import { clearContext } from './scratchpad.js';
 
@@ -228,8 +228,9 @@ export async function createProject({ name, goal, features, roleIds, topology })
   data.projects.push(project);
   save();
 
-  // Generate per-project charters (falls back to base verbatim on failure).
-  await generateProjectCharters(project);
+  // Write baseline charters verbatim — no model call at creation. The deep,
+  // PRD-aware pass (deepenCharters) tailors them during kickoff.
+  writeBaselineCharters(project);
   // Start the repo's history with the initial docs (project.md + charters).
   try { commitIfChanged(repoPath, 'Initialize project docs'); } catch {}
   return project;

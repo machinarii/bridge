@@ -177,6 +177,21 @@ export async function generateProjectCharters(project, { concurrency = 5, agents
   return results;
 }
 
+/** Write each agent's BASELINE charter verbatim to <repo>/docs/roles/ — no
+ *  network call. Used at project creation so role files populate instantly; the
+ *  deep, PRD-aware pass (deepenCharters) upgrades them during kickoff. Pass
+ *  `agents` to write only a subset (e.g. a newly-added agent). */
+export function writeBaselineCharters(project, { agents } = {}) {
+  const targets = agents || project.agents;
+  const rolesDir = resolve(project.repoPath, 'docs', 'roles');
+  mkdirSync(rolesDir, { recursive: true });
+  for (const a of targets) {
+    const path = resolve(rolesDir, charterFileName(getRole(a.role)));
+    writeFileSync(path, loadBaseCharter(a.role), 'utf8');
+  }
+  return targets.map(a => ({ agentId: a.id, roleId: a.role }));
+}
+
 /** Read a project's customized charter (or base if not yet written). */
 export function readProjectCharter(projectId, roleId) {
   const path = resolve(STATE_DIR, projectId, 'roles', charterFileNameFor(roleId));
