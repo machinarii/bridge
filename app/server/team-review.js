@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { getProject, setProjectState, rolesDir } from './projects.js';
 import { listNotes, readNote } from './backends/notes.js';
 import { getModelForRole } from './models.js';
-import { getRole } from './roles.js';
+import { getRole, kickoffPriority } from './roles.js';
 import { charterFileNameFor } from './charters.js';
 import { generateBuildPlan } from './scaffold.js';
 
@@ -29,11 +29,14 @@ function readPlanSection(projectId, roleId) {
   return m ? m[1].trim() : '';
 }
 
-/** The enabled, non-lead agents in tile order — the round's queue. */
+/** The enabled, non-lead agents, ordered by kickoff importance (high → low) so
+ * specialists ask in the same priority order as the PM's questions. */
 export function teamReviewAgents(projectId) {
   const p = getProject(projectId);
   if (!p) return [];
-  return p.agents.filter(a => a.enabled && a.id !== p.leadAgentId);
+  return p.agents
+    .filter(a => a.enabled && a.id !== p.leadAgentId)
+    .sort((a, b) => kickoffPriority(b.role) - kickoffPriority(a.role));
 }
 
 /** Begin the round: phase → team_review, queue the specialists, reset capture. */

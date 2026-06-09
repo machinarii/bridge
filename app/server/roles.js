@@ -44,6 +44,18 @@ const BY_ID = Object.fromEntries(ROLES.map(r => [r.id, r]));
 export function listRoles() { return ROLES.slice(); }
 export function getRole(id) { return BY_ID[id] || null; }
 
+/* Kickoff question importance per role (higher = asked first). Foundational /
+ * regulatory decisions (legal, security, product direction) gate everything
+ * downstream; QA / marketing / copy follow from them — so they come last. */
+const KICKOFF_PRIORITY = {
+  pm: 100, legal: 92, security: 90, ux_research: 82, designer: 80,
+  data_sci: 72, sw_engineer: 68, hw_engineer: 64,
+  marketing: 46, copywriter: 42, qa: 38,
+};
+export function kickoffPriority(roleId) {
+  return KICKOFF_PRIORITY[roleId] != null ? KICKOFF_PRIORITY[roleId] : 60;
+}
+
 /* Large shared fallback pool. When a role's short namePool is exhausted (lots
  * of projects), pickName draws a fresh, distinct name from here instead of
  * suffixing a number ("Cassidy 2"). */

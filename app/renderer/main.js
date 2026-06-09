@@ -2618,11 +2618,15 @@ function buildChoiceList(choices, agent, picked, skippable = false) {
 
   wrap.appendChild(opts);
 
+  // No preset options → a free-form question: the user answers by holding Other
+  // to talk or typing with "/". Show that hint and skip the (never-enabling)
+  // Submit; with options, it's the normal multi-select.
+  const hasChoices = choices.some(c => String(c).trim());
   const submitRow = document.createElement('div');
   submitRow.className = 'bubble-choices-submit';
   const hint = document.createElement('span');
   hint.className = 'bubble-choices-hint';
-  hint.textContent = 'Select one or more with ←/→';
+  hint.textContent = hasChoices ? 'Select one or more with ←/→' : 'Hold “Other” to talk, or type with /';
   // Right-side action group: [Skip for now] [Submit]. Skip precedes Submit in
   // the DOM so the bubble nav model (cycleBubbleAction → document order) reaches
   // it just left of Submit, matching its visual position.
@@ -2636,13 +2640,15 @@ function buildChoiceList(choices, agent, picked, skippable = false) {
     skip.addEventListener('click', (e) => { e.stopPropagation(); skipChoices(wrap, agent); });
     actions.appendChild(skip);
   }
-  const submit = document.createElement('button');
-  submit.type = 'button';
-  submit.className = 'choice-submit role-confirm is-disabled';   // disabled until a pick
-  submit.setAttribute('aria-disabled', 'true');
-  submit.textContent = 'Submit';
-  submit.addEventListener('click', (e) => { e.stopPropagation(); submitChoices(wrap, agent); });
-  actions.appendChild(submit);
+  if (hasChoices) {
+    const submit = document.createElement('button');
+    submit.type = 'button';
+    submit.className = 'choice-submit role-confirm is-disabled';   // disabled until a pick
+    submit.setAttribute('aria-disabled', 'true');
+    submit.textContent = 'Submit';
+    submit.addEventListener('click', (e) => { e.stopPropagation(); submitChoices(wrap, agent); });
+    actions.appendChild(submit);
+  }
   submitRow.append(hint, actions);
   wrap.appendChild(submitRow);
 
@@ -2993,10 +2999,11 @@ async function renderChatHistory(container, agent) {
         bubble.appendChild(buildKickoffApproval(agent, bubble));
       }
 
-      // Agent-offered choices → a selectable list in the bubble. If a later
-      // user turn already answered this question, replay their picks as a
-      // read-only record (selected state shown, no Submit/Other/hint).
-      if (!isUser && choices) {
+      // Agent-offered choices → a selectable list in the bubble. A question with
+      // no preset options (skippable) still gets the bubble so it shows the
+      // "Other — hold to talk" answer path. If a later user turn already answered
+      // it, replay their picks as a read-only record.
+      if (!isUser && (choices || skippable)) {
         let answer = null;
         for (let k = i + 1; k < messages.length; k++) {
           if (messages[k].role === 'user') { answer = String(messages[k].content || ''); break; }
@@ -3004,7 +3011,7 @@ async function renderChatHistory(container, agent) {
         const picked = answer != null
           ? answer.split(/;\s*/).map(s => s.trim()).filter(Boolean)
           : undefined;
-        bubble.appendChild(buildChoiceList(choices, agent, picked, skippable));
+        bubble.appendChild(buildChoiceList(choices || [], agent, picked, skippable));
       }
 
       // Handoff bubble → a "Talk to <name> (<role>)" button (bottom-right) that
@@ -5154,6 +5161,17 @@ function exitExplorerRight() {
   else ring.paint();
 }
 
+/* Inverse of exitExplorerRight: hop focus from the main surface back INTO the
+ * explorer list (Left at the surface's left edge). Clears the ring highlight so
+ * focus visibly lives in the explorer again. Shared by the keyboard and gamepad
+ * handlers so both paths re-enter the explorer identically. */
+function enterExplorerFromSurface() {
+  if (!fileExplorerOpen) return;
+  explorerFocused = true;
+  ring.items.forEach(el => el.classList.remove('focused'));
+  paintFileFocus();
+}
+
 const fileViewerEl      = document.getElementById('file-viewer');
 const fileViewerPathEl  = fileViewerEl.querySelector('.file-viewer-path');
 const fileViewerBodyEl  = fileViewerEl.querySelector('.file-viewer-body');
@@ -5571,7 +5589,7 @@ gp.addEventListener('press', (e) => {
   }
 
   if (mode === MODE_GRID) {
-    if (fileExplorerOpen) {
+    if (fileExplorerOpen && explorerFocused) {
       // Explorer is a vertical list — Up/Down walk it; Left no-op. Right exits
       // to the right (open viewer's text box, or the first grid tile).
       if (b === 'up')                   { fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
@@ -5580,6 +5598,12 @@ gp.addEventListener('press', (e) => {
       if (b === 'right')                { exitExplorerRight(); return; }
       if (b === 'cross')                { openFocusedFile(); return; }
       if (b === 'circle')               { closeFileExplorer(); return; }
+    }
+    // Left off the leftmost grid column with the explorer open hops back in.
+    if (b === 'left' && fileExplorerOpen && !explorerFocused) {
+      const grid = surfaceEl.querySelector('.agent-grid');
+      const cols = grid?._cols || 4;
+      if ((ring.index % cols) === 0) { enterExplorerFromSurface(); return; }
     }
     if (b === 'up' || b === 'down' || b === 'left' || b === 'right') gridMove(b);
     else if (b === 'cross')   enterZoom();
@@ -5593,7 +5617,7 @@ gp.addEventListener('press', (e) => {
   }
 
   if (mode === MODE_ZOOM) {
-    if (fileExplorerOpen) {
+    if (fileExplorerOpen && explorerFocused) {
       // Explorer is a vertical list — Up/Down walk it; Left no-op. Right exits
       // to the right (open viewer's text box, or the first grid tile).
       if (b === 'up')                   { fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
@@ -5637,6 +5661,10 @@ gp.addEventListener('press', (e) => {
       if (b === 'l1')     { cycleAgent(-1); return; }
       if (b === 'r1')     { cycleAgent(+1); return; }
       return;
+    }
+    // Left at the first ring position with the explorer open hops back in.
+    if (b === 'left' && fileExplorerOpen && !explorerFocused && ring.index === 0) {
+      enterExplorerFromSurface(); return;
     }
     // Surface ring. Up from the top enters the chat history (last bubble);
     // Down from the bottom drops into the footer shortcuts rail.
@@ -6655,13 +6683,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft' && fileExplorerOpen && !explorerFocused) {
       const grid = surfaceEl.querySelector('.agent-grid');
       const cols = grid?._cols || 4;
-      if ((ring.index % cols) === 0) {
-        e.preventDefault();
-        explorerFocused = true;
-        ring.items.forEach(el => el.classList.remove('focused'));
-        paintFileFocus();
-        return;
-      }
+      if ((ring.index % cols) === 0) { e.preventDefault(); enterExplorerFromSurface(); return; }
     }
     if (dir) {
       // gridMove owns edge behavior: Down off the last content row drops into
@@ -6731,11 +6753,7 @@ window.addEventListener('keydown', (e) => {
     }
     // Left at the first ring position with explorer open hops back in.
     if (e.key === 'ArrowLeft' && fileExplorerOpen && !explorerFocused && ring.index === 0) {
-      e.preventDefault();
-      explorerFocused = true;
-      ring.items.forEach(el => el.classList.remove('focused'));
-      paintFileFocus();
-      return;
+      e.preventDefault(); enterExplorerFromSurface(); return;
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault();

@@ -3,7 +3,7 @@
  * supporting docs and assigns topology-shaped starting tasks to the team.
  * See docs/superpowers/specs/2026-06-03-pm-kickoff-design.md. */
 
-import { getRole, listRoles } from './roles.js';
+import { getRole, listRoles, kickoffPriority } from './roles.js';
 import { getProject, setKickoff, getKickoff, TOPOLOGIES, addAgent } from './projects.js';
 import { appendTurn, getContext, setLastSpec } from './scratchpad.js';
 import { getModelForRole, getRouterModel } from './models.js';
@@ -610,7 +610,13 @@ export async function executeKickoff(projectId, opts = {}) {
     // Follow-up questions, asked ONE AT A TIME. Clarify questions (whose answers
     // become that role's task) come first, then the PM's general questions.
     const clarifyQuestions = clarify.map(c => ({ q: c.question, options: c.options, role: c.role }));
-    const questions = [...clarifyQuestions, ...(await generateQuestions(project, opts))];
+    // Ask in order of importance (high → low): a role-clarify is ranked by its
+    // role (foundational/regulatory first, QA/marketing last); the PM's general
+    // questions are broadly important, so they rank high too. Stable sort keeps
+    // same-priority questions in their generated order.
+    const importance = (q) => (q.role ? kickoffPriority(q.role) : 85);
+    const questions = [...clarifyQuestions, ...(await generateQuestions(project, opts))]
+      .sort((a, b) => importance(b) - importance(a));
     if (questions.length && getProject(projectId)) {
       appendTurn(project.leadAgentId, 'assistant', questionSpec(questions[0], 1, questions.length));
       // Stash the assignments so the team starts building once Q&A wraps up.
