@@ -368,11 +368,22 @@ export async function generateKickoffDocs(projectId, opts = {}) {
   const model = getModelForRole('pm');
   for (const kind of Object.keys(DOC_TITLES)) {
     if (!getProject(projectId)) return; // deleted mid-run
-    const md = (await callText({ apiKey, model, prompt: docPrompt(kind, project), timeoutMs: 30_000 })) || '_not generated_';
+    const raw = String(await callText({ apiKey, model, prompt: docPrompt(kind, project), timeoutMs: 30_000 }) || '').trim();
     const title = DOC_TITLES[kind] + (kind === 'operating' && project.topology ? ` (${TOPOLOGIES[project.topology]?.label || project.topology})` : '');
+    if (!raw) {
+      // The model returned nothing for this doc. NEVER clobber a doc that already
+      // has real content — especially the PRD, seeded at creation with the
+      // goal / top features / team. Keep what's on disk; only write a placeholder
+      // when the doc doesn't exist yet.
+      const existing = readNote(projectId, DOC_FILENAMES[kind]);
+      if (existing && existing.trim() && !/_not generated_/i.test(existing)) continue;
+      const note = writeNote(projectId, DOC_FILENAMES[kind], `# ${title}\n\n_not generated_`);
+      publishEvent({ type: 'note_added', projectId, noteId: note.id });
+      continue;
+    }
     // Deterministic first line so the explorer label is always the doc title
     // (don't trust the model's own heading).
-    const body = `# ${title}\n\n${md.replace(/^#+\s.*\n+/, '')}`;
+    const body = `# ${title}\n\n${raw.replace(/^#+\s.*\n+/, '')}`;
     const note = writeNote(projectId, DOC_FILENAMES[kind], body);
     publishEvent({ type: 'note_added', projectId, noteId: note.id });
   }
