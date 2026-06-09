@@ -187,8 +187,9 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
   ];
 
   try {
-    // v2 status: producing tokens.
-    emitStatus(projectId, agentId, 'drafting');
+    // v2 status: producing tokens. The software engineer's generation reads as
+    // "Building" (it's writing code), everyone else as "Drafting".
+    emitStatus(projectId, agentId, agent?.role === 'sw_engineer' ? 'building' : 'drafting');
     const resp = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: {
@@ -356,7 +357,7 @@ async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
  * tile path (action intents, empty output, or classify failure). */
 async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate = 0, effort = 'high' }) {
   if (await classifyIntent({ apiKey, text }) !== 'answer') return null;
-  emitStatus(projectId, agentId, 'drafting');
+  emitStatus(projectId, agentId, agent?.role === 'sw_engineer' ? 'building' : 'drafting');
   const history = getContext(agentId).messages.slice(0, -1);
   const messages = [
     { role: 'system', content: proseSystemPrompt({ project, agent, sharedFrom }) },
