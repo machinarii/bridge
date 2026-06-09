@@ -1,9 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadBaseCharter, validateCharterMarkdown, FALLBACK_REASON, deepenCharters } from './charters.js';
+import { listRoles } from './roles.js';
 import { mkdtempSync, writeFileSync as wfs, rmSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+test('every active role baseline has the three required charter headings', () => {
+  for (const r of listRoles()) {
+    const md = loadBaseCharter(r.id);
+    const v = validateCharterMarkdown(md);
+    assert.equal(v.ok, true, `role ${r.id} invalid: ${v.reason || ''}`);
+    assert.match(md, /^# /, `role ${r.id} missing top-level title`);
+  }
+});
 
 test('loadBaseCharter returns the file contents for a known role', () => {
   const md = loadBaseCharter('pm');
