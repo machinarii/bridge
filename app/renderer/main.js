@@ -2520,7 +2520,7 @@ function buildKickoffApproval(agent, bubble) {
   return row;
 }
 
-/* A handoff bubble's bottom-right "Talk to <name> (<role>)" button. Reuses the
+/* A handoff bubble's bottom-right "Talk to <name>" button. Reuses the
  * kickoff action-row layout so it's reachable via the bubble's keyboard/gamepad
  * model (cycleBubbleAction recognizes .bubble-kickoff-actions button). */
 function buildHandoffButton(handoffTo) {
@@ -2529,7 +2529,13 @@ function buildHandoffButton(handoffTo) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'role-confirm';
-  btn.textContent = `Talk to ${handoffTo.label}`;
+  // The bubble already names the agent WITH their role, so the button only needs
+  // the name. Prefer the live roster name; fall back to the label minus any
+  // "(role)" suffix, then the raw label.
+  const name = activeProject?.agents?.find(a => a.id === handoffTo.agentId)?.name
+    || String(handoffTo.label || '').replace(/\s*\(.*\)\s*$/, '').trim()
+    || handoffTo.label;
+  btn.textContent = `Talk to ${name}`;
   btn.addEventListener('click', (e) => { e.stopPropagation(); openAgentById(handoffTo.agentId); });
   row.appendChild(btn);
   return row;
