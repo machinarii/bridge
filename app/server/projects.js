@@ -13,7 +13,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, renameSync 
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRole, listRoles, FALLBACK_NAMES } from './roles.js';
-import { writeBaselineCharters, generateProjectCharters, charterFileNameFor, legacyCharterFileNames } from './charters.js';
+import { writeBaselineCharters, deepenCharters, charterFileNameFor, legacyCharterFileNames } from './charters.js';
 import { resolveRepoPath, ensureRepo, commitIfChanged } from './workspace.js';
 import { clearContext } from './scratchpad.js';
 
@@ -262,10 +262,19 @@ export async function addAgent(projectId, roleId) {
   };
   p.agents.push(agent);
   save();
-  // Only generate the new agent's charter — the rest are unchanged, so
-  // regenerating the whole team was N redundant OpenRouter calls per add.
-  try { await generateProjectCharters(p, { agents: [agent] }); }
-  catch (err) { console.warn(`[addAgent] charter generation failed: ${err.message}`); }
+  // Charter for the new agent: if a PRD already exists, tailor from it; else
+  // write the baseline verbatim (the deep pass runs for everyone at kickoff).
+  // Read PRD.md directly — importing backends/notes.js here would cycle.
+  try {
+    let prd = '';
+    const prdPath = resolve(p.repoPath, 'docs', 'PRD.md');
+    if (existsSync(prdPath)) prd = readFileSync(prdPath, 'utf8');
+    if (prd && !/^_?not generated_?$/i.test(prd.trim())) {
+      await deepenCharters(p, { prd, agents: [agent] });
+    } else {
+      writeBaselineCharters(p, { agents: [agent] });
+    }
+  } catch (err) { console.warn(`[addAgent] charter generation failed: ${err.message}`); }
   return p;
 }
 
