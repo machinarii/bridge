@@ -66,6 +66,22 @@ export function loadBaseCharter(roleId) {
   const role = getRole(roleId);
   if (!role) throw new Error(`unknown role: ${roleId}`);
   const fname = charterFileName(role);
+  // Optional drop-in override: a folder of charter-format files the user can
+  // regenerate from newer skills offline. A present, VALID override wins; an
+  // invalid/unreadable one is ignored (fall through to the bundled template).
+  const dir = process.env.BRIDGE_CHARTERS_DIR || '';
+  if (dir) {
+    const op = resolve(dir, fname);
+    if (existsSync(op)) {
+      try {
+        const md = readFileSync(op, 'utf8');
+        if (validateCharterMarkdown(md).ok) return md;
+        console.warn(`[charters] override ${fname} failed validation; using bundled`);
+      } catch (err) {
+        console.warn(`[charters] override ${fname} unreadable: ${err.message}; using bundled`);
+      }
+    }
+  }
   const path = resolve(CHARTERS_DIR, fname);
   if (!existsSync(path)) throw new Error(`missing base charter: ${fname}`);
   return readFileSync(path, 'utf8');
