@@ -141,12 +141,18 @@ async function proposeBuildOrClose(projectId, ct, apiKey, project, opts) {
       appendTurn(project.leadAgentId, 'assistant', handoff);
       emitNotification({ kind: 'info', projectId, title: 'Build handed to engineering',
                          body: `${swe.name} has the build plan for ${project.name}.` });
+      // The build is the engineer's (it still awaits the user's "Build it"). The
+      // REST of the team starts their tasks now, in parallel — they don't wait
+      // for the build. Exclude the engineer (already has the build handoff).
+      startTeamWork(projectId, opts, { excludeAgentId: swe.id });
       return { handled: true, intent: 'build_handoff', spec: handoff };
     }
     // No separate engineer available — keep the plan in the lead chat (fallback).
     appendTurn(project.leadAgentId, 'assistant', spec);
     setKickoff(projectId, { status: 'build_pending', buildAgentId: project.leadAgentId });
     emitActivity(projectId, 'PM: build plan ready', project.leadAgentId, { awaitKind: 'reply' });
+    // Still delegate the rest of the team in parallel (lead owns the build here).
+    startTeamWork(projectId, opts, { excludeAgentId: project.leadAgentId });
     return { handled: true, intent: 'build_plan', spec };
   }
   const spec = closingSpec("Thanks — that's everything I needed. Kickoff is complete: the docs are up to date and the team has its starting tasks. Ask me anything from here.");
@@ -467,7 +473,7 @@ export async function assignKickoffTasks(projectId, opts = {}) {
  * each role-based assignment we resolve (or auto-add) the agent, announce any
  * additions, then fan out — each agent runs its task so its tile lights up and
  * it produces a first deliverable, all shaped by the project topology. */
-async function startTeamWork(projectId, opts = {}) {
+async function startTeamWork(projectId, opts = {}, { excludeAgentId = null } = {}) {
   if (opts.callText) return;   // injected/unit-test mode — don't hit the network
   const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
   if (!apiKey || apiKey.includes('replace-me')) return;
@@ -508,6 +514,7 @@ async function startTeamWork(projectId, opts = {}) {
   const pmName = project.agents.find(a => a.id === project.leadAgentId)?.name || 'PM';
   const pmRole = getRole('pm').label;
   for (const r of resolved) {
+    if (r.agentId === excludeAgentId) continue;   // e.g. the engineer already has the build handoff
     // The assignment itself sets no pending state; the agent's reply decides it
     // ("Task complete" for a deliverable, "Waiting for response" for a question).
     // The task records as a PM→agent handoff bubble, not a "you" bubble.
