@@ -128,60 +128,6 @@ async function callOpenRouter({ apiKey, model, prompt, timeoutMs = CHARTER_TIMEO
   }
 }
 
-/** Customize one role's charter for a project. Always returns the markdown
- *  that should be written to disk — falling back to base on any failure. */
-export async function customizeCharter({ projectName, goal, agentName, roleId }) {
-  const base = loadBaseCharter(roleId);
-  const role = getRole(roleId);
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey || apiKey.includes('replace-me')) {
-    return { markdown: base, customized: false, reason: FALLBACK_REASON.NO_KEY };
-  }
-  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4.5';
-  const prompt =
-    `${agentName} (the ${role.label} on project "${projectName}") has this base charter:\n\n` +
-    `${base}\n\n` +
-    `The project goal is:\n"${goal}"\n\n` +
-    `Rewrite the charter so it reflects this project's specifics. Keep the same markdown structure ` +
-    `(the headings ## Role, ## Typical tasks, ## Areas of expertise must remain). Replace generic ` +
-    `items with project-specific ones. 200 words max. Output only markdown — no code fences, no commentary.`;
-  const r = await callOpenRouter({ apiKey, model, prompt });
-  if (!r.ok) return { markdown: base, customized: false, reason: r.reason };
-  const v = validateCharterMarkdown(r.content);
-  if (!v.ok)   return { markdown: base, customized: false, reason: FALLBACK_REASON.INVALID };
-  return { markdown: r.content, customized: true };
-}
-
-/** Customize roles for a project in parallel, with a hard cap on concurrent
- *  in-flight requests. Writes results to disk. Pass `agents` to regenerate only
- *  a subset (e.g. just the newly-added agent) instead of the whole team. */
-export async function generateProjectCharters(project, { concurrency = 5, agents } = {}) {
-  const targets = agents || project.agents;
-  const tasks = targets.map(a => async () => {
-    const r = await customizeCharter({
-      projectName: project.name,
-      goal: project.goal,
-      agentName: a.name,
-      roleId: a.role,
-    });
-    const rolesDir = resolve(project.repoPath, 'docs', 'roles');
-    mkdirSync(rolesDir, { recursive: true });
-    const path = resolve(rolesDir, charterFileName(getRole(a.role)));
-    writeFileSync(path, r.markdown, 'utf8');
-    return { agentId: a.id, roleId: a.role, customized: r.customized, reason: r.reason };
-  });
-  const results = [];
-  let cursor = 0;
-  async function worker() {
-    while (cursor < tasks.length) {
-      const i = cursor++;
-      results.push(await tasks[i]());
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, worker));
-  return results;
-}
-
 /** Write each agent's BASELINE charter verbatim to <repo>/docs/roles/ — no
  *  network call. Used at project creation so role files populate instantly; the
  *  deep, PRD-aware pass (deepenCharters) upgrades them during kickoff. Pass

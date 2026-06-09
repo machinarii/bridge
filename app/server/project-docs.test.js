@@ -71,10 +71,10 @@ test('createProject writes baseline charters WITHOUT any model call', async () =
   const base = mkdtempSync(join(tmpdir(), 'bridge-ws-'));
   const prev = process.env.BRIDGE_PROJECTS_BASE;
   process.env.BRIDGE_PROJECTS_BASE = base;
-  // Set a key so this is a real guard: the OLD code path (generateProjectCharters
-  // → customizeCharter) would attempt a fetch when a key is present, and the
-  // throwing stub below would fail the test. Baseline-only creation makes no
-  // call regardless, so it passes — proving creation is unconditionally network-free.
+  // Set a key so this is a real guard: any model-customization-at-create path
+  // would attempt a fetch when a key is present, and the throwing stub below
+  // would fail the test. Baseline-only creation makes no call regardless, so it
+  // passes — proving creation is unconditionally network-free.
   const prevKey = process.env.OPENROUTER_API_KEY;
   process.env.OPENROUTER_API_KEY = 'test-key-should-not-be-used';
   const realFetch = globalThis.fetch;
