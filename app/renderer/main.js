@@ -2610,10 +2610,22 @@ function buildChoiceList(choices, agent, picked, skippable = false) {
     `<span class="choice-other-label">Other</span>` +
     `<span class="choice-other-sub">Hold to talk</span>` +
     `<span class="choice-other-wave" aria-hidden="true">${'<i></i>'.repeat(9)}</span>`;
-  other.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); startOtherDictate(other); });
-  other.addEventListener('pointerup',     () => endOtherDictate());
-  other.addEventListener('pointercancel', () => endOtherDictate());
-  other.addEventListener('pointerleave',  () => endOtherDictate());
+  other.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    // Capture the pointer so the hold survives layout shifts. Starting dictation
+    // appends the "…" pending bubble (showPendingBubble) and scrolls, which moves
+    // THIS button out from under a stationary cursor. Without capture that fires
+    // pointerleave and cancels the hold. Capture binds the pointer to the button
+    // until release, so only pointerup/cancel end it.
+    try { other.setPointerCapture(e.pointerId); } catch {}
+    startOtherDictate(other);
+  });
+  other.addEventListener('pointerup',           () => endOtherDictate());
+  other.addEventListener('pointercancel',       () => endOtherDictate());
+  // No pointerleave ender — with capture the pointer stays bound to the button and
+  // release ends the hold wherever the cursor is. lostpointercapture is a safety
+  // net (e.g. the button is removed mid-hold) so dictation never gets stuck on.
+  other.addEventListener('lostpointercapture',  () => endOtherDictate());
   opts.appendChild(other);
 
   wrap.appendChild(opts);
