@@ -62,6 +62,18 @@ test('startKickoff posts a plan turn and sets awaiting_approval', async () => {
   } finally { deleteProject(p.id); }
 });
 
+test('startKickoff role-tags any teammate named in the plan body', async () => {
+  const p = await createProject({ name: 'Tag KO', goal: 'do X', roleIds: ['pm', 'designer'], topology: 'mesh-mob' });
+  try {
+    const designer = p.agents.find(a => a.role === 'designer');
+    // The model names the teammate by bare first name; startKickoff must role-tag it.
+    await startKickoff(p.id, { callText: async () => `First, ${designer.name} sketches the screens.` });
+    const k = getKickoff(p.id);
+    const spec = JSON.parse(getContext(p.leadAgentId).messages[k.planTurnIndex].content);
+    assert.match(spec.body, new RegExp(`${designer.name} \\(Designer\\)`), 'teammate name paired with role');
+  } finally { deleteProject(p.id); }
+});
+
 test('startKickoff with no api key skips and marks skipped_no_key', async () => {
   const p = await createProject({ name: 'NoKey KO', goal: 'do Y', roleIds: ['pm'], topology: null });
   try {

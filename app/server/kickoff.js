@@ -319,8 +319,11 @@ export async function startKickoff(projectId, opts = {}) {
   // PM is now actively drafting the plan — light up the L1 tile ("Drafting")
   // and the L2 thinking bubble while the model works.
   emitStatus(projectId, project.leadAgentId, 'drafting');
-  const body = (await callText({ apiKey, model: getModelForRole('pm'), prompt: buildPlanPrompt(project) }))
+  const rawBody = (await callText({ apiKey, model: getModelForRole('pm'), prompt: buildPlanPrompt(project) }))
     || 'I\'ll draft a PRD, a roadmap, team operating notes, and an open-questions doc, then assign each teammate a starting task.';
+  // Always pair a teammate's name with their role ("Kade (Software Engineer)").
+  // Deterministic + idempotent — won't double-tag a name the model already labeled.
+  const body = annotateAgentMentions(rawBody, project.agents);
   appendTurn(project.leadAgentId, 'assistant', planSpec(body));
   const planTurnIndex = getContext(project.leadAgentId).messages.length - 1;
   setKickoff(projectId, { status: 'awaiting_approval', planTurnIndex });
