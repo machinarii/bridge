@@ -261,28 +261,8 @@ export function buildPlanPrompt(project) {
 
 /** Markdown/text chat-completion call (no JSON response_format). Returns the
  *  assistant string, or '' on failure. Exposed via opts.callText for tests. */
-export async function callOpenRouterText({ apiKey, model, prompt, timeoutMs = PLAN_TIMEOUT_MS }) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const r = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json',
-                 'HTTP-Referer': 'http://localhost/bridge', 'X-Title': 'Bridge - kickoff' },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
-      signal: ctrl.signal,
-    });
-    if (!r.ok) {
-      console.warn(`[openrouter] ${model} → HTTP ${r.status}: ${(await r.text().catch(() => '')).slice(0, 300)}`);
-      return '';
-    }
-    const data = await r.json();
-    const content = data?.choices?.[0]?.message?.content || '';
-    if (!content) console.warn(`[openrouter] ${model} → empty content (finish_reason: ${data?.choices?.[0]?.finish_reason || '?'})`);
-    return content;
-  } catch (err) { console.warn(`[openrouter] ${model} → ${err?.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : (err?.message || err)}`); return ''; }
-  finally { clearTimeout(timer); }
-}
+export { callOpenRouterText } from './llm.js';
+import { callOpenRouterText } from './llm.js';
 
 // The kickoff plan is presented as a selectable question (the question-bubble
 // module) rather than an Approve/Reject gate. The first two options proceed;
