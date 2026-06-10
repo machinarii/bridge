@@ -24,6 +24,30 @@ const shortcutsRailEl = document.getElementById('shortcuts-rail');
 const primaryShortcutEl = document.getElementById('primary-shortcut');
 const backShortcutEl   = document.getElementById('back-shortcut');
 
+/* ---------- UI navigation sound effects ----------
+ * Short audio cues for moving around the zoom hierarchy:
+ *   navigate → lateral switch between siblings (project↔project on L1,
+ *              agent↔agent on L2)
+ *   zoomout  → stepping up a level (L2→L1, L1→L0)
+ * Files are served from app/renderer/sounds (see /sounds static path).
+ * Preloaded once; play() clones the element so rapid repeats overlap
+ * instead of cutting each other off. Playback failures (autoplay policy,
+ * missing file) are swallowed — sound is never load-bearing. */
+const SFX = {
+  navigate: new Audio('sounds/ui-sound-navigate.m4a'),
+  zoomout:  new Audio('sounds/ui-sound-zoomout.m4a'),
+};
+Object.values(SFX).forEach(a => { a.preload = 'auto'; a.volume = 0.5; });
+function playSfx(name) {
+  const base = SFX[name];
+  if (!base) return;
+  try {
+    const a = base.cloneNode();
+    a.volume = base.volume;
+    a.play().catch(() => {});
+  } catch { /* sound is best-effort */ }
+}
+
 /** Set the persistent shortcuts rail at bottom-right. Pass an array of
  *  { gamepad, keyboard, label, action } — both glyphs render and CSS
  *  hides the inactive one based on body[data-input-mode]. Each chip is
@@ -1271,6 +1295,7 @@ async function openFocused() {
   const sourceTile = ring.current();
   const sourceRect = sourceTile?.getBoundingClientRect();
   const targetRect = surfaceContentRect();
+  playSfx('navigate');   // L0 → L1 (project tile selected; also "+ New")
   if (idx === tileCount() - 1) {
     // "+ New" — enter create flow with the same morph as a project tile.
     newProjRoleIds = [];
@@ -2368,6 +2393,7 @@ function gridMove(dir) {
   if (!grid) return;
   const next = stepGrid(grid, ring.index, ring.elements.length, dir);
   if (next == null) return;   // consumed by footer entry / rubberband
+  playSfx('navigate');   // agent → agent (cursor move on L1 grid)
   ring.index = next;
   gridIndex = next;
   ring.paint();
@@ -2388,6 +2414,7 @@ async function enterZoom(specOverride) {
     // routes to the add-agent handler (→ L1 grid), not the grid's circle
     // handler (→ L0). openAddAgentPicker re-sets it at the handoff.
     mode = MODE_ADD_AGENT;
+    playSfx('navigate');   // L1 → add-agent picker ("+ Add agent" tile selected)
     await forwardMorph(addTile, addRect, surfaceContentRect(), () => openAddAgentPicker());
     return;
   }
@@ -2401,6 +2428,7 @@ async function enterZoom(specOverride) {
     return;
   }
   _focusLastOnNextChatRender = true;   // navigated INTO the agent → focus its last bubble
+  playSfx('navigate');   // L1 → L2 (agent tile selected)
   const sourceTile = ring.current();
   const sourceRect = sourceTile?.getBoundingClientRect();
   const targetRect = surfaceContentRect();
@@ -3576,6 +3604,7 @@ function _setL2Shortcuts() {
 async function exitZoom() {
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
+  playSfx('zoomout');   // L2 → L1
   const fromAgentId = currentAgent()?.id;
   popZoomRect();
   await backZoomWithSnapshot(
@@ -3602,6 +3631,7 @@ function cycleProject(delta) {
   if (nextIdx < 0 || nextIdx >= projects.length) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
+  playSfx('navigate');   // project → project
   slideAgent(delta, () => {
     activeProject = withLeadFirst(projects[nextIdx]);
     gridIndex = 0;
@@ -3631,6 +3661,7 @@ function cycleAgent(delta) {
   if (i < 0 || i >= n) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
+  playSfx('navigate');   // agent → agent
   _focusLastOnNextChatRender = true;   // switched to another agent → focus its last bubble
   slideAgent(delta, () => { zoomedIndex = i; renderZoom(); });
 }
@@ -4937,6 +4968,7 @@ function pickerMove(dir) {
   if (!grid) return;
   const next = stepGrid(grid, ring.index, ring.elements.length, dir);
   if (next == null) return;   // consumed by footer entry / rubberband
+  playSfx('navigate');   // project → project (cursor move on L0 home grid)
   ring.index = next;
   pickerIndex = next;
   ring.paint();
@@ -4945,6 +4977,7 @@ function pickerMove(dir) {
 async function exitToProjects() {
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
+  playSfx('zoomout');   // L1 → L0
   closeFileViewer();
   if (fileExplorerOpen) closeFileExplorer();
   if (memoryDrawerOpen) closeMemoryDrawer();
