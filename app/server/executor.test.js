@@ -88,3 +88,41 @@ test('without an API key a question blocks immediately (no PM call)', async () =
     assert.equal(pmCalled, false);
   } finally { deleteProject(p.id); }
 });
+
+test('a delegate reply enqueues a task for the teammate and both complete', async () => {
+  const p = await createProject({ name: 'Exec Delegate', goal: 'g', roleIds: ['pm', 'designer', 'sw_engineer'], topology: 'hub-and-spoke' });
+  try {
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    const swe = getProject(p.id).agents.find(a => a.role === 'sw_engineer');
+    const interpret = async ({ agentId }) => {
+      if (agentId === designer.id) {
+        return { intent: 'delegate', to_role: 'sw_engineer', task: 'implement the landing page', body: 'engineering work' };
+      }
+      return { intent: 'answer', template: 'reader', title: 'Done', body: 'Landing page implemented.' };
+    };
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'build the landing page' }, { interpret });
+    await drain(p.id, { interpret });
+    const tasks = listTasks(p.id);
+    assert.equal(tasks.length, 2, 'delegation created a second task');
+    assert.ok(tasks.every(t => t.status === 'done'));
+    const child = tasks.find(t => t.agentId === swe.id);
+    assert.equal(child.description, 'implement the landing page');
+    assert.equal(child.from.agentId, designer.id);
+  } finally { deleteProject(p.id); }
+});
+
+test('a delegate to a role not on the team auto-adds the agent', async () => {
+  const p = await createProject({ name: 'Exec AutoAdd', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    const interpret = async ({ agentId }) =>
+      agentId === designer.id
+        ? { intent: 'delegate', to_role: 'sw_engineer', task: 'wire it up', body: '' }
+        : { intent: 'answer', template: 'reader', title: 'Done', body: 'Wired.' };
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'ship it' }, { interpret });
+    await drain(p.id, { interpret });
+    const swe = getProject(p.id).agents.find(a => a.role === 'sw_engineer');
+    assert.ok(swe, 'sw_engineer auto-added');
+    assert.ok(listTasks(p.id).every(t => t.status === 'done'));
+  } finally { deleteProject(p.id); }
+});
