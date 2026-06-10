@@ -126,3 +126,34 @@ test('a delegate to a role not on the team auto-adds the agent', async () => {
     assert.ok(listTasks(p.id).every(t => t.status === 'done'));
   } finally { deleteProject(p.id); }
 });
+
+test('a thrown turn retries once, then succeeds', async () => {
+  const p = await createProject({ name: 'Exec Retry', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    let calls = 0;
+    const interpret = async () => {
+      if (++calls === 1) throw new Error('OpenRouter 502');
+      return { intent: 'answer', template: 'reader', title: 'Done', body: 'ok' };
+    };
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'flaky task' }, { interpret });
+    await drain(p.id, { interpret });
+    const [t] = listTasks(p.id);
+    assert.equal(t.status, 'done');
+    assert.equal(t.attempts, 2);
+  } finally { deleteProject(p.id); }
+});
+
+test('a turn that keeps throwing fails after MAX_ATTEMPTS', async () => {
+  const p = await createProject({ name: 'Exec Fail', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    const interpret = async () => { throw new Error('OpenRouter 500'); };
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'doomed task' }, { interpret });
+    await drain(p.id, { interpret });
+    const [t] = listTasks(p.id);
+    assert.equal(t.status, 'failed');
+    assert.equal(t.attempts, 2);
+    assert.match(t.output, /500/);
+  } finally { deleteProject(p.id); }
+});
