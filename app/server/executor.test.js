@@ -38,3 +38,53 @@ test('a deliverable reply marks the task done and reports to the PM', async () =
     assert.ok(listNotes(p.id).some(n => /deliverable/i.test(n.id)), 'deliverable doc written');
   } finally { deleteProject(p.id); }
 });
+
+const { tasksForAgent } = await import('./tasks.js');
+
+const questionSpec = (body, choices) => ({ intent: 'answer', template: 'reader', title: 'Q', body, choices });
+
+test('a question the PM can answer resumes the agent without the user', async () => {
+  const p = await createProject({ name: 'Exec PM Answer', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    const seen = [];
+    const interpret = async ({ text }) => {
+      seen.push(text);
+      if (seen.length === 1) return questionSpec('Dark or light theme?', ['Dark', 'Light']);
+      return { intent: 'answer', template: 'reader', title: 'Done', body: 'Dark theme it is.' };
+    };
+    const callText = async () => 'Dark';   // the PM answers decisively
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'pick a theme' }, { interpret, callText, apiKey: 'k' });
+    await drain(p.id, { interpret, callText, apiKey: 'k' });
+    const [t] = listTasks(p.id);
+    assert.equal(t.status, 'done');
+    assert.deepEqual(seen, ['pick a theme', 'Dark'], 'PM answer became the agent\'s next turn');
+  } finally { deleteProject(p.id); }
+});
+
+test('a question the PM cannot answer blocks on the user', async () => {
+  const p = await createProject({ name: 'Exec Blocked', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    const interpret = async () => questionSpec('What is your budget?', ['$10', '$100']);
+    const callText = async () => 'ASK USER';
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'estimate cost' }, { interpret, callText, apiKey: 'k' });
+    await drain(p.id, { interpret, callText, apiKey: 'k' });
+    assert.equal(listTasks(p.id)[0].status, 'blocked_on_user');
+    assert.equal(tasksForAgent(designer.id, 'blocked_on_user').length, 1);
+  } finally { deleteProject(p.id); }
+});
+
+test('without an API key a question blocks immediately (no PM call)', async () => {
+  const p = await createProject({ name: 'Exec NoKey', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    const interpret = async () => questionSpec('Q?', ['A', 'B']);
+    let pmCalled = false;
+    const callText = async () => { pmCalled = true; return 'A'; };
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'task' }, { interpret, callText, apiKey: '' });
+    await drain(p.id, { interpret, callText, apiKey: '' });
+    assert.equal(listTasks(p.id)[0].status, 'blocked_on_user');
+    assert.equal(pmCalled, false);
+  } finally { deleteProject(p.id); }
+});
