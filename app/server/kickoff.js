@@ -15,6 +15,7 @@ import { deepenCharters } from './charters.js';
 import { startTeamReview, currentReviewAgent, recordPlan, teamReviewQuestion } from './team-review.js';
 import { enqueueTask } from './executor.js';
 import { runAndFix, classifyFailure } from './run-fix.js';
+import { startPreview } from './preview.js';
 
 // After kickoff Q&A, the PM proposes a build plan as a selectable question.
 const BUILD_CHOICES = ['Build it', 'Hold off — let me adjust'];
@@ -797,7 +798,22 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     const r = await runAndFix(projectId, { callText: opts.callText || callOpenRouterText, runner: opts.runner, apiKey });
     let body;
     if (r.daemonDown) body = "I couldn't reach the Docker engine — start it (e.g. `colima start`) and say \"Run it\" again.";
-    else if (r.ok) body = `✅ It runs — install, build, and tests all pass${r.rounds ? ` (after ${r.rounds} fix round${r.rounds === 1 ? '' : 's'})` : ''}. Everything's committed in the project repo.`;
+    else if (r.ok) {
+      body = `✅ It runs — install, build, and tests all pass${r.rounds ? ` (after ${r.rounds} fix round${r.rounds === 1 ? '' : 's'})` : ''}. Everything's committed in the project repo.`;
+      // Keep the app running in a preview container and hand the user a link to
+      // verify it themselves. Best-effort: a preview failure never spoils the
+      // green report. Skipped in unit-test mode (injected runner, no previewer).
+      const previewer = opts.startPreview || (opts.runner ? null : startPreview);
+      if (previewer) {
+        try {
+          const prev = await previewer(projectId);
+          if (prev.ok) {
+            body += `\n\nTry it yourself: [${prev.url}](${prev.url})` +
+                    (prev.ready ? '' : ' — still booting, give it a few seconds') + '.';
+          }
+        } catch (e) { console.warn('[preview]', e?.message); }
+      }
+    }
     else {
       const cls = classifyFailure(r.lastStep, r.lastOutput);
       const note = cls.kind === 'environment'

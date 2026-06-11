@@ -51,3 +51,24 @@ test('run_pending + "Run it" with Docker down → asks to start Docker, stays ru
     assert.match(JSON.parse(r.spec).body, /Docker/i);
   } finally { deleteProject(p.id); }
 });
+
+test('green run with a preview up includes a clickable verify link', async () => {
+  const p = await runReady('Run Preview');
+  try {
+    const startPreview = async () => ({ ok: true, url: 'http://localhost:4512', ready: true });
+    const r = await handleLeadMessageDuringKickoff(p.id, 'Run it',
+      { runner: async () => ({ exitCode: 0, output: 'ok' }), callText: async () => '{}', startPreview });
+    assert.equal(r.intent, 'verified');
+    assert.match(JSON.parse(r.spec).body, /\[http:\/\/localhost:4512\]\(http:\/\/localhost:4512\)/, 'markdown link present');
+  } finally { deleteProject(p.id); }
+});
+
+test('green run without a previewer (unit-test mode) keeps the plain message', async () => {
+  const p = await runReady('Run NoPreview');
+  try {
+    const r = await handleLeadMessageDuringKickoff(p.id, 'Run it',
+      { runner: async () => ({ exitCode: 0, output: 'ok' }), callText: async () => '{}' });
+    assert.equal(r.intent, 'verified');
+    assert.doesNotMatch(JSON.parse(r.spec).body, /localhost:45/, 'no preview link in test mode');
+  } finally { deleteProject(p.id); }
+});
