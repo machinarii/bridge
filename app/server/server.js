@@ -20,6 +20,8 @@ import {
   notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
 } from './autosave.js';
 import { subscribe as subscribeEvents, publish as publishEvent } from './events.js';
+import { listTasks } from './tasks.js';
+import { resolveBlockedForAgent } from './executor.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -525,6 +527,9 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
   const { pid, aid } = req.params;
   const text = String(req.body?.text || '').trim();
   if (!text) return res.status(400).json({ error: 'empty intent' });
+  // A user message to an agent whose executor task is blocked on them resumes
+  // the work in chat — close the executor's claim on it.
+  resolveBlockedForAgent(aid);
   const regenerate = Number(req.body?.regenerate) || 0;
   const effort = String(req.body?.effort || 'high');
   try {
@@ -564,6 +569,12 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
     console.error(`[interpret:${aid}]`, err);
     res.status(500).json({ error: String(err?.message || err) });
   }
+});
+
+// Executor task list for a project — status of every queued / in-progress /
+// blocked / done / failed agent task (renderer task panel + debugging).
+app.get('/projects/:pid/tasks', (req, res) => {
+  res.json({ tasks: listTasks(req.params.pid) });
 });
 
 app.post('/projects/:pid/agents/:aid/spec', (req, res) => {
