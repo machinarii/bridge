@@ -28,6 +28,7 @@ const backShortcutEl   = document.getElementById('back-shortcut');
  * Short audio cues for moving around the zoom hierarchy:
  *   navigate → lateral switch between siblings (project↔project on L1,
  *              agent↔agent on L2)
+ *   zoomin   → selecting into a level (L0→L1 project, L1→L2 agent)
  *   zoomout  → stepping up a level (L2→L1, L1→L0)
  * Files are served from app/renderer/sounds (see /sounds static path).
  * Preloaded once; play() clones the element so rapid repeats overlap
@@ -35,6 +36,7 @@ const backShortcutEl   = document.getElementById('back-shortcut');
  * missing file) are swallowed — sound is never load-bearing. */
 const SFX = {
   navigate: new Audio('sounds/ui-sound-navigate.m4a'),
+  zoomin:   new Audio('sounds/ui-sound-zoomin.m4a'),
   zoomout:  new Audio('sounds/ui-sound-zoomout.m4a'),
 };
 Object.values(SFX).forEach(a => { a.preload = 'auto'; a.volume = 0.5; });
@@ -1295,7 +1297,7 @@ async function openFocused() {
   const sourceTile = ring.current();
   const sourceRect = sourceTile?.getBoundingClientRect();
   const targetRect = surfaceContentRect();
-  playSfx('navigate');   // L0 → L1 (project tile selected; also "+ New")
+  playSfx('zoomin');   // L0 → L1 (project tile selected; also "+ New")
   if (idx === tileCount() - 1) {
     // "+ New" — enter create flow with the same morph as a project tile.
     newProjRoleIds = [];
@@ -2414,7 +2416,7 @@ async function enterZoom(specOverride) {
     // routes to the add-agent handler (→ L1 grid), not the grid's circle
     // handler (→ L0). openAddAgentPicker re-sets it at the handoff.
     mode = MODE_ADD_AGENT;
-    playSfx('navigate');   // L1 → add-agent picker ("+ Add agent" tile selected)
+    playSfx('zoomin');   // L1 → add-agent picker ("+ Add agent" tile selected)
     await forwardMorph(addTile, addRect, surfaceContentRect(), () => openAddAgentPicker());
     return;
   }
@@ -2428,7 +2430,7 @@ async function enterZoom(specOverride) {
     return;
   }
   _focusLastOnNextChatRender = true;   // navigated INTO the agent → focus its last bubble
-  playSfx('navigate');   // L1 → L2 (agent tile selected)
+  playSfx('zoomin');   // L1 → L2 (agent tile selected)
   const sourceTile = ring.current();
   const sourceRect = sourceTile?.getBoundingClientRect();
   const targetRect = surfaceContentRect();
