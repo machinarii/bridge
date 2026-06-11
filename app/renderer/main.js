@@ -44,7 +44,7 @@ const SFX_FILES = {
 // Perceived loudness is logarithmic: linear gain 0.12 ≈ -12dB from the
 // original 0.5 ≈ roughly half as loud to the ear. Small linear cuts
 // (e.g. ×0.7 = -3dB) are barely audible — adjust in big steps.
-const SFX_VOLUME = 0.12;                    // default per-play gain
+const SFX_VOLUME = 0.084;                   // default per-play gain
 const SFX_VOLUMES = {                       // per-sound overrides
   swooshNext: 0.02,
   swooshPrev: 0.02,
