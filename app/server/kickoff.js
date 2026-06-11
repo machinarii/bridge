@@ -13,6 +13,7 @@ import { commitIfChanged } from './workspace.js';
 import { generateBuildPlan, runScaffold } from './scaffold.js';
 import { deepenCharters } from './charters.js';
 import { startTeamReview, currentReviewAgent, recordPlan, teamReviewQuestion } from './team-review.js';
+import { enqueueTask } from './executor.js';
 import { runAndFix, classifyFailure } from './run-fix.js';
 
 // After kickoff Q&A, the PM proposes a build plan as a selectable question.
@@ -173,7 +174,7 @@ async function proposeBuildOrClose(projectId, ct, apiKey, project, opts) {
   startTeamWork(projectId, opts);
   return { handled: true, intent: 'questions_done', spec };
 }
-import { RESPONSE_STYLE, interpretIntent } from './orchestrator.js';
+import { RESPONSE_STYLE } from './orchestrator.js';
 
 export const DOC_TITLES = {
   prd:       'PRD',
@@ -477,10 +478,10 @@ export async function assignKickoffTasks(projectId, opts = {}) {
  * each role-based assignment we resolve (or auto-add) the agent, announce any
  * additions, then fan out — each agent runs its task so its tile lights up and
  * it produces a first deliverable, all shaped by the project topology. */
-async function startTeamWork(projectId, opts = {}, { excludeAgentId = null } = {}) {
-  if (opts.callText) return;   // injected/unit-test mode — don't hit the network
+export async function startTeamWork(projectId, opts = {}, { excludeAgentId = null } = {}) {
+  if (opts.callText && !opts.interpret) return;   // injected/unit-test mode — don't hit the network
   const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
-  if (!apiKey || apiKey.includes('replace-me')) return;
+  if (!opts.interpret && (!apiKey || apiKey.includes('replace-me'))) return;
   let project = getProject(projectId);
   if (!project) return;
   const assignments = getKickoff(projectId).assignments || [];
@@ -513,22 +514,12 @@ async function startTeamWork(projectId, opts = {}, { excludeAgentId = null } = {
     emitActivity(projectId, `PM: added ${added.length} teammate${added.length === 1 ? '' : 's'}`, project.leadAgentId);
   }
 
-  // Fan out: each agent starts on its task. Fire-and-forget so completion isn't
-  // blocked; interpretIntent emits status (analyzing/drafting) on its own.
-  const pmName = project.agents.find(a => a.id === project.leadAgentId)?.name || 'PM';
-  const pmRole = getRole('pm').label;
+  // Fan out through the executor: each assignment becomes a persisted task the
+  // drain loop runs (handoff bubble + delegate event happen inside runTask, and
+  // the agent's reply settles the task — done / blocked_on_user / delegated).
   for (const r of resolved) {
     if (r.agentId === excludeAgentId) continue;   // e.g. the engineer already has the build handoff
-    // The assignment itself sets no pending state; the agent's reply decides it
-    // ("Task complete" for a deliverable, "Waiting for response" for a question).
-    // The task records as a PM→agent handoff bubble, not a "you" bubble.
-    emitDelegate(projectId, project.leadAgentId, r.agentId, r.task);
-    interpretIntent({
-      projectId, agentId: r.agentId, text: r.task, effort: 'high',
-      handoff: { from: pmName, fromRole: pmRole, to: r.name, toRole: r.roleLabel },
-    })
-      .then(spec => setLastSpec(r.agentId, spec))
-      .catch(err => console.warn(`[kickoff] ${r.name} failed to start:`, err?.message));
+    enqueueTask({ projectId, agentId: r.agentId, description: r.task }, opts);
   }
 }
 
