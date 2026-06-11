@@ -1,8 +1,8 @@
 # Bridge
 
-## Command center for multi-agentic orchestration using Speech to Text (STT) + gamepad for increased productivity.
+## Command center for multi-agentic orchestration using diverse input modalities (voice, trackpad/mouse, keyboard and gamepad) for ultimate productivity.
 
-Bridge is an **Command center for managing multi-agent work** — a productivity surface for running teams of role-based AI agents across multiple projects. You describe intent; the orchestrator routes it to the right agents, and composes a consistent, navigable surface. Agents work **in parallel** — many run at once across your projects — and can define work topology so that agents can work dynamically. The goal is to make *coordinating a team of agents* — assigning, steering, and tracking their work — fast, low-friction and goal-oriented.
+Bridge is an **command center for managing multi-agent work** — a productivity surface for running teams of role-based AI agents across multiple projects. You describe intent; the orchestrator routes it to the right agents, and composes a consistent, navigable surface. Agents work **in parallel** — many run at once across your projects — and can define work topology so that agents can work dynamically. The goal is to make *coordinating a team of agents* — assigning, steering, and tracking their work — fast, low-friction and goal-oriented.
 
 It's built around **diverse input modalities**, so you can drive it however suits you (and however you're able to):
 
@@ -10,7 +10,7 @@ It's built around **diverse input modalities**, so you can drive it however suit
 - **Gamepad** *(PlayStation 5 DualSense only, for now)* — the fastest way to switch from project to project and agent to agent. Every on-screen action maps to a controller glyph, so **switching is a single button at your fingertips** (L1/R1 to cycle, ✕ to select) — no cursor travel. A trackpad or mouse forces you to move the pointer, aim at a tab, click, and repeat that whole trip every time you want to switch; the gamepad collapses it to one press, which adds up fast when you're hopping across many projects and agents.
 - **Keyboard** — full parity with the controller.
 - **Trackpad / mouse** — click any tile, chip, or action to select; standard pointer navigation.
-- **Remote** *(planned)* — drive a Bridge session from a phone or second device.
+- **Remote device** *(planned)* — drive a Bridge session from a phone or second device.
 
 Agents are powered by **any model on OpenRouter** (choose a default and override per role), and **speech-to-text runs locally with the Parakeet model**. It runs as a macOS desktop app (Electron).
 
