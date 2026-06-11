@@ -44,3 +44,4 @@ plans/
 QA-GUIDE.md
 sounds/source/
 .claude/
+build/stt/
