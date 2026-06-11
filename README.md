@@ -18,7 +18,7 @@ Agents are powered by **any model on OpenRouter** (choose a default and override
 
 ## Core ideas
 
-- **Projects → agents → conversation.** Work is organized into *projects*, each staffed by a small team of *role-typed agents* (Product Manager, Software & Hardware Engineer, Designer, QA, Data Scientist, Security, Researcher, Copywriter, Marketing, Legal). Each agent has a globally unique name and a persistent identity. You navigate three levels:
+- **Projects → agents → conversation.** Work is organized into *projects*, each staffed by a small team of *role-typed agents* (Product Manager, Software / Hardware / Electrical Engineer, Designer, QA, Data Scientist, Security, Researcher, Copywriter, Marketing, Legal). Each agent has a globally unique name and a persistent identity. You navigate three levels:
   - **Layer 0 — Projects:** pick a project (or create one) and talk to its lead.
   - **Layer 1 — Team grid:** the project's agents as tiles.
   - **Layer 2 — Agent view:** zoom into one agent and converse.
@@ -26,7 +26,7 @@ Agents are powered by **any model on OpenRouter** (choose a default and override
   (These screen *layers* are written "Layer 0/1/2" throughout — distinct from the gamepad **L1 / R1** shoulder buttons.)
 - **Parallel agents & subagents.** Agents run *concurrently* rather than one-at-a-time — you can have several projects' teams working at once — and any agent can **delegate to a teammate**, splitting a big task into pieces and synthesizing the results back into one answer. A delegate's reply surfaces in the chat as a labeled bubble (group-chat style), with a `From → To` handoff marker so you can follow who did what.
 - **Plan-first PM kickoff that puts the team to work.** Create a project and the PM drafts a **kickoff plan** in the lead chat — *Approve* (one tap) and it writes a PRD, roadmap, operating notes, and open-questions doc, then asks its follow-up questions **one at a time** as selectable choices. When the questions are answered, kickoff is **complete** and the team actually **starts building**: every assigned specialist runs its task and produces a first deliverable. The PM even **auto-adds a missing specialist** if a task needs a role that isn't on the team yet (and tells you who it added and why). *Reject* holds it off.
-- **Topology-shaped teams.** Creating a project walks you through *roles → topology → name → goal*. The **work topology** — Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, or Async pull / queue — is written into `project.md` *and* injected into the PM's routing prompt, so it actually shapes how work is assigned and whether teammates report back or coordinate.
+- **Topology-shaped teams.** Creating a project walks you through *roles → topology → name → goal*. The **work topology** — Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, or Async pull / queue — is written into the project's `PRD.md` *and* injected into the PM's routing prompt, so it actually shapes how work is assigned and whether teammates report back or coordinate.
 - **Agents ask, not guess.** When direction is unclear an agent offers **multi-select choices** right in the bubble — A/B/C buttons in a horizontal row plus an **"Other — hold to talk"** for a free-form answer; pick one or more and **Submit**. Agents follow a shared house style (legible reasoning, telegraphic bullets, banned clichés) and are **grounded** — they produce documents and code here, never fake Figma files, channels, or delivery dates.
 - **Voice-first, controller-navigable.** Hold to talk; every on-screen action shows its controller glyph (✕ select, ○ back, L1/R1 switch, R2 push-to-talk). Keyboard mirrors all of it.
 - **The model assembles, it doesn't author.** Agents return a small structured spec; a deterministic renderer turns it into a consistent surface — fast, cheap, and visually stable (which matters for spatial memory and accessibility).
@@ -52,7 +52,7 @@ For the full vision and design rationale see the (local, unpublished) `docs/` fo
 - **Redo / regenerate** — re-roll a prompt's answer in place; each consecutive redo escalates temperature (variety) and reasoning effort (quality).
 - **Deterministic surfaces** — agents emit a small structured spec; a fixed renderer turns it into a stable, navigable UI (fast, cheap, accessible).
 - **Per-role model routing** — different OpenRouter model per role, plus a fast **router model** for team-voice classification.
-- **Agent skills** — toggle the playbooks (discovery, TDD, code review, positioning, …) the team can draw on (Settings → Skills).
+- **Agent skills** — playbooks injected into each agent's prompts by role, adopted from the open Claude-skills ecosystem on GitHub (anthropics/skills, obra/superpowers, pbakaus/impeccable, trailofbits/skills, aklofas/kicad-happy, …) plus Bridge-native ones. Toggle them in Settings → Skills.
 - **Activity feed, memory, and file explorer** drawers. The Activity feed is **cross-project everywhere** — agent responses from all projects as project → agent · role → summary cards. The Explorer's files/folders are mouse-clickable (open / expand). Per-project notes with optional **git auto-save**.
 - **GitHub pairing** — connect your GitHub account from Settings via a **keyboard-free OAuth device flow** (scan a QR on your phone or open a pre-filled authorize link on-device).
 - **Settings** — OpenRouter key, default + per-role + router models, agent skill toggles, git auto-save, GitHub pairing (MCP plugins coming soon).
@@ -86,7 +86,7 @@ For the full vision and design rationale see the (local, unpublished) `docs/` fo
 
 - **AI** is via **OpenRouter** (one integration, many models, per-role model overrides).
 - **Speech-to-text** runs **only** on the bundled local **Parakeet** (MLX) Python sidecar (`LOCAL_STT_URL`, default `127.0.0.1:8123`) — it never falls back to the browser engine; a failure surfaces on the capture screen instead. **Text-to-speech** is disabled in this build (no OS voice output).
-- **State** for each project (notes, conversation, optional git auto-save) lives under `app/state/<projectId>/` (git-ignored).
+- **Storage** all lives under `~/bridge-projects/`: each project's files (docs, role charters, generated code, git auto-save) in `~/bridge-projects/<slug>/`, and the cross-project registry (`projects.json`, `tasks.json`, `scratchpad.json`) in `~/bridge-projects/.bridge/`. Nothing is written inside the app bundle; tests redirect both via `BRIDGE_STATE_DIR` / `BRIDGE_PROJECTS_BASE`.
 
 ---
 
@@ -186,8 +186,11 @@ Open Settings from the footer (⚙). Tabs:
 - **General** — OpenRouter API key, default model, local STT URL.
 - **Models** — per-role model overrides (route each role to a different model).
 - **Skills** — activate/deactivate the agent **playbook skills** (model-agnostic
-  how-to-do-the-work guides, e.g. discovery, TDD, code review, positioning) the
-  team can draw on.
+  how-to-do-the-work guides, e.g. discovery, TDD, code review, KiCad PCB design,
+  Impeccable design). Enabled skills are injected into matching agents' prompts:
+  skills with a condensed playbook (`app/server/skill-playbooks/<id>.md`) inject
+  the full playbook, the rest a one-line capability. Many are adopted from the
+  GitHub Claude-skills ecosystem (each entry records its `source` repo).
 - **MCP** — register MCP plugins *(coming soon)*.
 - **Git** — auto-save each project's state to its git repo on an interval.
 
@@ -201,10 +204,13 @@ app/
 ├── server/        # Express orchestrator: API, OpenRouter calls, static serving
 ├── renderer/      # UI: input, speech, gamepad icons, deterministic surfaces
 ├── assets/fonts/  # local font files (git-ignored — not redistributed, see Fonts)
-├── stt/           # optional local Parakeet (MLX) speech-to-text sidecar
-└── state/         # per-project state + git repos (git-ignored)
+└── stt/           # optional local Parakeet (MLX) speech-to-text sidecar
 build/             # app icon, entitlements, Python/STT packaging scripts
 docs/              # internal design + planning notes (git-ignored, not published)
+
+~/bridge-projects/           # ALL runtime data (outside the repo / app bundle)
+├── .bridge/                 # registry: projects.json, tasks.json, scratchpad.json
+└── <project-slug>/          # one git repo per project: docs/, docs/roles/, code
 ```
 
 ### Key modules
@@ -212,12 +218,13 @@ docs/              # internal design + planning notes (git-ignored, not publishe
 ```
 app/server/
 ├── server.js        # Express: REST + SSE (projects, agents, notes, settings, skills, …)
-├── orchestrator.js  # per-agent intent → tile spec, using the role charter
+├── orchestrator.js  # per-agent intent → tile spec, using the role charter + skills
 ├── team.js          # team voice: router → fan-out → synthesizer
-├── projects.js      # projects store + per-project folder scaffold
-├── roles.js         # role catalog (PM, Software/Hardware Engineer, Designer, …)
-├── charters.js      # per-project role charters (role-<slug>.md, no underscores; short slugs via CHARTER_SLUG_OVERRIDE)
-├── skills.js        # agent skill (playbook) registry — toggled in Settings → Skills
+├── projects.js      # projects store + per-project repo scaffold
+├── state-dir.js     # central state-dir resolution (~/bridge-projects/.bridge) + legacy migration
+├── roles.js         # 12-role catalog (PM, SW/HW/EE Engineer, Designer, …)
+├── charters.js      # per-project role charters in <repo>/docs/roles/ (role-<slug>.md)
+├── skills.js        # skill registry + per-role playbook injection (skill-playbooks/<id>.md)
 ├── scratchpad.js    # per-agent conversation context
 ├── events.js        # SSE event bus (status / activity / delegate / notification)
 └── backends/notes.js# project-scoped markdown notes
