@@ -62,9 +62,32 @@ export function subscribe(projectId, write) {
 /** Test/diagnostic helper: the current feed-buffer length. */
 export function _feedBufferSize() { return FEED_BUFFER.length; }
 
+// Live per-agent status verbs (non-idle only), so a freshly-loaded client can
+// rehydrate "who's working right now" — SSE has no history and status events
+// are deliberately not buffered. A server restart clears this, which is
+// correct: in-flight turns die with the process, so nobody is working.
+const LIVE_STATUS = new Map();   // projectId → Map(agentId → verb)
+
+/** Current non-idle verbs for a project: { [agentId]: verb }. */
+export function statusSnapshot(projectId) {
+  const m = LIVE_STATUS.get(projectId);
+  const out = {};
+  if (m) for (const [agentId, verb] of m) out[agentId] = verb;
+  return out;
+}
+
 /** Convenience helpers used by the orchestrator + team driver so
  *  callers don't have to remember the exact event shape. */
 export function emitStatus(projectId, agentId, verb) {
+  if (projectId && agentId) {
+    if (!verb || verb === 'idle') {
+      LIVE_STATUS.get(projectId)?.delete(agentId);
+    } else {
+      let m = LIVE_STATUS.get(projectId);
+      if (!m) { m = new Map(); LIVE_STATUS.set(projectId, m); }
+      m.set(agentId, verb);
+    }
+  }
   publish({ type: 'status', projectId, agentId, verb });
 }
 export function emitToken(projectId, agentId, delta) {

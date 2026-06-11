@@ -19,7 +19,7 @@ import { proposeBuildPlan, runScaffold } from './scaffold.js';
 import {
   notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
 } from './autosave.js';
-import { subscribe as subscribeEvents, publish as publishEvent } from './events.js';
+import { subscribe as subscribeEvents, publish as publishEvent, statusSnapshot } from './events.js';
 import { listTasks } from './tasks.js';
 import { resolveBlockedForAgent } from './executor.js';
 
@@ -575,6 +575,13 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
 // blocked / done / failed agent task (renderer task panel + debugging).
 app.get('/projects/:pid/tasks', (req, res) => {
   res.json({ tasks: listTasks(req.params.pid) });
+});
+
+// Live agent-status snapshot ({ agentId: verb }, non-idle only) so a reloaded
+// renderer can rehydrate busy tiles + the L2 "…" bubble — SSE replays no
+// status history.
+app.get('/projects/:pid/agents/status', (req, res) => {
+  res.json({ statuses: statusSnapshot(req.params.pid) });
 });
 
 app.post('/projects/:pid/agents/:aid/spec', (req, res) => {
