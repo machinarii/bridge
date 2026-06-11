@@ -39,3 +39,14 @@ test('updateTask merges a patch and bumps updatedAt; nextQueued returns oldest q
   assert.equal(nextQueued('pQ').id, t2.id);
   assert.equal(updateTask('t_nope', { status: 'done' }), null);
 });
+
+test('resolveBlockedForAgent closes blocked tasks when the user takes over', async () => {
+  const { resolveBlockedForAgent } = await import('./executor.js');
+  const t = createTask({ projectId: 'pB', agentId: 'agZ', description: 'needs input' });
+  updateTask(t.id, { status: 'blocked_on_user' });
+  const n = resolveBlockedForAgent('agZ');
+  assert.equal(n, 1);
+  assert.equal(getTask(t.id).status, 'done');
+  assert.match(getTask(t.id).output, /chat/);
+  assert.equal(resolveBlockedForAgent('agZ'), 0, 'idempotent');
+});
