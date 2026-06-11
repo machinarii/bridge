@@ -157,3 +157,26 @@ test('a turn that keeps throwing fails after MAX_ATTEMPTS', async () => {
     assert.match(t.output, /500/);
   } finally { deleteProject(p.id); }
 });
+
+const { statusSnapshot } = await import('./events.js');
+
+test('agent stays non-idle through the settle phase (no status gap for the PM answer)', async () => {
+  const p = await createProject({ name: 'Exec NoGap', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    let verbDuringPmCall = null;
+    let first = true;
+    const interpret = async () => {
+      if (first) { first = false; return questionSpec('Theme?', ['Dark', 'Light']); }
+      return { intent: 'answer', template: 'reader', title: 'Done', body: 'ok' };
+    };
+    const callText = async () => {
+      verbDuringPmCall = statusSnapshot(p.id)[designer.id] || 'idle';
+      return 'Dark';
+    };
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'pick theme' }, { interpret, callText, apiKey: 'k' });
+    await drain(p.id, { interpret, callText, apiKey: 'k' });
+    assert.notEqual(verbDuringPmCall, 'idle', 'agent reads as working while the PM answers');
+    assert.equal(statusSnapshot(p.id)[designer.id], undefined, 'idle again once the task settles');
+  } finally { deleteProject(p.id); }
+});

@@ -12,7 +12,7 @@ import { getProject, addAgent } from './projects.js';
 import { getRole } from './roles.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, appendTurn } from './scratchpad.js';
-import { emitActivity, emitDelegate, emitNotification, publish as publishEvent } from './events.js';
+import { emitActivity, emitDelegate, emitNotification, emitStatus, publish as publishEvent } from './events.js';
 import { readNote, writeNote } from './backends/notes.js';
 import { getModelForRole } from './models.js';
 import { callOpenRouterText } from './llm.js';
@@ -79,7 +79,12 @@ async function runTask(task, opts = {}) {
       handoff: { from: fromName, fromRole, to: agent.name, toRole: getRole(agent.role).label },
     });
     setLastSpec(agent.id, spec);
-    await settleReply(task, project, agent, spec, opts);
+    // Keep the agent visibly working through the settle phase: interpretIntent
+    // ends on 'idle', but settleReply may still run a PM auto-answer + a second
+    // turn — a status gap that made the L2 "…" bubble vanish on re-entry.
+    emitStatus(task.projectId, agent.id, 'analyzing');
+    try { await settleReply(task, project, agent, spec, opts); }
+    finally { emitStatus(task.projectId, agent.id, 'idle'); }
   } catch (err) {
     if (task.attempts < MAX_ATTEMPTS) {
       updateTask(task.id, { status: 'queued' });   // the drain loop picks it up again
