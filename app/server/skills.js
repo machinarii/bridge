@@ -22,6 +22,7 @@ export const SKILLS = [
   { id: 'ux-flows',          name: 'UX flows',             description: 'Design user flows and journey maps from a goal.',                             roles: ['designer', 'ux_research'] },
   { id: 'positioning',       name: 'Positioning & messaging', description: 'Sharpen positioning, value props, and launch messaging.',                 roles: ['marketing', 'copywriter'] },
   { id: 'threat-model',      name: 'Threat modeling',      description: 'Identify security, privacy, and abuse risks and mitigations.',                roles: ['security'] },
+  { id: 'kicad',             name: 'KiCad PCB design',     description: 'Design schematics and PCB layouts in KiCad — capture, footprints, DRC/ERC, and manufacturing outputs (Gerbers, BOM).', roles: ['ee_engineer'] },
 ];
 
 const BY_ID = Object.fromEntries(SKILLS.map(s => [s.id, s]));
