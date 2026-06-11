@@ -13,14 +13,14 @@
  *   all()                           → { [agentId]: record }
  */
 
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { resolve, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { stateDir, ensureStateDir } from './state-dir.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SERVER_ROOT = resolve(__dirname);
-const DATA_DIR = resolve(SERVER_ROOT, '..', 'state');
-const FILE = join(DATA_DIR, 'scratchpad.json');
+// Resolved lazily (not a module-level const) so BRIDGE_STATE_DIR set by tests
+// before first use is honored — a hardcoded path here used to leak test writes
+// into the real scratchpad.json.
+function scratchpadFile() { return join(stateDir(), 'scratchpad.json'); }
 
 const HISTORY_TURN_LIMIT = 24; // keep the last N turns per agent
 
@@ -28,9 +28,10 @@ let cache = null;
 
 function load() {
   if (cache) return cache;
-  mkdirSync(DATA_DIR, { recursive: true });
-  if (existsSync(FILE)) {
-    try { cache = JSON.parse(readFileSync(FILE, 'utf8')); }
+  ensureStateDir();
+  const file = scratchpadFile();
+  if (existsSync(file)) {
+    try { cache = JSON.parse(readFileSync(file, 'utf8')); }
     catch { cache = {}; }
   } else cache = {};
   return cache;
@@ -38,7 +39,7 @@ function load() {
 
 function save() {
   if (!cache) return;
-  writeFileSync(FILE, JSON.stringify(cache, null, 2), 'utf8');
+  writeFileSync(scratchpadFile(), JSON.stringify(cache, null, 2), 'utf8');
 }
 
 function record(agentId) {

@@ -1,6 +1,7 @@
 /* Bridge — charter customization. Loads base templates, calls OpenRouter to
  * rewrite them against a project's goal, validates the result, falls back
- * to the base verbatim on any failure. Written to <projectId>/roles/<roleId>.md.
+ * to the base verbatim on any failure. Charters live in the project's repo
+ * at <repoPath>/docs/roles/<file>.md — reads and writes share that one path.
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
@@ -11,7 +12,6 @@ import { getModelForRole } from './models.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CHARTERS_DIR = resolve(__dirname, 'role-charters');
-const STATE_DIR = resolve(__dirname, '..', 'state');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const REQUIRED_HEADINGS = ['## Role', '## Typical tasks', '## Areas of expertise'];
@@ -143,10 +143,14 @@ export function writeBaselineCharters(project, { agents } = {}) {
   return targets.map(a => ({ agentId: a.id, roleId: a.role }));
 }
 
-/** Read a project's customized charter (or base if not yet written). */
-export function readProjectCharter(projectId, roleId) {
-  const path = resolve(STATE_DIR, projectId, 'roles', charterFileNameFor(roleId));
-  if (existsSync(path)) return readFileSync(path, 'utf8');
+/** Read a project's customized charter from <repoPath>/docs/roles/ — the same
+ * place writeBaselineCharters/deepenCharters write — or the base template if
+ * not yet written. Takes the project record (needs repoPath), not its id. */
+export function readProjectCharter(project, roleId) {
+  if (project?.repoPath) {
+    const path = resolve(project.repoPath, 'docs', 'roles', charterFileNameFor(roleId));
+    if (existsSync(path)) return readFileSync(path, 'utf8');
+  }
   return loadBaseCharter(roleId);
 }
 

@@ -9,19 +9,17 @@
  *   nextQueued(projectId) → oldest queued task | null
  */
 
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { resolve, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { stateDir, ensureStateDir } from './state-dir.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-function stateDir() { return process.env.BRIDGE_STATE_DIR || resolve(__dirname, '..', 'state'); }
 function tasksFile() { return join(stateDir(), 'tasks.json'); }
 
 let cache = null;
 
 function load() {
   if (cache) return cache;
-  mkdirSync(stateDir(), { recursive: true });
+  ensureStateDir();
   if (existsSync(tasksFile())) {
     try { cache = JSON.parse(readFileSync(tasksFile(), 'utf8')); }
     catch { cache = { nextId: 1, tasks: [] }; }
