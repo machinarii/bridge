@@ -36,6 +36,8 @@ export const SKILLS = [
   { id: 'mcp-builder',       name: 'MCP builder',          description: 'Build MCP servers that connect agents to external APIs and tools.',           roles: ['sw_engineer'], source: 'https://github.com/anthropics/skills' },
   { id: 'frontend-design',   name: 'Frontend design',      description: 'Distinctive, production-grade UI work that avoids generic AI aesthetics.',    roles: ['designer', 'sw_engineer'], source: 'https://github.com/anthropics/skills' },
   { id: 'canvas-design',     name: 'Canvas design',        description: 'Create visual art, posters, and graphics as PNG/PDF.',                        roles: ['designer'], source: 'https://github.com/anthropics/skills' },
+  { id: 'impeccable',        name: 'Impeccable design',    description: 'Design-language toolkit — polish, audit, critique, animate, bolder/quieter commands that kill generic AI-slop frontend design.', roles: ['designer'], source: 'https://github.com/pbakaus/impeccable' },
+  { id: 'awesome-design',    name: 'Design system inspirations', description: 'Ready-to-use DESIGN.md design systems by aesthetic family — drop one in and scaffold a full UI from exact design tokens.', roles: ['designer'], source: 'https://github.com/VoltAgent/awesome-claude-design' },
   { id: 'webapp-testing',    name: 'Web app testing',      description: 'Drive and test web apps end-to-end with Playwright automation.',              roles: ['qa'], source: 'https://github.com/anthropics/skills' },
 
   // — documents & comms (anthropics/skills) —
