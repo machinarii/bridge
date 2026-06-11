@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SKILLS, getSkill, listSkills, withSkillEnabled } from './skills.js';
+import { readdirSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { SKILLS, getSkill, listSkills, withSkillEnabled, skillsForRole, loadSkillPlaybook } from './skills.js';
 import { listRoles } from './roles.js';
+
+const PLAYBOOKS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), 'skill-playbooks');
 
 test('skill ids are unique', () => {
   const ids = SKILLS.map(s => s.id);
@@ -42,4 +47,27 @@ test('listSkills marks everything enabled by default and honors SKILLS_DISABLED'
 test('getSkill returns the skill or null', () => {
   assert.equal(getSkill('kicad').name, 'KiCad PCB design');
   assert.equal(getSkill('nope'), null);
+});
+
+test('skillsForRole returns enabled skills for that role only', () => {
+  delete process.env.SKILLS_DISABLED;
+  const ee = skillsForRole('ee_engineer').map(s => s.id);
+  assert.ok(ee.includes('kicad'));
+  process.env.SKILLS_DISABLED = JSON.stringify(['kicad']);
+  assert.ok(!skillsForRole('ee_engineer').map(s => s.id).includes('kicad'));
+  delete process.env.SKILLS_DISABLED;
+});
+
+test('loadSkillPlaybook returns vendored content or null', () => {
+  const pb = loadSkillPlaybook('kicad');
+  assert.ok(pb && pb.includes('KiCad'));
+  assert.equal(loadSkillPlaybook('no-such-skill'), null);
+});
+
+test('every vendored playbook file maps to a known skill id', () => {
+  for (const f of readdirSync(PLAYBOOKS_DIR)) {
+    if (!f.endsWith('.md')) continue;
+    const id = f.slice(0, -3);
+    assert.ok(getSkill(id), `orphan playbook: ${f}`);
+  }
 });

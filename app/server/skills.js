@@ -7,11 +7,22 @@
  *
  * Entries with a `source` are adopted from the open Claude-skills ecosystem on
  * GitHub (anthropics/skills, obra/superpowers, trailofbits/skills, …) — the URL
- * is where the playbook content lives. Entries without one are Bridge-native.
+ * is where the full playbook lives. Entries without one are Bridge-native.
+ *
+ * Skills with a condensed playbook vendored at skill-playbooks/<id>.md get the
+ * full playbook injected into matching agents' prompts (see orchestrator.js);
+ * the rest inject as a one-line "you can do this" capability.
  *
  * Enabled by default; the disabled set is persisted in the SKILLS_DISABLED env
  * (a JSON array of skill ids) via the same .env store as the other settings.
  */
+
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PLAYBOOKS_DIR = resolve(__dirname, 'skill-playbooks');
 
 export const SKILLS = [
   // — Bridge-native playbooks —
@@ -82,4 +93,17 @@ export function withSkillEnabled(id, enabled) {
   const disabled = disabledSkillIds();
   if (enabled) disabled.delete(id); else disabled.add(id);
   return [...disabled];
+}
+
+/** The ENABLED skills available to a role, for prompt injection. */
+export function skillsForRole(roleId) {
+  return listSkills().filter(s => s.enabled && s.roles.includes(roleId));
+}
+
+/** The skill's vendored condensed playbook (skill-playbooks/<id>.md), or null
+ * when none ships — callers fall back to the one-line description. */
+export function loadSkillPlaybook(id) {
+  const path = resolve(PLAYBOOKS_DIR, `${id}.md`);
+  if (!existsSync(path)) return null;
+  try { return readFileSync(path, 'utf8'); } catch { return null; }
 }
