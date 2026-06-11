@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyApproval, topologyGuidance, DOC_TITLES, buildPlanPrompt, startKickoff, executeKickoff, handleLeadMessageDuringKickoff } from './kickoff.js';
+import { classifyApproval, topologyGuidance, DOC_TITLES, buildPlanPrompt, startKickoff, executeKickoff, handleLeadMessageDuringKickoff, startTeamWork } from './kickoff.js';
+import { listTasks as listExecTasks } from './tasks.js';
+import { drain as drainTasks } from './executor.js';
 import { createProject, getKickoff, setKickoff, deleteProject, rolesDir } from './projects.js';
 import { getContext } from './scratchpad.js';
 import { mkdtempSync, readFileSync } from 'node:fs';
@@ -190,5 +192,19 @@ test('approval routing: yes runs, question replies, not-awaiting passes through'
       await handleLeadMessageDuringKickoff(p.id, 'another answer', deps);
     }
     assert.equal(getKickoff(p.id).status, 'done');
+  } finally { deleteProject(p.id); }
+});
+
+test('startTeamWork enqueues one executor task per assignment and they run', async () => {
+  const p = await createProject({ name: 'FanOut Exec', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    setKickoff(p.id, { status: 'done', assignments: [{ role: 'designer', task: 'design the home screen' }] });
+    const interpret = async () => ({ intent: 'answer', template: 'reader', title: 'Done', body: 'sketched' });
+    await startTeamWork(p.id, { interpret, apiKey: 'k' });
+    await drainTasks(p.id, { interpret });
+    const tasks = listExecTasks(p.id);
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].status, 'done');
+    assert.equal(tasks[0].description, 'design the home screen');
   } finally { deleteProject(p.id); }
 });
