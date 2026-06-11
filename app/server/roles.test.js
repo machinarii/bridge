@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ROLES, getRole, listRoles } from './roles.js';
 
-test('listRoles returns all 14 roles', () => {
+test('listRoles returns all 12 roles', () => {
   const ids = listRoles().map(r => r.id);
-  assert.equal(ids.length, 14);
-  assert.deepEqual(new Set(ids).size, 14, 'all ids unique');
+  assert.equal(ids.length, 12);
+  assert.deepEqual(new Set(ids).size, 12, 'all ids unique');
 });
 
 test('every role has id, label, color, namePool, personaSeed', () => {

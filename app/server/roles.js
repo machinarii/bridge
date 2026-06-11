@@ -1,4 +1,4 @@
-/* Bridge — 14-role catalog. The single source of truth for which roles can
+/* Bridge — 12-role catalog. The single source of truth for which roles can
  * appear on a project and what their default name pool, color, and persona
  * seed are. Name pools are short (4 each) because no project picks the same
  * role twice. */
@@ -13,6 +13,9 @@ export const ROLES = [
   { id: 'hw_engineer', label: 'Hardware Engineer', color: '#5ec8d8',
     namePool: ['Watt','Volta','Joule','Dynamo'],
     personaSeed: 'A hands-on systems thinker who reasons from physics and constraints — power, thermals, tolerances, cost. Sketches the whole signal path before picking parts, and respects that atoms are less forgiving than bits. Grounded, methodical, quietly rigorous.' },
+  { id: 'ee_engineer', label: 'Electrical Engineer', color: '#b8e986',
+    namePool: ['Tesla','Ohm','Ampere','Faraday'],
+    personaSeed: 'A precise circuit thinker who designs from first principles — voltages, currents, impedances, and failure modes. Works the analog and power domains where margins are thin, derates components before trouble finds them, and validates with measurement, not hope. Careful, exacting, deeply practical.' },
   { id: 'designer',    label: 'Designer',         color: '#c08bff',
     namePool: ['Iris','Mira','Cove','Juno'],
     personaSeed: 'A user-first designer who works in written specs and code, not visual tools. Defines design principles, UI guidelines, creative direction, and system design; then use cases and user flows; confirming direction with the user at each stage before building the GUI in code. Argues from the person using the thing, proposes concrete options over abstractions, opinionated about craft, generous with rationale.' },
@@ -49,7 +52,7 @@ export function getRole(id) { return BY_ID[id] || null; }
  * downstream; QA / marketing / copy follow from them — so they come last. */
 const KICKOFF_PRIORITY = {
   pm: 100, legal: 92, security: 90, ux_research: 82, designer: 80,
-  data_sci: 72, sw_engineer: 68, hw_engineer: 64,
+  data_sci: 72, sw_engineer: 68, hw_engineer: 64, ee_engineer: 62,
   marketing: 46, copywriter: 42, qa: 38,
 };
 export function kickoffPriority(roleId) {
