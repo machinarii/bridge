@@ -4188,10 +4188,32 @@ speech.addEventListener('error', (e) => {
  * handlers update local state and the DOM. The connection
  * auto-reconnects if the server restarts. */
 let _evtSource = null;
+/* A reloaded (or reconnected) renderer has an empty status map, so an agent
+ * mid-turn looked idle and the L2 "…" bubble vanished. Pull the server's live
+ * snapshot and resync EVERY agent of the active project — including clearing
+ * stale busy flags after a server restart (empty snapshot = nobody working). */
+async function rehydrateAgentStatuses() {
+  if (!activeProject) return;
+  try {
+    const r = await fetch(`/projects/${activeProject.id}/agents/status`);
+    if (!r.ok) return;
+    const { statuses } = await r.json();
+    for (const a of activeProject.agents) {
+      const verb = (statuses && statuses[a.id]) || 'idle';
+      agentStatus[a.id] = verb;
+      agentBusy[a.id] = (verb !== 'idle');
+      paintAgentStatus(a.id);
+    }
+    paintProjectStatuses();
+    const cur = currentAgent();
+    if (mode === MODE_ZOOM && !inflightController && cur && agentBusy[cur.id]) showPendingAgentBubble();
+  } catch { /* snapshot is best-effort; live SSE events still apply */ }
+}
 function startEventStream() {
   if (_evtSource) try { _evtSource.close(); } catch {}
   try {
     _evtSource = new EventSource('/events');
+    _evtSource.onopen = () => { rehydrateAgentStatuses(); };
     _evtSource.addEventListener('bridge', (e) => {
       try { handleBridgeEvent(JSON.parse(e.data)); } catch {}
     });
@@ -7054,6 +7076,7 @@ window.addEventListener('keyup', (e) => {
     if (saved?.pickerIndex) pickerIndex = saved.pickerIndex;
     renderProjects();
   }
+  rehydrateAgentStatuses();   // busy verbs + "…" bubble survive the reload
   staggerInCards();
   staggerInFooter();
   setIndicator('idle', 'Connected');
