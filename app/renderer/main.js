@@ -3197,7 +3197,9 @@ async function renderChatHistory(container, agent) {
     // L2 re-entry while the agent is still working.
     const stillWorking = agentBusy[agent.id]
       || (agentStatus[agent.id] && agentStatus[agent.id] !== 'idle');
-    if (stillWorking && !inflightController) showPendingAgentBubble();
+    // Re-show even while a client request is in flight: this render just wiped
+    // any owned "…" bubble from the DOM, and showPendingAgentBubble dedupes.
+    if (stillWorking) showPendingAgentBubble();
 
     // Kickoff plan awaiting approval → auto-focus the plan bubble so a single
     // Cross/Enter approves (no need to press Up first). The approval buttons
