@@ -36,3 +36,10 @@ MVP-bridge-3day-prototype.md
 
 # Vendored Dosis font files — not published
 app/assets/fonts/dosis/
+
+# local-only docs/specs/sources — not for GitHub
+docs/
+specs/
+plans/
+QA-GUIDE.md
+sounds/source/
