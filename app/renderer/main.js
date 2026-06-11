@@ -34,19 +34,38 @@ const backShortcutEl   = document.getElementById('back-shortcut');
  * Preloaded once; play() clones the element so rapid repeats overlap
  * instead of cutting each other off. Playback failures (autoplay policy,
  * missing file) are swallowed — sound is never load-bearing. */
-const SFX = {
-  navigate: new Audio('sounds/ui-sound-navigate.m4a'),
-  zoomin:   new Audio('sounds/ui-sound-zoomin.m4a'),
-  zoomout:  new Audio('sounds/ui-sound-zoomout.m4a'),
+const SFX_FILES = {
+  navigate: 'sounds/ui-sound-navigate.m4a',
+  zoomin:   'sounds/ui-sound-zoomin.m4a',
+  zoomout:  'sounds/ui-sound-zoomout.m4a',
 };
-Object.values(SFX).forEach(a => { a.preload = 'auto'; a.volume = 0.5; });
+const SFX_VOLUME = 0.35;
+// Web Audio, not <audio>: clips decode ONCE into AudioBuffers at startup and
+// each play is a throwaway BufferSource — starts within a frame of the trigger.
+// (Cloned <audio> elements re-loaded + re-decoded per play: 300-500ms late.)
+let _sfxCtx = null;
+const _sfxBuffers = {};
+(function initSfx() {
+  try { _sfxCtx = new AudioContext(); } catch { return; }
+  for (const [name, url] of Object.entries(SFX_FILES)) {
+    fetch(url)
+      .then(r => r.arrayBuffer())
+      .then(b => _sfxCtx.decodeAudioData(b))
+      .then(buf => { _sfxBuffers[name] = buf; })
+      .catch(() => {});   // sound is never load-bearing
+  }
+})();
 function playSfx(name) {
-  const base = SFX[name];
-  if (!base) return;
+  const buf = _sfxBuffers[name];
+  if (!_sfxCtx || !buf) return;
   try {
-    const a = base.cloneNode();
-    a.volume = base.volume;
-    a.play().catch(() => {});
+    if (_sfxCtx.state === 'suspended') _sfxCtx.resume();
+    const src = _sfxCtx.createBufferSource();
+    src.buffer = buf;
+    const gain = _sfxCtx.createGain();
+    gain.gain.value = SFX_VOLUME;
+    src.connect(gain).connect(_sfxCtx.destination);
+    src.start();
   } catch { /* sound is best-effort */ }
 }
 
