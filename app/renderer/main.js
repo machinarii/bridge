@@ -39,7 +39,10 @@ const SFX_FILES = {
   zoomin:   'sounds/ui-sound-zoomin.m4a',
   zoomout:  'sounds/ui-sound-zoomout.m4a',
 };
-const SFX_VOLUME = 0.245;
+// Perceived loudness is logarithmic: linear gain 0.12 ≈ -12dB from the
+// original 0.5 ≈ roughly half as loud to the ear. Small linear cuts
+// (e.g. ×0.7 = -3dB) are barely audible — adjust in big steps.
+const SFX_VOLUME = 0.12;
 // Web Audio, not <audio>: clips decode ONCE into AudioBuffers at startup and
 // each play is a throwaway BufferSource — starts within a frame of the trigger.
 // (Cloned <audio> elements re-loaded + re-decoded per play: 300-500ms late.)
