@@ -1,6 +1,7 @@
-/* Periodic + on-change git auto-save of project state. Per-project
- * git repo lives at app/state/<projectId>/. Each commit captures
- * charters, notes, project.md, and any scratchpad files written there.
+/* Periodic + on-change git auto-save of project state. Commits the project's
+ * own repo (~/bridge-projects/<slug>/, i.e. project.repoPath) — the single
+ * home for docs, charters, and code. Each commit captures any drift the
+ * synchronous commitIfChanged calls missed.
  *
  * Triggered by:
  *   - server.js endpoints calling notifyStateChange(projectId) after a
@@ -13,14 +14,10 @@
  */
 
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { listProjects } from './projects.js';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { listProjects, getProject, ensureRepoPath } from './projects.js';
 import { emitNotification } from './events.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const STATE_DIR = resolve(__dirname, '..', 'state');
 
 function git(repoDir, args) {
   return new Promise((resolveP, rejectP) => {
@@ -37,14 +34,12 @@ function autosaveEnabled() {
   return (process.env.GIT_AUTOSAVE || 'off') === 'on';
 }
 
+/* Make sure the project's repo exists and is git-initialized. Identity is NOT
+ * written into the repo's local config — it belongs to the user — commits use
+ * an inline -c identity instead (same approach as workspace.js commitAll). */
 export async function initProjectRepo(projectId) {
-  const dir = resolve(STATE_DIR, projectId);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  if (existsSync(resolve(dir, '.git'))) return;
   try {
-    await git(dir, ['init', '-q']);
-    await git(dir, ['config', 'user.email', 'bridge@local']);
-    await git(dir, ['config', 'user.name', 'Bridge Autosave']);
+    ensureRepoPath(projectId);
   } catch (err) {
     console.warn(`[autosave] init failed for ${projectId}:`, err.message);
   }
@@ -59,13 +54,17 @@ async function isDirty(repoDir) {
 
 export async function commitProject(projectId, message = 'Autosave') {
   if (!autosaveEnabled()) return false;
-  const dir = resolve(STATE_DIR, projectId);
-  if (!existsSync(resolve(dir, '.git'))) await initProjectRepo(projectId);
+  let dir;
+  try { dir = ensureRepoPath(projectId); } catch { return false; }
+  if (!dir) return false;
   try {
     if (!(await isDirty(dir))) return false;
     await git(dir, ['add', '-A']);
     const stamp = new Date().toISOString();
-    await git(dir, ['commit', '-q', '-m', `${message} — ${stamp}`]);
+    await git(dir, [
+      '-c', 'user.name=Bridge Autosave', '-c', 'user.email=bridge@local',
+      'commit', '-q', '-m', `${message} — ${stamp}`,
+    ]);
     return true;
   } catch (err) {
     console.warn(`[autosave] commit failed for ${projectId}:`, err.message);
@@ -111,8 +110,8 @@ export function rescheduleAutosave() {
 
 /* Status helper for the UI. */
 export async function autosaveStatus(projectId) {
-  const dir = resolve(STATE_DIR, projectId);
-  const hasRepo = existsSync(resolve(dir, '.git'));
+  const dir = getProject(projectId)?.repoPath || null;
+  const hasRepo = !!dir && existsSync(resolve(dir, '.git'));
   let dirty = false;
   let lastCommit = null;
   if (hasRepo) {

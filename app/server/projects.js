@@ -3,24 +3,21 @@
  * Project record:
  *   { id, name, goal, createdAt, leadAgentId, agents: [{ id, role, name, color, persona, enabled }] }
  *
- * Folder layout (created in createProject):
- *   app/state/<projectId>/project.md
- *   app/state/<projectId>/roles/    (charter customization writes here later)
- *   app/state/<projectId>/notes/
+ * Storage:
+ *   stateDir()/projects.json                  — the cross-project registry
+ *   ~/bridge-projects/<slug>/                 — the project's repo (project.repoPath)
+ *   ~/bridge-projects/<slug>/docs/PRD.md      — single source-of-truth doc
+ *   ~/bridge-projects/<slug>/docs/roles/      — per-project role charters
  */
 
 import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, renameSync } from 'node:fs';
-import { resolve, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve, join } from 'node:path';
 import { getRole, listRoles, FALLBACK_NAMES } from './roles.js';
 import { writeBaselineCharters, deepenCharters, charterFileNameFor, legacyCharterFileNames } from './charters.js';
 import { resolveRepoPath, ensureRepo, commitIfChanged } from './workspace.js';
 import { clearContext } from './scratchpad.js';
+import { stateDir, ensureStateDir } from './state-dir.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-// Resolved lazily so tests can redirect ALL project state to a throwaway dir via
-// BRIDGE_STATE_DIR — and never touch the real app/state/projects.json.
-function stateDir() { return process.env.BRIDGE_STATE_DIR || resolve(__dirname, '..', 'state'); }
 function projectsFile() { return join(stateDir(), 'projects.json'); }
 
 /* Work topologies — how the team operates. The `rule` is written into the
@@ -38,7 +35,7 @@ let cache = null;
 
 function load() {
   if (cache) return cache;
-  mkdirSync(stateDir(), { recursive: true });
+  ensureStateDir();
   const file = projectsFile();
   if (existsSync(file)) {
     try { cache = JSON.parse(readFileSync(file, 'utf8')); }
@@ -289,8 +286,10 @@ export function removeAgent(projectId, agentId) {
   save();
   // Remove the agent's charter file so the explorer doesn't show a stale entry.
   try {
-    const charterPath = resolve(stateDir(), projectId, 'roles', charterFileNameFor(agent.role));
-    if (existsSync(charterPath)) rmSync(charterPath);
+    if (p.repoPath) {
+      const charterPath = resolve(p.repoPath, 'docs', 'roles', charterFileNameFor(agent.role));
+      if (existsSync(charterPath)) rmSync(charterPath);
+    }
   } catch (err) { console.warn(`[removeAgent] charter cleanup failed: ${err.message}`); }
   return { project: p, removedRole: agent.role };
 }
@@ -353,7 +352,8 @@ export function deleteProject(id) {
 export function migrateCharterFilenames() {
   let renamed = 0;
   for (const p of load().projects) {
-    const dir = resolve(stateDir(), p.id, 'roles');
+    if (!p.repoPath) continue;
+    const dir = resolve(p.repoPath, 'docs', 'roles');
     if (!existsSync(dir)) continue;
     for (const a of (p.agents || [])) {
       let canonical;

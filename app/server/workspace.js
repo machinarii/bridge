@@ -1,6 +1,6 @@
-/* Bridge — the on-disk project repo. The ONLY module that writes outside
- * app/state/. Resolves <BRIDGE_PROJECTS_BASE>/<slug>/, git-inits it, writes
- * files (path-safe), and commits. No model calls live here. */
+/* Bridge — the on-disk project repo. Resolves <BRIDGE_PROJECTS_BASE>/<slug>/
+ * (default ~/bridge-projects/<slug>/), git-inits it, writes files (path-safe),
+ * and commits. No model calls live here. */
 
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, join, isAbsolute, relative } from 'node:path';

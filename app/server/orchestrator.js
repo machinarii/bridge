@@ -56,7 +56,7 @@ function roleGuidance(roleId) {
 
 function systemPrompt({ project, agent, sharedFrom }) {
   const role = getRole(agent.role);
-  const charter = readProjectCharter(project.id, agent.role);
+  const charter = readProjectCharter(project, agent.role);
   const topo = project.topology ? TOPOLOGIES[project.topology] : null;
   const topoLine = topo ? `\nTeam operating model — ${topo.label}: ${topo.rule}\nLet this shape whether you handle the task yourself, delegate, or report back to the lead.\n` : '';
   const sharedBlock = (Array.isArray(sharedFrom) && sharedFrom.length)
@@ -276,7 +276,7 @@ function parseSpec(raw) {
 /* Role + charter, but instruct a direct prose reply (no JSON tile spec). */
 function proseSystemPrompt({ project, agent, sharedFrom }) {
   const role = getRole(agent.role);
-  const charter = readProjectCharter(project.id, agent.role);
+  const charter = readProjectCharter(project, agent.role);
   const topo = project.topology ? TOPOLOGIES[project.topology] : null;
   const topoLine = topo ? `\nTeam operating model — ${topo.label}: ${topo.rule}\n` : '';
   const sharedBlock = (Array.isArray(sharedFrom) && sharedFrom.length)
