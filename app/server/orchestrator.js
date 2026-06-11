@@ -2,6 +2,7 @@ import { listNotes } from './backends/notes.js';
 import { appendTurn, getContext } from './scratchpad.js';
 import { getProject, TOPOLOGIES } from './projects.js';
 import { readProjectCharter } from './charters.js';
+import { skillsForRole, loadSkillPlaybook } from './skills.js';
 import { getRole } from './roles.js';
 import { getModelForRole, getRouterModel } from './models.js';
 import { emitStatus, emitActivity, emitToken } from './events.js';
@@ -52,6 +53,24 @@ function roleGuidance(roleId) {
   return g ? `\n${g}\n` : '';
 }
 
+/* Per-role skills section. Skills with a vendored playbook inject the full
+ * (condensed) playbook; the rest inject as a one-line capability. Disabled
+ * skills (Settings → Skills) are omitted entirely. */
+function skillsBlock(roleId) {
+  const skills = skillsForRole(roleId);
+  if (!skills.length) return '';
+  const lines = [];
+  const playbooks = [];
+  for (const s of skills) {
+    const pb = loadSkillPlaybook(s.id);
+    if (pb) playbooks.push(`### Skill: ${s.name}\n${pb.trim()}`);
+    else lines.push(`- ${s.name}: ${s.description}`);
+  }
+  return '\nYour skills — apply the relevant one when a task matches:\n' +
+    (lines.length ? lines.join('\n') + '\n' : '') +
+    (playbooks.length ? playbooks.join('\n\n') + '\n' : '');
+}
+
 /* Tile-spec contract is unchanged from Aurora MVP — see prior README. */
 
 function systemPrompt({ project, agent, sharedFrom }) {
@@ -70,7 +89,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${roleGuidance(agent.role)}${topoLine}${sharedBlock}
+${roleGuidance(agent.role)}${skillsBlock(agent.role)}${topoLine}${sharedBlock}
 Stay in role and on-goal. Speak briefly, in first person when relevant. The user is talking to you specifically.
 ${RESPONSE_STYLE}
 
@@ -289,7 +308,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${roleGuidance(agent.role)}${topoLine}${sharedBlock}
+${roleGuidance(agent.role)}${skillsBlock(agent.role)}${topoLine}${sharedBlock}
 Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.
 ${RESPONSE_STYLE}`;
 }
