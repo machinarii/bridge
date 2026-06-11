@@ -4,7 +4,7 @@ Snapshot for whoever picks this up next. Pairs with `README.md` (product + dev s
 
 ## TL;DR
 
-- **Repo:** active branch is **`feat/scaffold-phase-a`** (Phase A scaffold + Phase B execution loop + a long tail of UX work). Commit before switching away.
+- **Repo:** active branch is **`main`**. Runtime data lives outside the repo under `~/bridge-projects/` (registry in `.bridge/`, one git repo per project).
 - **Runtime:** an Express server (`app/server/server.js`) on **:4317** + a local **Parakeet** STT sidecar on **:8123**. The renderer is vanilla JS served statically from `app/renderer/`. The build/run sandbox shells out to the **`docker` CLI** (any daemon — **Colima** recommended, no Docker Desktop).
 - **To run:** see "Running it" below. Voice needs the Parakeet sidecar up; agents need `OPENROUTER_API_KEY` in `app/server/.env`; the "Run it" build loop needs a Docker daemon (`colima start`).
 
@@ -40,7 +40,13 @@ Notes:
 - Voice is **Parakeet-only** — it never falls back to the browser engine. If the sidecar is down, voice shows a visible STT error.
 - **QA shortcut:** `npm run qa:new -- trading` (or `recipes` / `iot`) seeds a fully-formed project from prefilled name/objective/features and kicks off — skips the capture UI. Prefilled copy-paste text for the capture screens + a flow walkthrough live in **`QA-GUIDE.md`**.
 
-## What's new (latest session)
+## What's new (latest session — storage, roles, skills)
+
+- **Storage unified under `~/bridge-projects/`.** The cross-project registry (`projects.json`, `tasks.json`, `scratchpad.json`) moved out of the app bundle to `~/bridge-projects/.bridge/` via the new `app/server/state-dir.js` (one-time copy migration from legacy `app/state/`). All per-project files live in the project's own repo (`~/bridge-projects/<slug>/`). Three real bugs fixed in the process: `readProjectCharter` read a legacy path the writers never touched (the orchestrator never saw tailored charters); autosave git-committed the internal state dir instead of the project repo (now commits `project.repoPath` with an inline `-c` identity); `scratchpad.js` ignored `BRIDGE_STATE_DIR`, leaking test writes into the real scratchpad.
+- **12-role catalog.** New **Electrical Engineer** (`ee_engineer`, charter `role-ee-eng.md`) owning schematics, PCB layout, power/analog, and fab outputs; the long-failing `listRoles` test (expected 14) is fixed to 12.
+- **Skill registry rebuilt around the GitHub Claude-skills ecosystem.** 31 skills, every role covered; adopted entries carry a `source` repo URL (anthropics/skills, obra/superpowers, pbakaus/impeccable, VoltAgent/awesome-claude-design, trailofbits/skills, aklofas/kicad-happy, …). **Skills now inject into agent prompts**: `orchestrator.js` adds a per-role skills section to both system prompts (tile + prose, so the executor inherits it); 13 condensed playbooks vendored at `app/server/skill-playbooks/<id>.md` inject in full, the rest as one-line capabilities; the Settings → Skills toggle now actually gates agent behavior. New API: `skillsForRole(roleId)`, `loadSkillPlaybook(id)`.
+
+## What's new (previous session)
 
 Code generation/execution loop + a long tail of doc/UX fixes on `feat/scaffold-phase-a`. Highlights:
 
@@ -86,7 +92,7 @@ Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 
 ## Tests
 
-`cd app/server && node --test` → currently **106/107 pass**; the **one** failure is pre-existing and unrelated: `listRoles returns all 14 roles` (the catalog has fewer). Hermeticity rule: tests MUST set `BRIDGE_STATE_DIR` + `BRIDGE_PROJECTS_BASE` to throwaway temp dirs before importing `projects.js` — never touch real `app/state/projects.json` or `~/bridge-projects` (a past test wiped real data). Sanity-check: `shasum app/state/projects.json` is byte-identical before/after a full run.
+`node --test "app/server/*.test.js"` (from the repo root) → currently **160/160 pass**. Hermeticity rule: tests MUST set `BRIDGE_STATE_DIR` + `BRIDGE_PROJECTS_BASE` to throwaway temp dirs before importing server modules — never touch the real `~/bridge-projects/.bridge/` registry or `~/bridge-projects/` repos (a past test wiped real data). All state modules (`projects.js`, `tasks.js`, `scratchpad.js`) resolve paths lazily through `state-dir.js`, so the env vars work as long as they're set before first use.
 
 ## Known gaps / follow-ups
 
@@ -95,9 +101,8 @@ Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 - **"Task complete" clears on view**, "Waiting for response" clears on reply — verify this matches expectations across non-kickoff replies too.
 - **`npm run stt`** should set `HF_HOME=build/hf-cache` (and ideally one launch script starts web + STT together).
 - **`app/renderer/speech.js`** (browser Web Speech) is now dead code — voice is Parakeet-only.
-- **Scratchpad isolation in tests.** `scratchpad.js` stores at `app/state/scratchpad.json` and does **not** honor `BRIDGE_STATE_DIR`, so tests that `appendTurn` write to the real file. Honoring `BRIDGE_STATE_DIR` (lazily, like `projects.js`) is a worthwhile follow-up.
 - **Project id reuse.** Ids are date+slug based; a same-day, same-name project reuses the id (and agent ids). `createProject`/`deleteProject` now clear the scratchpad to compensate, but a counter/random suffix on collision would be cleaner.
-- One **pre-existing** test failure unrelated to this work (`listRoles returns all 14 roles`).
+- **Skill playbook coverage.** 13 of 31 skills have vendored playbooks; the rest inject as one-liners. Worth writing playbooks for the remaining high-traffic ones (discovery, prd, ux-flows) and refreshing vendored ones against their upstream `source` repos occasionally.
 - The app is **unsigned/un-notarized** if packaged — rebuild from `main` to ship these changes; sign with team `935434BZ22` for distribution.
 
 ## Design docs
