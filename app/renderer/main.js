@@ -46,8 +46,8 @@ const SFX_FILES = {
 // (e.g. ×0.7 = -3dB) are barely audible — adjust in big steps.
 const SFX_VOLUME = 0.12;                    // default per-play gain
 const SFX_VOLUMES = {                       // per-sound overrides
-  swooshNext: 0.1,
-  swooshPrev: 0.1,
+  swooshNext: 0.04,
+  swooshPrev: 0.04,
 };
 // Web Audio, not <audio>: clips decode ONCE into AudioBuffers at startup and
 // each play is a throwaway BufferSource — starts within a frame of the trigger.
