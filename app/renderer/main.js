@@ -35,9 +35,11 @@ const backShortcutEl   = document.getElementById('back-shortcut');
  * instead of cutting each other off. Playback failures (autoplay policy,
  * missing file) are swallowed — sound is never load-bearing. */
 const SFX_FILES = {
-  navigate: 'sounds/ui-sound-navigate.m4a',
-  zoomin:   'sounds/ui-sound-zoomin.m4a',
-  zoomout:  'sounds/ui-sound-zoomout.m4a',
+  navigate:   'sounds/ui-sound-navigate.m4a',
+  zoomin:     'sounds/ui-sound-zoomin.m4a',
+  zoomout:    'sounds/ui-sound-zoomout.m4a',
+  swooshNext: 'sounds/ui-sound-swoosh-next.m4a',   // ] — slide right
+  swooshPrev: 'sounds/ui-sound-swoosh-prev.m4a',   // [ — slide left (reversed)
 };
 // Perceived loudness is logarithmic: linear gain 0.12 ≈ -12dB from the
 // original 0.5 ≈ roughly half as loud to the ear. Small linear cuts
@@ -3657,7 +3659,7 @@ function cycleProject(delta) {
   if (nextIdx < 0 || nextIdx >= projects.length) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
-  playSfx('navigate');   // project → project
+  playSfx(delta > 0 ? 'swooshNext' : 'swooshPrev');   // project → project slide
   slideAgent(delta, () => {
     activeProject = withLeadFirst(projects[nextIdx]);
     gridIndex = 0;
@@ -3687,7 +3689,7 @@ function cycleAgent(delta) {
   if (i < 0 || i >= n) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
   if (inflightController) { inflightController.abort(); inflightController = null; }
   stopSpeaking();
-  playSfx('navigate');   // agent → agent
+  playSfx(delta > 0 ? 'swooshNext' : 'swooshPrev');   // agent → agent slide
   _focusLastOnNextChatRender = true;   // switched to another agent → focus its last bubble
   slideAgent(delta, () => { zoomedIndex = i; renderZoom(); });
 }
