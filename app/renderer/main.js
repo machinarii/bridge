@@ -44,7 +44,11 @@ const SFX_FILES = {
 // Perceived loudness is logarithmic: linear gain 0.12 ≈ -12dB from the
 // original 0.5 ≈ roughly half as loud to the ear. Small linear cuts
 // (e.g. ×0.7 = -3dB) are barely audible — adjust in big steps.
-const SFX_VOLUME = 0.12;
+const SFX_VOLUME = 0.12;                    // default per-play gain
+const SFX_VOLUMES = {                       // per-sound overrides
+  swooshNext: 0.1,
+  swooshPrev: 0.1,
+};
 // Web Audio, not <audio>: clips decode ONCE into AudioBuffers at startup and
 // each play is a throwaway BufferSource — starts within a frame of the trigger.
 // (Cloned <audio> elements re-loaded + re-decoded per play: 300-500ms late.)
@@ -68,7 +72,7 @@ function playSfx(name) {
     const src = _sfxCtx.createBufferSource();
     src.buffer = buf;
     const gain = _sfxCtx.createGain();
-    gain.gain.value = SFX_VOLUME;
+    gain.gain.value = SFX_VOLUMES[name] ?? SFX_VOLUME;
     src.connect(gain).connect(_sfxCtx.destination);
     src.start();
   } catch { /* sound is best-effort */ }
