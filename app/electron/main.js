@@ -11,7 +11,7 @@
  * Quitting the app cleans up the spawned child processes.
  */
 
-const { app, BrowserWindow, shell, Menu, Notification, session, systemPreferences, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, Menu, Notification, session, systemPreferences, ipcMain, dialog } = require('electron');
 const path = require('node:path');
 const fs   = require('node:fs');
 const { spawn } = require('node:child_process');
@@ -34,6 +34,30 @@ function resolveBundled(rel) {
 }
 
 async function startServer() {
+  // If a Bridge server already owns the port (e.g. the dev server from
+  // `npm run server`), reuse it instead of dying on EADDRINUSE — the packaged
+  // app and a dev checkout can coexist on one machine.
+  try {
+    const probe = await fetch(`http://127.0.0.1:${PORT}/health`, { signal: AbortSignal.timeout(1500) });
+    if (probe.ok) { console.log('[bridge] reusing existing server on port', PORT); return; }
+  } catch { /* port free or not a Bridge server — boot our own below */ }
+
+  // A non-Bridge process squatting on the port would otherwise surface as a
+  // raw "Uncaught Exception: EADDRINUSE" dialog from deep inside node:net.
+  // Registered only for the startup window; removed once the server is up so
+  // Electron's default error handling applies for the rest of the run.
+  const onStartupError = (err) => {
+    if (err?.code !== 'EADDRINUSE') {
+      dialog.showErrorBox('Bridge failed to start', String(err?.stack || err));
+    } else {
+      dialog.showErrorBox('Bridge can\'t start',
+        `Port ${PORT} is already in use by another program.\n\n` +
+        `Quit whatever is using it (or set the PORT environment variable) and relaunch Bridge.`);
+    }
+    app.quit();
+  };
+  process.on('uncaughtException', onStartupError);
+
   // Boot the Express server in-process. It registers routes against
   // its own express() instance and calls app.listen on PORT.
   //
@@ -54,10 +78,11 @@ async function startServer() {
   for (let i = 0; i < 100; i++) {
     try {
       const res = await fetch(`http://127.0.0.1:${PORT}/health`);
-      if (res.ok) return;
+      if (res.ok) { process.removeListener('uncaughtException', onStartupError); return; }
     } catch { /* not up yet */ }
     await new Promise(r => setTimeout(r, 100));
   }
+  process.removeListener('uncaughtException', onStartupError);
   console.error('[bridge] server did not become healthy on port', PORT);
 }
 
