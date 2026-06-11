@@ -39,7 +39,7 @@ const SFX_FILES = {
   zoomin:   'sounds/ui-sound-zoomin.m4a',
   zoomout:  'sounds/ui-sound-zoomout.m4a',
 };
-const SFX_VOLUME = 0.35;
+const SFX_VOLUME = 0.245;
 // Web Audio, not <audio>: clips decode ONCE into AudioBuffers at startup and
 // each play is a throwaway BufferSource — starts within a frame of the trigger.
 // (Cloned <audio> elements re-loaded + re-decoded per play: 300-500ms late.)
