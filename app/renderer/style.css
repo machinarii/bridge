@@ -2247,8 +2247,10 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .topo-desc { font-size: 0.82rem; opacity: 0.7; line-height: 1.35; }
 
 .role-picker {
-  /* Mirror the L0 / L1 grids: 1rem top/bottom, 0.5rem left/right. */
-  padding: 1rem 0.5rem;
+  /* Mirror the L0 / L1 grids: 1rem top, 0.5rem left/right. Bottom is 0.5rem —
+   * the same offset as .topology-picker — so the Cancel/Continue row sits at
+   * the exact same height on every create-flow screen (no jumping). */
+  padding: 1rem 0.5rem 0.5rem;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -2481,14 +2483,14 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .capture-tile .placeholder { opacity: 0.4; }
 
 /* Pin the action row to the bottom of the surface and stretch it
- * across the full width. Left / right insets match .role-picker
- * (0.5rem horizontal padding) so the row aligns with the previous
- * screen's button column. */
+ * across the full width. All insets match .topology-picker's 0.5rem
+ * padding so the row sits at the exact same spot on every create-flow
+ * screen (roles → topology → name → objective → features). */
 .capture-tile .role-confirm-row {
   position: absolute;
   left: 0.5rem;
   right: 0.5rem;
-  bottom: 1rem;
+  bottom: 0.5rem;
   justify-content: flex-end;   /* right-align the row: … Back · Clear · Continue */
 }
 
@@ -3185,3 +3187,48 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   transform: scale(1.2);
   transform-origin: left center;
 }
+
+/* ===== First-launch OpenRouter key gate ===== */
+/* Sits above every modal/drawer (settings is z-100). No close affordance. */
+#apikey-gate {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.apikey-gate-card {
+  width: min(560px, calc(100vw - 48px));
+  background: var(--bg-elev);
+  border: 1px solid var(--bg-elev-2);
+  border-radius: var(--radius);
+  padding: 40px 44px 32px;
+  text-align: center;
+}
+.apikey-gate-mark { width: 64px; color: var(--accent); margin-bottom: 8px; }
+.apikey-gate-card h1 {
+  margin: 0 0 10px;
+  font-family: 'Oxanium', sans-serif;
+  font-size: 26px; font-weight: 600; color: var(--fg);
+}
+.apikey-gate-copy { margin: 0 0 22px; font-size: var(--steam-body-fs); color: var(--fg-dim); line-height: 1.5; }
+.apikey-gate-copy a { color: var(--accent); }
+#apikey-gate-form { display: flex; gap: 10px; }
+#apikey-gate-input {
+  flex: 1; min-height: var(--steam-input-h);
+  padding: 0 14px;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--bg-elev-2); border-radius: 10px;
+  font-family: 'JetBrains Mono', monospace; font-size: 15px;
+}
+#apikey-gate-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+#apikey-gate-save {
+  min-height: var(--steam-input-h);
+  padding: 0 20px;
+  background: var(--accent); color: var(--bg);
+  border: none; border-radius: 10px;
+  font-family: 'Oxanium', sans-serif; font-size: 16px; font-weight: 600;
+  cursor: pointer;
+}
+#apikey-gate-save:disabled { opacity: 0.55; cursor: wait; }
+.apikey-gate-error { margin: 14px 0 0; color: var(--danger); font-size: 15px; }
+.apikey-gate-note { margin: 18px 0 0; color: var(--fg-dim); font-size: 13px; }
