@@ -7064,8 +7064,84 @@ window.addEventListener('keyup', (e) => {
   if ((e.code === 'Space' || e.key === 'Enter') && _otherDictateBtn) { e.preventDefault(); endOtherDictate(); }
 });
 
+/* ---------- First-launch OpenRouter key gate ---------- */
+/* Blocks boot until a VALID key is saved. Unskippable by design: no close
+ * affordance, Escape is swallowed, focus is held in the input, and all key
+ * events outside the gate are trapped so nav/PTT handlers can't fire. */
+async function ensureApiKey() {
+  try {
+    const r = await fetch('/settings');
+    if ((await r.json()).OPENROUTER_API_KEY_SET) return;
+  } catch { /* server unreachable — fall through and show the gate anyway */ }
+
+  const gate    = document.getElementById('apikey-gate');
+  const form    = document.getElementById('apikey-gate-form');
+  const input   = document.getElementById('apikey-gate-input');
+  const saveBtn = document.getElementById('apikey-gate-save');
+  const errEl   = document.getElementById('apikey-gate-error');
+
+  gate.hidden = false;
+  input.focus();
+
+  // Capture-phase trap: kill keys targeted outside the gate (grid nav, PTT,
+  // type-box) and Escape everywhere. Keys typed in the input pass through.
+  const trap = (e) => {
+    if (!gate.contains(e.target) || e.key === 'Escape') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  };
+  // Bubble-stop at the gate root so input keystrokes never reach the global
+  // window-level shortcut handlers registered at module load.
+  const stop = (e) => e.stopPropagation();
+  const refocus = () => { if (!gate.hidden) setTimeout(() => input.focus(), 0); };
+  window.addEventListener('keydown', trap, true);
+  window.addEventListener('keyup', trap, true);
+  gate.addEventListener('keydown', stop);
+  gate.addEventListener('keyup', stop);
+  input.addEventListener('focusout', refocus);
+
+  await new Promise((resolve) => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const key = input.value.trim();
+      errEl.hidden = true;
+      if (!key) { errEl.textContent = 'Enter your OpenRouter API key to continue.'; errEl.hidden = false; return; }
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Checking…';
+      try {
+        const v = await (await fetch('/settings/verify-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key }),
+        })).json();
+        if (!v.valid) throw new Error(v.error || 'Invalid key');
+        const s = await fetch('/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ OPENROUTER_API_KEY: key }),
+        });
+        if (!s.ok) throw new Error('Could not save the key — try again.');
+        resolve();
+      } catch (err) {
+        errEl.textContent = err.message || 'Something went wrong — try again.';
+        errEl.hidden = false;
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save & continue';
+      }
+    });
+  });
+
+  window.removeEventListener('keydown', trap, true);
+  window.removeEventListener('keyup', trap, true);
+  input.removeEventListener('focusout', refocus);
+  gate.hidden = true;
+  console.log('[bridge] OpenRouter key saved via first-launch gate');
+}
+
 /* ---------- Boot ---------- */
 (async () => {
+  await ensureApiKey();
   await loadProjects();
   // Restore the last screen the user was on (survives page refresh).
   const saved = readNavState();
