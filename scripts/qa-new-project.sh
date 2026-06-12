@@ -38,7 +38,7 @@ case "$PRESET" in
     NAME="Smart Home Energy Dashboard"
     GOAL="A dashboard that shows real-time home energy use per device and suggests concrete ways to save."
     FEATURES="Per-device live usage; monthly cost projection; anomaly alerts; ranked savings suggestions; a weekly email/PDF report."
-    ROLES='["pm","sw_engineer","hw_engineer","designer","data_sci","security"]'
+    ROLES='["pm","sw_engineer","hw_engineer","ee_engineer","designer","data_sci","security"]'
     TOPOLOGY="hub-and-spoke"
     ;;
   *)
