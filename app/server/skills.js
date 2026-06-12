@@ -79,8 +79,16 @@ export const SKILLS = [
   { id: 'security-analysis', name: 'Security static analysis', description: 'Hunt vulnerabilities with CodeQL, Semgrep, and differential code review playbooks.', roles: ['security'], source: 'https://github.com/trailofbits/skills' },
   { id: 'security-audit',    name: 'Cybersecurity code audit', description: 'Comprehensive security review — vulnerabilities, authorization, secrets, supply chain, IaC, and business-logic flaws, mapped to OWASP/CWE/ATT&CK.', roles: ['security'], source: 'https://github.com/AgriciDaniel/claude-cybersecurity' },
 
-  // — electronics (aklofas/kicad-happy) —
+  // — electronics & embedded —
   { id: 'kicad',             name: 'KiCad PCB design',     description: 'Design schematics and PCB layouts in KiCad — capture, footprints, DRC/ERC, EMC pre-compliance, SPICE checks, and fab outputs (Gerbers, BOM).', roles: ['ee_engineer'], source: 'https://github.com/aklofas/kicad-happy' },
+  { id: 'circuit-synth',     name: 'Circuit synthesis',    description: 'Define circuits in Python and generate KiCad netlists/projects — programmatic, reviewable schematic generation.', roles: ['ee_engineer'], source: 'https://github.com/circuit-synth/circuit-synth' },
+  { id: 'embedded-systems',  name: 'Embedded systems',     description: 'Firmware for resource-constrained MCUs — bare-metal and RTOS (ESP32/STM32/ARM Cortex-M), drivers, and hardware/software integration.', roles: ['hw_engineer'], source: 'https://github.com/Jeffallan/claude-skills' },
+
+  // — data & science (K-Dense-AI) —
+  { id: 'scientific-computing', name: 'Scientific computing', description: 'Python scientific stack — statistics, modeling, simulations, and scientific database integration for rigorous analysis.', roles: ['data_sci'], source: 'https://github.com/K-Dense-AI/claude-scientific-skills' },
+
+  // — legal templates (phuryn/pm-skills toolkit) —
+  { id: 'legal-templates',   name: 'Legal templates',      description: 'Draft NDAs with jurisdiction clauses and GDPR/CCPA-compliant privacy policies from structured templates.', roles: ['legal'], source: 'https://github.com/phuryn/pm-skills' },
 ];
 
 const BY_ID = Object.fromEntries(SKILLS.map(s => [s.id, s]));
@@ -158,6 +166,10 @@ const TASK_KEYWORDS = {
   'security-analysis': ['vulnerab', 'codeql', 'semgrep', 'static analysis', 'cve', 'exploit'],
   'security-audit':    ['audit', 'vulnerab', 'secret', 'supply chain', 'owasp', 'authoriz', 'security review', 'pentest'],
   'kicad':             ['pcb', 'schematic', 'kicad', 'circuit', 'board', 'layout', 'footprint', 'gerber', 'bom', 'emc', 'spice', 'power tree'],
+  'circuit-synth':     ['circuit', 'netlist', 'schematic', 'python circuit', 'generate kicad'],
+  'embedded-systems':  ['firmware', 'microcontroller', 'mcu', 'rtos', 'esp32', 'stm32', 'embedded', 'bare-metal', 'driver', 'bring-up'],
+  'scientific-computing': ['statistic', 'model', 'simulation', 'dataset', 'analysis', 'python', 'notebook', 'hypothesis'],
+  'legal-templates':   ['nda', 'privacy policy', 'gdpr', 'ccpa', 'terms', 'agreement', 'compliance', 'non-disclosure'],
 };
 
 function skillScore(skill, t) {
