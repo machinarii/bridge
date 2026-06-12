@@ -26,14 +26,21 @@ const PLAYBOOKS_DIR = resolve(__dirname, 'skill-playbooks');
 
 export const SKILLS = [
   // — Bridge-native playbooks —
-  { id: 'discovery',         name: 'Discovery',            description: 'Run product discovery — interviews, jobs-to-be-done, opportunity mapping.', roles: ['pm', 'ux_research'] },
-  { id: 'prioritization',    name: 'Prioritization',       description: 'Rank work with explicit tradeoffs and a clear rationale.',                    roles: ['pm'] },
-  { id: 'roadmap',           name: 'Roadmap planning',     description: 'Turn goals into a sequenced, outcome-oriented roadmap.',                      roles: ['pm'] },
-  { id: 'prd',               name: 'PRD authoring',        description: 'Write a crisp product requirements doc from a problem statement.',            roles: ['pm'] },
-  { id: 'user-stories',      name: 'User stories',         description: 'Split work into vertical, testable user stories.',                            roles: ['pm'] },
   { id: 'ux-flows',          name: 'UX flows',             description: 'Design user flows and journey maps from a goal.',                             roles: ['designer', 'ux_research'] },
   { id: 'positioning',       name: 'Positioning & messaging', description: 'Sharpen positioning, value props, and launch messaging.',                 roles: ['marketing', 'copywriter'] },
   { id: 'threat-model',      name: 'Threat modeling',      description: 'Identify security, privacy, and abuse risks and mitigations.',                roles: ['security'] },
+
+  // — product management (phuryn/pm-skills — 68-skill marketplace; PM charter
+  //   baselines were originally distilled from it) —
+  { id: 'discovery',         name: 'Discovery',            description: 'Run product discovery — interviews, jobs-to-be-done, assumption mapping, opportunity solution trees.', roles: ['pm', 'ux_research'], source: 'https://github.com/phuryn/pm-skills' },
+  { id: 'prioritization',    name: 'Prioritization',       description: 'Rank work with explicit frameworks (RICE, ICE, MoSCoW, Kano) and a clear rationale.', roles: ['pm'], source: 'https://github.com/phuryn/pm-skills' },
+  { id: 'roadmap',           name: 'Roadmap planning',     description: 'Turn goals into a sequenced, outcome-oriented roadmap.',                      roles: ['pm'], source: 'https://github.com/phuryn/pm-skills' },
+  { id: 'prd',               name: 'PRD authoring',        description: 'Write a crisp product requirements doc from a problem statement.',            roles: ['pm'], source: 'https://github.com/phuryn/pm-skills' },
+  { id: 'user-stories',      name: 'User stories',         description: 'Split work into vertical, testable user stories (3 C’s, INVEST, job stories).', roles: ['pm'], source: 'https://github.com/phuryn/pm-skills' },
+  { id: 'product-strategy',  name: 'Product strategy',     description: 'Strategy canvas, vision, value proposition, business model, SWOT/PESTLE/Five Forces.', roles: ['pm'], source: 'https://github.com/phuryn/pm-skills' },
+  { id: 'market-research',   name: 'Market research',      description: 'Personas, segmentation, customer journey maps, TAM/SAM/SOM sizing, competitor analysis.', roles: ['pm', 'ux_research'], source: 'https://github.com/phuryn/pm-skills' },
+  { id: 'go-to-market',      name: 'Go-to-market',         description: 'GTM strategy and motions, ideal customer profile, beachhead segment, growth loops, battlecards.', roles: ['pm', 'marketing'], source: 'https://github.com/phuryn/pm-skills' },
+  { id: 'product-analytics', name: 'Product analytics',    description: 'North Star + input metrics, cohort and retention analysis, A/B test evaluation, SQL from questions.', roles: ['pm', 'data_sci'], source: 'https://github.com/phuryn/pm-skills' },
 
   // — engineering process (obra/superpowers) —
   { id: 'writing-plans',     name: 'Writing plans',        description: 'Turn a goal into a step-by-step implementation plan.',                        roles: ['pm', 'sw_engineer'], source: 'https://github.com/obra/superpowers' },
@@ -63,8 +70,9 @@ export const SKILLS = [
   { id: 'xlsx',              name: 'Spreadsheets',         description: 'Analyze and build Excel spreadsheets with formulas, pivots, and charts.',     roles: ['data_sci'], source: 'https://github.com/anthropics/skills' },
   { id: 'd3-visualization',  name: 'D3 visualization',     description: 'Build interactive data visualizations with d3.js.',                           roles: ['data_sci'], source: 'https://github.com/chrisvoncsefalvay/claude-d3js-skill' },
 
-  // — security (trailofbits/skills) —
+  // — security (trailofbits/skills, AgriciDaniel/claude-cybersecurity) —
   { id: 'security-analysis', name: 'Security static analysis', description: 'Hunt vulnerabilities with CodeQL, Semgrep, and differential code review playbooks.', roles: ['security'], source: 'https://github.com/trailofbits/skills' },
+  { id: 'security-audit',    name: 'Cybersecurity code audit', description: 'Comprehensive security review — vulnerabilities, authorization, secrets, supply chain, IaC, and business-logic flaws, mapped to OWASP/CWE/ATT&CK.', roles: ['security'], source: 'https://github.com/AgriciDaniel/claude-cybersecurity' },
 
   // — electronics (aklofas/kicad-happy) —
   { id: 'kicad',             name: 'KiCad PCB design',     description: 'Design schematics and PCB layouts in KiCad — capture, footprints, DRC/ERC, EMC pre-compliance, SPICE checks, and fab outputs (Gerbers, BOM).', roles: ['ee_engineer'], source: 'https://github.com/aklofas/kicad-happy' },
