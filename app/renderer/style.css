@@ -612,8 +612,16 @@ kbd {
 .settings-pane[hidden] { display: none !important; }
 /* About tab: centered credit block. */
 .settings-pane.settings-about { align-items: center; justify-content: center; text-align: center; gap: 0.5rem; }
-.settings-about .about-title { font-size: 1.5rem; letter-spacing: 0.04em; }
-.settings-about .about-credit { margin: 0.75rem 0 0; font-size: 1.05rem; }
+/* Kill the default <p> margins so the pane's 0.5rem gap is the ONLY spacing —
+ * the tagline hugs the title and name/email/link sit close together. */
+.settings-about p { margin: 0; }
+.settings-about .about-title {
+  font-size: 1.5rem; letter-spacing: 0.04em;
+  display: flex; align-items: center; gap: 0.65rem;
+}
+.settings-about .about-mark { width: 30px; height: auto; color: var(--accent, #6ea8ff); }
+/* A touch more air above the credit block, separating it from the tagline. */
+.settings-about .about-credit { margin: 1.25rem 0 0; font-size: 1.05rem; font-weight: 400; }
 .settings-about a { color: var(--accent, #6ea8ff); text-decoration: none; }
 .settings-about a:hover { text-decoration: underline; }
 .settings-pane {
