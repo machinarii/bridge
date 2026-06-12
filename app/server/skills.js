@@ -113,6 +113,75 @@ export function skillsForRole(roleId) {
   return listSkills().filter(s => s.enabled && s.roles.includes(roleId));
 }
 
+/* Task-trigger terms per skill (lowercase substrings; multi-word phrases ok).
+ * Used by selectSkillsForTask to decide which skills a given task actually
+ * calls for — the skill NAME always counts as an implicit trigger too.
+ * Skills absent from this map only match on their name. */
+const TASK_KEYWORDS = {
+  'ux-flows':          ['flow', 'journey', 'wireframe', 'navigation', 'screens', 'onboarding'],
+  'positioning':       ['positioning', 'messag', 'value prop', 'tagline', 'launch copy'],
+  'threat-model':      ['threat', 'risk', 'abuse', 'privacy', 'attack surface'],
+  'discovery':         ['interview', 'user research', 'jobs-to-be-done', 'jtbd', 'assumption', 'opportunit', 'validate'],
+  'prioritization':    ['prioriti', 'rank', 'backlog', 'rice', 'moscow', 'kano', 'tradeoff', 'what first'],
+  'roadmap':           ['roadmap', 'milestone', 'quarter', 'sequence', 'timeline'],
+  'prd':               ['prd', 'requirement', 'spec', 'scope'],
+  'user-stories':      ['user stor', 'stories', 'story', 'acceptance criteria', 'backlog'],
+  'product-strategy':  ['strateg', 'vision', 'business model', 'swot', 'pestle', 'five forces', 'value proposition'],
+  'market-research':   ['market', 'persona', 'segment', 'competitor', 'tam', 'journey map', 'sizing'],
+  'go-to-market':      ['launch', 'gtm', 'go-to-market', 'icp', 'growth loop', 'channel', 'customer profile', 'battlecard'],
+  'product-analytics': ['metric', 'north star', 'cohort', 'retention', 'a/b', 'ab test', 'funnel', 'sql', 'analytics'],
+  'lean-startup':      ['mvp', 'validate', 'first customer', 'pricing', 'bootstrap', 'startup'],
+  'mental-models':     ['decide', 'decision', 'tradeoff', 'stuck', 'think through', 'framework', 'weigh'],
+  'writing-plans':     ['plan', 'breakdown', 'steps', 'sequence the work'],
+  'brainstorming':     ['brainstorm', 'idea', 'explore', 'direction', 'options', 'before building'],
+  'tdd':               ['test', 'tdd', 'implement', 'fix', 'bug', 'feature', 'code', 'build'],
+  'systematic-debugging': ['debug', 'bug', 'broken', 'fail', 'crash', 'error', 'not working', 'regression', 'bring-up', 'flaky'],
+  'code-review':       ['review', 'pull request', ' pr ', 'diff', 'code quality', 'refactor'],
+  'verification-before-completion': ['verify', 'done', 'complete', 'finished', 'ship', 'confirm', 'works'],
+  'mcp-builder':       ['mcp', 'integration', 'connector', 'tool server', 'external api'],
+  'engineering-patterns': ['api', 'backend', 'frontend', 'architecture', 'database', 'cache', 'endpoint', 'e2e', 'schema'],
+  'frontend-design':   ['ui', 'interface', 'frontend', 'page', 'component', 'landing', 'web design', 'screen'],
+  'canvas-design':     ['poster', 'art', 'graphic', 'visual', 'banner', 'illustration'],
+  'impeccable':        ['polish', 'audit', 'critique', 'animate', 'refine', 'spacing', 'design pass', 'slop'],
+  'awesome-design':    ['design system', 'token', 'design.md', 'aesthetic', 'scaffold'],
+  'ui-ux-pro':         ['design system', 'palette', 'font', 'ux', 'style guide', 'color', 'theme'],
+  'web-motion-3d':     ['3d', 'three.js', 'webgl', 'animation', 'motion', 'scroll', 'lottie', 'parallax', 'interactive'],
+  'webapp-testing':    ['test', 'e2e', 'playwright', 'browser', 'regression', 'click through', 'automation'],
+  'doc-coauthoring':   ['draft', 'document', 'doc', 'write up', 'co-author', 'memo'],
+  'docx':              ['word', 'docx', 'contract', 'redline', 'tracked changes', 'agreement'],
+  'pdf':               ['pdf', 'form', 'extract'],
+  'pptx':              ['deck', 'slide', 'presentation', 'powerpoint', 'pitch'],
+  'internal-comms':    ['status report', 'newsletter', 'faq', 'announcement', 'update the team'],
+  'brand-guidelines':  ['brand', 'typography', 'voice', 'logo', 'identity'],
+  'xlsx':              ['spreadsheet', 'excel', 'xlsx', 'formula', 'pivot', 'csv', 'table'],
+  'd3-visualization':  ['chart', 'visualiz', 'graph', 'd3', 'plot', 'dashboard'],
+  'security-analysis': ['vulnerab', 'codeql', 'semgrep', 'static analysis', 'cve', 'exploit'],
+  'security-audit':    ['audit', 'vulnerab', 'secret', 'supply chain', 'owasp', 'authoriz', 'security review', 'pentest'],
+  'kicad':             ['pcb', 'schematic', 'kicad', 'circuit', 'board', 'layout', 'footprint', 'gerber', 'bom', 'emc', 'spice', 'power tree'],
+};
+
+function skillScore(skill, t) {
+  let score = 0;
+  for (const kw of TASK_KEYWORDS[skill.id] || []) if (t.includes(kw)) score++;
+  if (t.includes(skill.name.toLowerCase())) score += 2;
+  return score;
+}
+
+/** Task-aware selection: the role's enabled skills, plus which of them the
+ * given task text actually triggers (sorted by keyword-hit count, registry
+ * order as tiebreak). Empty/missing text → no matches, just the full list. */
+export function selectSkillsForTask(roleId, text) {
+  const all = skillsForRole(roleId);
+  const t = String(text || '').toLowerCase();
+  if (!t) return { matched: [], all };
+  const matched = all
+    .map((s, i) => ({ s, i, score: skillScore(s, t) }))
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score || a.i - b.i)
+    .map(x => x.s);
+  return { matched, all };
+}
+
 /** The skill's vendored condensed playbook (skill-playbooks/<id>.md), or null
  * when none ships — callers fall back to the one-line description. */
 export function loadSkillPlaybook(id) {

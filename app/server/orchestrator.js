@@ -2,7 +2,7 @@ import { listNotes } from './backends/notes.js';
 import { appendTurn, getContext } from './scratchpad.js';
 import { getProject, TOPOLOGIES } from './projects.js';
 import { readProjectCharter } from './charters.js';
-import { skillsForRole, loadSkillPlaybook } from './skills.js';
+import { selectSkillsForTask, loadSkillPlaybook } from './skills.js';
 import { getRole } from './roles.js';
 import { getModelForRole, getRouterModel } from './models.js';
 import { emitStatus, emitActivity, emitToken } from './events.js';
@@ -53,19 +53,25 @@ function roleGuidance(roleId) {
   return g ? `\n${g}\n` : '';
 }
 
-/* Per-role skills section. Skills with a vendored playbook inject the full
- * (condensed) playbook; the rest inject as a one-line capability. Disabled
- * skills (Settings → Skills) are omitted entirely. */
-function skillsBlock(roleId) {
-  const skills = skillsForRole(roleId);
-  if (!skills.length) return '';
-  const lines = [];
-  const playbooks = [];
-  for (const s of skills) {
-    const pb = loadSkillPlaybook(s.id);
-    if (pb) playbooks.push(`### Skill: ${s.name}\n${pb.trim()}`);
-    else lines.push(`- ${s.name}: ${s.description}`);
-  }
+/* Per-role skills section, task-aware. Skills the task text actually triggers
+ * (keyword match in skills.js) inject their full vendored playbook — capped at
+ * MAX_TASK_PLAYBOOKS so a keyword-rich message can't flood the prompt. All
+ * other enabled role skills inject as a one-line capability, keeping the agent
+ * aware of what it can do without the weight. With no task text, every
+ * vendored playbook injects (pre-task-aware behavior). Disabled skills
+ * (Settings → Skills) are omitted entirely. */
+const MAX_TASK_PLAYBOOKS = 3;
+function skillsBlock(roleId, taskText) {
+  const { matched, all } = selectSkillsForTask(roleId, taskText);
+  if (!all.length) return '';
+  const expanded = (taskText ? matched : all)
+    .map(s => ({ s, pb: loadSkillPlaybook(s.id) }))
+    .filter(x => x.pb)
+    .slice(0, taskText ? MAX_TASK_PLAYBOOKS : all.length);
+  const expandedIds = new Set(expanded.map(x => x.s.id));
+  const lines = all.filter(s => !expandedIds.has(s.id))
+    .map(s => `- ${s.name}: ${s.description}`);
+  const playbooks = expanded.map(x => `### Skill: ${x.s.name}\n${x.pb.trim()}`);
   return '\nYour skills — apply the relevant one when a task matches:\n' +
     (lines.length ? lines.join('\n') + '\n' : '') +
     (playbooks.length ? playbooks.join('\n\n') + '\n' : '');
@@ -73,7 +79,7 @@ function skillsBlock(roleId) {
 
 /* Tile-spec contract is unchanged from Aurora MVP — see prior README. */
 
-function systemPrompt({ project, agent, sharedFrom }) {
+function systemPrompt({ project, agent, sharedFrom, text }) {
   const role = getRole(agent.role);
   const charter = readProjectCharter(project, agent.role);
   const topo = project.topology ? TOPOLOGIES[project.topology] : null;
@@ -89,7 +95,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${roleGuidance(agent.role)}${skillsBlock(agent.role)}${topoLine}${sharedBlock}
+${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${topoLine}${sharedBlock}
 Stay in role and on-goal. Speak briefly, in first person when relevant. The user is talking to you specifically.
 ${RESPONSE_STYLE}
 
@@ -201,7 +207,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
 
   const history = getContext(agentId).messages.slice(0, -1);
   const messages = [
-    { role: 'system', content: systemPrompt({ project, agent, sharedFrom }) },
+    { role: 'system', content: systemPrompt({ project, agent, sharedFrom, text }) },
     ...history,
     { role: 'user', content: text },
   ];
@@ -293,7 +299,7 @@ function parseSpec(raw) {
  * intents (note/list/compose/…) still use the structured path. */
 
 /* Role + charter, but instruct a direct prose reply (no JSON tile spec). */
-function proseSystemPrompt({ project, agent, sharedFrom }) {
+function proseSystemPrompt({ project, agent, sharedFrom, text }) {
   const role = getRole(agent.role);
   const charter = readProjectCharter(project, agent.role);
   const topo = project.topology ? TOPOLOGIES[project.topology] : null;
@@ -308,7 +314,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${roleGuidance(agent.role)}${skillsBlock(agent.role)}${topoLine}${sharedBlock}
+${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${topoLine}${sharedBlock}
 Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.
 ${RESPONSE_STYLE}`;
 }
@@ -380,7 +386,7 @@ async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey
   emitStatus(projectId, agentId, agent?.role === 'sw_engineer' ? 'building' : 'drafting');
   const history = getContext(agentId).messages.slice(0, -1);
   const messages = [
-    { role: 'system', content: proseSystemPrompt({ project, agent, sharedFrom }) },
+    { role: 'system', content: proseSystemPrompt({ project, agent, sharedFrom, text }) },
     ...history,
     { role: 'user', content: text },
   ];
