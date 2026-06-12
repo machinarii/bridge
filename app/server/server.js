@@ -213,6 +213,23 @@ app.get('/settings/models', async (_req, res) => {
   }
 });
 
+/* Validate an OpenRouter key WITHOUT saving it — used by the first-launch
+ * gate so a typo'd key is rejected up front instead of failing on first chat. */
+app.post('/settings/verify-key', async (req, res) => {
+  const key = String(req.body?.key || '').trim();
+  if (!key) return res.status(400).json({ valid: false, error: 'key required' });
+  try {
+    const r = await fetch('https://openrouter.ai/api/v1/key', {
+      headers: { 'Authorization': `Bearer ${key}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (r.ok) return res.json({ valid: true });
+    res.json({ valid: false, error: r.status === 401 ? 'Invalid key' : `OpenRouter returned ${r.status}` });
+  } catch (err) {
+    res.status(502).json({ valid: false, error: 'Could not reach OpenRouter — check your connection.' });
+  }
+});
+
 app.put('/settings', (req, res) => {
   try {
     const updates = {};

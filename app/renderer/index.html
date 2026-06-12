@@ -10,6 +10,31 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
+  <!-- First-launch gate: blocks the whole app until a valid OpenRouter key is
+       saved. No close affordance on purpose — the step cannot be skipped. -->
+  <div id="apikey-gate" hidden role="dialog" aria-modal="true" aria-labelledby="apikey-gate-title">
+    <div class="apikey-gate-card">
+      <svg class="apikey-gate-mark" viewBox="-2 -2 93 74" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="0"  y="31"   width="39" height="39" rx="6" fill="none" stroke="currentColor" stroke-width="4"/>
+        <rect x="25" y="15.5" width="39" height="39" rx="6" fill="none" stroke="currentColor" stroke-width="4"/>
+        <rect x="50" y="0"    width="39" height="39" rx="6" fill="none" stroke="currentColor" stroke-width="4"/>
+      </svg>
+      <h1 id="apikey-gate-title">Welcome to Bridge</h1>
+      <p class="apikey-gate-copy">
+        Bridge agents run on models via <strong>OpenRouter</strong>. Enter your
+        API key to continue — you can create one at
+        <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.
+      </p>
+      <form id="apikey-gate-form">
+        <input id="apikey-gate-input" type="password" placeholder="sk-or-…"
+               autocomplete="off" spellcheck="false" aria-label="OpenRouter API key" />
+        <button id="apikey-gate-save" type="submit">Save &amp; continue</button>
+      </form>
+      <p id="apikey-gate-error" class="apikey-gate-error" hidden></p>
+      <p class="apikey-gate-note">Stored locally in Bridge's settings — never sent anywhere except OpenRouter.</p>
+    </div>
+  </div>
+
   <div id="baseplate">
     <main id="surface" aria-live="polite"></main>
 
