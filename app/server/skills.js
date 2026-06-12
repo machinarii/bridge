@@ -41,6 +41,8 @@ export const SKILLS = [
   { id: 'market-research',   name: 'Market research',      description: 'Personas, segmentation, customer journey maps, TAM/SAM/SOM sizing, competitor analysis.', roles: ['pm', 'ux_research'], source: 'https://github.com/phuryn/pm-skills' },
   { id: 'go-to-market',      name: 'Go-to-market',         description: 'GTM strategy and motions, ideal customer profile, beachhead segment, growth loops, battlecards.', roles: ['pm', 'marketing'], source: 'https://github.com/phuryn/pm-skills' },
   { id: 'product-analytics', name: 'Product analytics',    description: 'North Star + input metrics, cohort and retention analysis, A/B test evaluation, SQL from questions.', roles: ['pm', 'data_sci'], source: 'https://github.com/phuryn/pm-skills' },
+  { id: 'lean-startup',      name: 'Minimalist entrepreneur', description: 'Lean validation playbook — validate the idea, scope an MVP, win first customers, price it, grow sustainably.', roles: ['pm', 'marketing'], source: 'https://github.com/slavingia/skills' },
+  { id: 'mental-models',     name: 'Mental models',        description: '249 decision frameworks with a selection protocol — frame the stakes, pick ONE fitting model, apply it interactively.', roles: ['pm'], source: 'https://github.com/machinarii/awesome-mental-models' },
 
   // — engineering process (obra/superpowers) —
   { id: 'writing-plans',     name: 'Writing plans',        description: 'Turn a goal into a step-by-step implementation plan.',                        roles: ['pm', 'sw_engineer'], source: 'https://github.com/obra/superpowers' },
@@ -52,10 +54,13 @@ export const SKILLS = [
 
   // — building & testing (anthropics/skills) —
   { id: 'mcp-builder',       name: 'MCP builder',          description: 'Build MCP servers that connect agents to external APIs and tools.',           roles: ['sw_engineer'], source: 'https://github.com/anthropics/skills' },
+  { id: 'engineering-patterns', name: 'Engineering patterns', description: 'API design, backend/frontend architecture patterns, e2e testing, and build-test-lint verification loops.', roles: ['sw_engineer'], source: 'https://github.com/affaan-m/ECC' },
   { id: 'frontend-design',   name: 'Frontend design',      description: 'Distinctive, production-grade UI work that avoids generic AI aesthetics.',    roles: ['designer', 'sw_engineer'], source: 'https://github.com/anthropics/skills' },
   { id: 'canvas-design',     name: 'Canvas design',        description: 'Create visual art, posters, and graphics as PNG/PDF.',                        roles: ['designer'], source: 'https://github.com/anthropics/skills' },
   { id: 'impeccable',        name: 'Impeccable design',    description: 'Design-language toolkit — polish, audit, critique, animate, bolder/quieter commands that kill generic AI-slop frontend design.', roles: ['designer'], source: 'https://github.com/pbakaus/impeccable' },
   { id: 'awesome-design',    name: 'Design system inspirations', description: 'Ready-to-use DESIGN.md design systems by aesthetic family — drop one in and scaffold a full UI from exact design tokens.', roles: ['designer'], source: 'https://github.com/VoltAgent/awesome-claude-design' },
+  { id: 'ui-ux-pro',         name: 'UI/UX Pro Max',        description: 'Design-system generator — 67 UI styles, 161 palettes, 57 font pairings, 99 UX guidelines, tailored per project across 15 stacks.', roles: ['designer'], source: 'https://github.com/nextlevelbuilder/ui-ux-pro-max-skill' },
+  { id: 'web-motion-3d',     name: 'Web motion & 3D',      description: 'Interactive web experiences — Three.js/R3F, GSAP ScrollTrigger, spring physics, Lottie/Rive, and integration patterns.', roles: ['designer', 'sw_engineer'], source: 'https://github.com/freshtechbro/claudedesignskills' },
   { id: 'webapp-testing',    name: 'Web app testing',      description: 'Drive and test web apps end-to-end with Playwright automation.',              roles: ['qa'], source: 'https://github.com/anthropics/skills' },
 
   // — documents & comms (anthropics/skills) —
