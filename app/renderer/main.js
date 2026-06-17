@@ -7404,20 +7404,25 @@ async function ensureApiKey() {
       saveBtn.disabled = true;
       saveBtn.textContent = 'Checking…';
       try {
-        const v = await (await fetch('/settings/verify-key', {
+        console.log('[gate] verifying key (len %d)…', key.length);
+        const vr = await fetch('/settings/verify-key', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key }),
-        })).json();
+        });
+        const v = await vr.json();
+        console.log('[gate] verify-key →', vr.status, v);
         if (!v.valid) throw new Error(v.error || 'Invalid key');
         const s = await fetch('/settings', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ OPENROUTER_API_KEY: key }),
         });
+        console.log('[gate] PUT /settings →', s.status);
         if (!s.ok) throw new Error('Could not save the key — try again.');
         resolve();
       } catch (err) {
+        console.error('[gate] save failed:', err);
         errEl.textContent = err.message || 'Something went wrong — try again.';
         errEl.hidden = false;
         saveBtn.disabled = false;
