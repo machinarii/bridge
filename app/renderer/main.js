@@ -7350,13 +7350,17 @@ async function ensureApiKey() {
   // reached the server and confirmed no key is configured.
   for (let attempt = 0; attempt < 8; attempt++) {
     try {
-      const r = await fetch('/settings');
-      if ((await r.json()).OPENROUTER_API_KEY_SET) return;  // key already set → no gate
+      const r = await fetch('/settings', { cache: 'no-store' });   // never trust a stale gate verdict
+      const j = await r.json();
+      console.log('[gate] /settings check → OPENROUTER_API_KEY_SET =', j.OPENROUTER_API_KEY_SET);
+      if (j.OPENROUTER_API_KEY_SET) return;                 // key already set → no gate
       break;                                                // reached server, no key → show gate
-    } catch {
+    } catch (err) {
+      console.warn('[gate] /settings unreachable (attempt', attempt, ')', err?.message || err);
       await new Promise((res) => setTimeout(res, 300));     // server still warming up — retry
     }
   }
+  console.log('[gate] no key configured — showing gate');
 
   const gate    = document.getElementById('apikey-gate');
   const form    = document.getElementById('apikey-gate-form');
