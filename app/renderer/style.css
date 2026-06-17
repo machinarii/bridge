@@ -3239,6 +3239,7 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   cursor: pointer; transition: background 120ms, border-color 120ms;
 }
 #apikey-gate-save:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.5); }
+#apikey-gate-save:focus, #apikey-gate-save:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #apikey-gate-save:disabled { opacity: 0.55; cursor: wait; }
 .apikey-gate-error { margin: 14px 0 0; color: var(--danger); font-size: 15px; }
 .apikey-gate-note { margin: 18px 0 0; color: var(--fg-dim); font-size: 13px; }

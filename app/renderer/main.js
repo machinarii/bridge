@@ -5822,6 +5822,15 @@ gp.addEventListener('press', (e) => {
   setInputMode('gamepad');
   flashShortcutByGamepad(e.detail.button);
   const b = e.detail.button;
+  // First-launch key gate owns the gamepad while it's up: d-pad moves between
+  // the key field and Save; Cross submits.
+  const apiGateEl = document.getElementById('apikey-gate');
+  if (apiGateEl && !apiGateEl.hidden) {
+    if (b === 'up' || b === 'left')         document.getElementById('apikey-gate-input')?.focus();
+    else if (b === 'down' || b === 'right') document.getElementById('apikey-gate-save')?.focus();
+    else if (b === 'cross')                 document.getElementById('apikey-gate-save')?.click();
+    return;
+  }
   // Reasoning-effort picker: hold the touchpad, nudge Up/Down (d-pad or sticks).
   if (b === 'touchpad') { openEffortPicker(); return; }
   if (effortPickerOpen) {
@@ -7371,8 +7380,22 @@ async function ensureApiKey() {
   // global grid-nav / PTT handlers, and swallow Escape. Two carve-outs:
   //  - never touch ⌘/Ctrl combos — that was eating ⌘V paste (and copy/cut/⌘A);
   //  - never touch keys typed in the input (target is inside the gate).
+  const ARROWS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
   const trap = (e) => {
     if (e.metaKey || e.ctrlKey) return;
+    // Arrow-key focus nav between the key field and Save (keyboard; the d-pad
+    // is handled on the gamepad bus below). Left/Right/Up stay native inside
+    // the field so the text cursor still works; Down hops to the button.
+    if (e.type === 'keydown' && ARROWS.includes(e.key)) {
+      if (document.activeElement === saveBtn) {
+        input.focus(); e.preventDefault(); e.stopImmediatePropagation(); return;
+      }
+      if (document.activeElement === input) {
+        if (e.key === 'ArrowDown') { saveBtn.focus(); e.preventDefault(); e.stopImmediatePropagation(); }
+        return;   // keep Left/Right/Up for the text cursor
+      }
+      input.focus(); e.preventDefault(); e.stopImmediatePropagation(); return;
+    }
     if (!gate.contains(e.target) || e.key === 'Escape') {
       e.preventDefault();
       e.stopImmediatePropagation();
