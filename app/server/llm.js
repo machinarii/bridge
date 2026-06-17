@@ -26,3 +26,23 @@ export async function callOpenRouterText({ apiKey, model, prompt, timeoutMs = PL
   } catch (err) { console.warn(`[openrouter] ${model} → ${err?.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : (err?.message || err)}`); return ''; }
   finally { clearTimeout(timer); }
 }
+
+/* Same call constrained to a JSON object response. Returns the raw JSON string
+ * (caller parses); on any failure returns '{}' so the caller never throws. */
+export async function callOpenRouterJSON({ apiKey, model, prompt, timeoutMs = PLAN_TIMEOUT_MS }) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json',
+                 'HTTP-Referer': 'http://localhost/bridge', 'X-Title': 'Bridge - council' },
+      body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages: [{ role: 'user', content: prompt }] }),
+      signal: ctrl.signal,
+    });
+    if (!r.ok) { console.warn(`[openrouter] ${model} (json) → HTTP ${r.status}`); return '{}'; }
+    const data = await r.json();
+    return data?.choices?.[0]?.message?.content || '{}';
+  } catch (err) { console.warn(`[openrouter] ${model} (json) → ${err?.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : (err?.message || err)}`); return '{}'; }
+  finally { clearTimeout(timer); }
+}

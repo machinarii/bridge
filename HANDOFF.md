@@ -40,13 +40,23 @@ Notes:
 - Voice is **Parakeet-only** — it never falls back to the browser engine. If the sidecar is down, voice shows a visible STT error.
 - **QA shortcut:** `npm run qa:new -- trading` (or `recipes` / `iot`) seeds a fully-formed project from prefilled name/objective/features and kicks off — skips the capture UI. Prefilled copy-paste text for the capture screens + a flow walkthrough live in **`QA-GUIDE.md`**.
 
-## What's new (latest session — storage, roles, skills)
+## What's new (latest session — Council + custom Instructions)
+
+- **L1 "Council" — PM intake → blind & sequential deliberation → chair.** New project-level surface (press **C** / gamepad L2 from the grid, or `openCouncil()`). The flow, all in the new **`app/server/council.js`** module:
+  1. **PM intake.** The PM (`getModelForRole('pm')`) reads the question and returns up to **3** single-select clarifying questions; the user answers each via clickable options (or "Other…" free text / Skip), one at a time. Their answers become a context brief appended to every downstream prompt. `POST /council/intake` → `buildIntake` / `normalizeIntake`.
+  2. **Blind & sequential members.** The three "council members" answer **one at a time, each in its own bubble** — never simultaneously, and each **blind** (it sees only the question + PM context, never another member's answer). The client calls `POST /council/member` once per index in turn; `askMember` runs the call.
+  3. **Chairman synthesis.** `POST /council/synthesis` → `synthesize` folds the answers into one decisive recommendation.
+  Members are configurable in **Settings → Models → Council members** and default to three diverse problem-solvers no other agent uses — `openai/gpt-5.1`, `google/gemini-2.5-pro`, `deepseek/deepseek-r1` (chair = member 1; xAI/grok omitted by default — 404s on accounts whose OpenRouter data policy disallows xAI). Renderer state machine in `councilState` (`MODE_COUNCIL`): `openCouncil → startCouncilIntake → renderCouncilIntake/answerCouncilIntake → runCouncilDeliberation` (`updateCouncilMember` / `setCouncilSynth`); styles under `.council-*` in `style.css`. Inspired by karpathy/llm-council.
+- **Custom AI instructions (Settings → Instructions).** New settings tab with a freeform textarea persisted as `AI_INSTRUCTIONS`; injected into **every agent system prompt** (`customInstructionsBlock()` in `orchestrator.js`, both the JSON-tile and prose prompts) and into **all council prompts** (`aiInstructionsBlock()` in `council.js`). Empty by default; the `PUT /settings` handler special-cases it so an empty string can clear it (the generic update loop skips empties).
+- **Tests.** Council logic now lives in an importable module with injectable LLM callers (mirroring `kickoff.js`), so it's unit-tested in **`app/server/council.test.js`** (13 tests: model resolution defaults/override/malformed, intake normalization + capping, context assembly, blind member prompt, chair prompt member-numbering, synthesis short-circuit). Full suite **175/175**.
+
+## What's new (previous session — storage, roles, skills)
 
 - **Storage unified under `~/bridge-projects/`.** The cross-project registry (`projects.json`, `tasks.json`, `scratchpad.json`) moved out of the app bundle to `~/bridge-projects/.bridge/` via the new `app/server/state-dir.js` (one-time copy migration from legacy `app/state/`). All per-project files live in the project's own repo (`~/bridge-projects/<slug>/`). Three real bugs fixed in the process: `readProjectCharter` read a legacy path the writers never touched (the orchestrator never saw tailored charters); autosave git-committed the internal state dir instead of the project repo (now commits `project.repoPath` with an inline `-c` identity); `scratchpad.js` ignored `BRIDGE_STATE_DIR`, leaking test writes into the real scratchpad.
 - **12-role catalog.** New **Electrical Engineer** (`ee_engineer`, charter `role-ee-eng.md`) owning schematics, PCB layout, power/analog, and fab outputs; the long-failing `listRoles` test (expected 14) is fixed to 12.
 - **Skill registry rebuilt around the GitHub Claude-skills ecosystem.** 31 skills, every role covered; adopted entries carry a `source` repo URL (anthropics/skills, obra/superpowers, pbakaus/impeccable, VoltAgent/awesome-claude-design, trailofbits/skills, aklofas/kicad-happy, …). **Skills now inject into agent prompts**: `orchestrator.js` adds a per-role skills section to both system prompts (tile + prose, so the executor inherits it); 13 condensed playbooks vendored at `app/server/skill-playbooks/<id>.md` inject in full, the rest as one-line capabilities; the Settings → Skills toggle now actually gates agent behavior. New API: `skillsForRole(roleId)`, `loadSkillPlaybook(id)`.
 
-## What's new (previous session)
+## What's new (earlier — scaffold/execution loop)
 
 Code generation/execution loop + a long tail of doc/UX fixes on `feat/scaffold-phase-a`. Highlights:
 
