@@ -7353,9 +7353,12 @@ async function ensureApiKey() {
   gate.hidden = false;
   input.focus();
 
-  // Capture-phase trap: kill keys targeted outside the gate (grid nav, PTT,
-  // type-box) and Escape everywhere. Keys typed in the input pass through.
+  // Capture-phase trap: stop keys aimed OUTSIDE the gate from reaching the
+  // global grid-nav / PTT handlers, and swallow Escape. Two carve-outs:
+  //  - never touch ⌘/Ctrl combos — that was eating ⌘V paste (and copy/cut/⌘A);
+  //  - never touch keys typed in the input (target is inside the gate).
   const trap = (e) => {
+    if (e.metaKey || e.ctrlKey) return;
     if (!gate.contains(e.target) || e.key === 'Escape') {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -7364,9 +7367,16 @@ async function ensureApiKey() {
   // Bubble-stop at the gate root so input keystrokes never reach the global
   // window-level shortcut handlers registered at module load.
   const stop = (e) => e.stopPropagation();
+  // Keep the cursor in the key field. Programmatic focus() can silently no-op
+  // when the OS window isn't focused at launch — leaving ⌘V with no target — so
+  // also refocus when the window regains focus and on any click in the card
+  // (except the OpenRouter link, which must stay clickable).
   const refocus = () => { if (!gate.hidden) setTimeout(() => input.focus(), 0); };
+  const grabFocus = (e) => { if (!gate.hidden && e.target?.tagName !== 'A') input.focus(); };
   window.addEventListener('keydown', trap, true);
   window.addEventListener('keyup', trap, true);
+  window.addEventListener('focus', refocus);
+  gate.addEventListener('mousedown', grabFocus);
   gate.addEventListener('keydown', stop);
   gate.addEventListener('keyup', stop);
   input.addEventListener('focusout', refocus);
@@ -7376,7 +7386,7 @@ async function ensureApiKey() {
       e.preventDefault();
       const key = input.value.trim();
       errEl.hidden = true;
-      if (!key) { errEl.textContent = 'Enter your OpenRouter API key to continue.'; errEl.hidden = false; return; }
+      if (!key) { errEl.textContent = 'Enter your OpenRouter API key to continue.'; errEl.hidden = false; input.focus(); return; }
       saveBtn.disabled = true;
       saveBtn.textContent = 'Checking…';
       try {
@@ -7404,6 +7414,8 @@ async function ensureApiKey() {
 
   window.removeEventListener('keydown', trap, true);
   window.removeEventListener('keyup', trap, true);
+  window.removeEventListener('focus', refocus);
+  gate.removeEventListener('mousedown', grabFocus);
   input.removeEventListener('focusout', refocus);
   gate.hidden = true;
   console.log('[bridge] OpenRouter key saved via first-launch gate');
