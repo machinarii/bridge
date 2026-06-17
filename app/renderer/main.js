@@ -7351,16 +7351,12 @@ async function ensureApiKey() {
   for (let attempt = 0; attempt < 8; attempt++) {
     try {
       const r = await fetch('/settings', { cache: 'no-store' });   // never trust a stale gate verdict
-      const j = await r.json();
-      console.log('[gate] /settings check → OPENROUTER_API_KEY_SET =', j.OPENROUTER_API_KEY_SET);
-      if (j.OPENROUTER_API_KEY_SET) return;                 // key already set → no gate
+      if ((await r.json()).OPENROUTER_API_KEY_SET) return;  // key already set → no gate
       break;                                                // reached server, no key → show gate
-    } catch (err) {
-      console.warn('[gate] /settings unreachable (attempt', attempt, ')', err?.message || err);
+    } catch {
       await new Promise((res) => setTimeout(res, 300));     // server still warming up — retry
     }
   }
-  console.log('[gate] no key configured — showing gate');
 
   const gate    = document.getElementById('apikey-gate');
   const form    = document.getElementById('apikey-gate-form');
@@ -7408,21 +7404,17 @@ async function ensureApiKey() {
       saveBtn.disabled = true;
       saveBtn.textContent = 'Checking…';
       try {
-        console.log('[gate] verifying key (len %d)…', key.length);
-        const vr = await fetch('/settings/verify-key', {
+        const v = await (await fetch('/settings/verify-key', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key }),
-        });
-        const v = await vr.json();
-        console.log('[gate] verify-key →', vr.status, v);
+        })).json();
         if (!v.valid) throw new Error(v.error || 'Invalid key');
         const s = await fetch('/settings', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ OPENROUTER_API_KEY: key }),
         });
-        console.log('[gate] PUT /settings →', s.status);
         if (!s.ok) throw new Error('Could not save the key — try again.');
         resolve();
       } catch (err) {

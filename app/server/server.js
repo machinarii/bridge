@@ -284,7 +284,6 @@ app.post('/settings/verify-key', async (req, res) => {
       headers: { 'Authorization': `Bearer ${key}` },
       signal: AbortSignal.timeout(8000),
     });
-    console.log(`[gate] verify-key: len=${key.length} openrouter=${r.status}`);
     if (r.ok) return res.json({ valid: true });
     res.json({ valid: false, error: r.status === 401 ? 'Invalid key' : `OpenRouter returned ${r.status}` });
   } catch (err) {
