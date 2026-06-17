@@ -139,6 +139,7 @@ function parseJsonEnv(name, fallback) {
 }
 
 app.get('/settings', (_req, res) => {
+  res.set('Cache-Control', 'no-store');   // the gate must never read a stale key verdict
   res.json({
     OPENROUTER_API_KEY: maskKey(process.env.OPENROUTER_API_KEY || ''),
     OPENROUTER_API_KEY_SET: !!process.env.OPENROUTER_API_KEY,
