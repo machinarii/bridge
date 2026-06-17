@@ -6865,29 +6865,34 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
+  // Bare-letter shortcuts (v=talk, e=explorer, m=memory, a=activity, /=type)
+  // must NOT hijack OS/browser combos — otherwise ⌘V triggers push-to-talk and
+  // preventDefault() eats the paste, ⌘A blocks select-all, etc.
+  const bareKey = !e.metaKey && !e.ctrlKey && !e.altKey;
+
   // Hold 'v' for push-to-talk (voice).
-  if (e.key === 'v' && !e.repeat) {
+  if (bareKey && e.key === 'v' && !e.repeat) {
     e.preventDefault();
     if (mode === MODE_PROJECTS) talkToFocusedLead();
     else startPTT();
     return;
   }
 
-  if (e.key === 'e' || e.key === 'E') {
+  if (bareKey && (e.key === 'e' || e.key === 'E')) {
     // toggleFileExplorer bails outside the surface modes (L1 / L2 /
     // add-agent), so no extra guard needed here.
     e.preventDefault();
     toggleFileExplorer();
     return;
   }
-  if (e.key === 'm' || e.key === 'M') {
+  if (bareKey && (e.key === 'm' || e.key === 'M')) {
     if (mode === MODE_PROJECTS) {
       e.preventDefault();
       toggleMemoryDrawer();
       return;
     }
   }
-  if (e.key === 'a' || e.key === 'A') {
+  if (bareKey && (e.key === 'a' || e.key === 'A')) {
     if (mode === MODE_GRID || mode === MODE_ZOOM ||
         mode === MODE_ADD_AGENT || mode === MODE_PROJECTS) {
       e.preventDefault();
@@ -6895,7 +6900,7 @@ window.addEventListener('keydown', (e) => {
       return;
     }
   }
-  if (e.key === '/')  { e.preventDefault(); typedWrap.hidden = false; typedInput.focus(); return; }
+  if (bareKey && e.key === '/')  { e.preventDefault(); typedWrap.hidden = false; typedInput.focus(); return; }
 
   // Universal Tab: jumps focus into the footer rail from anywhere. Once
   // there, the rail keydown handler below takes over.
@@ -7329,7 +7334,7 @@ async function finalizeNewProject() {
   }
 }
 window.addEventListener('keyup', (e) => {
-  if (e.key === 'v') { e.preventDefault(); endPTT(); }
+  if (e.key === 'v' && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); endPTT(); }
   // Releasing Space / Enter ends a hold-to-talk started on an "Other" option.
   if ((e.code === 'Space' || e.key === 'Enter') && _otherDictateBtn) { e.preventDefault(); endOtherDictate(); }
 });
@@ -7339,10 +7344,19 @@ window.addEventListener('keyup', (e) => {
  * affordance, Escape is swallowed, focus is held in the input, and all key
  * events outside the gate are trapped so nav/PTT handlers can't fire. */
 async function ensureApiKey() {
-  try {
-    const r = await fetch('/settings');
-    if ((await r.json()).OPENROUTER_API_KEY_SET) return;
-  } catch { /* server unreachable — fall through and show the gate anyway */ }
+  // Retry briefly before showing the gate. At launch the renderer can load
+  // before the server is ready; failing open immediately would wrongly prompt
+  // for a key that's already set. Only show the gate once we've actually
+  // reached the server and confirmed no key is configured.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      const r = await fetch('/settings');
+      if ((await r.json()).OPENROUTER_API_KEY_SET) return;  // key already set → no gate
+      break;                                                // reached server, no key → show gate
+    } catch {
+      await new Promise((res) => setTimeout(res, 300));     // server still warming up — retry
+    }
+  }
 
   const gate    = document.getElementById('apikey-gate');
   const form    = document.getElementById('apikey-gate-form');
