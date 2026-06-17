@@ -699,6 +699,7 @@ const MODE_NEW_PROJ_FEATURES = 'new_project_features'; // create-flow step 5
 const MODE_GRID             = 'grid';              // L1 (project grid)
 const MODE_ZOOM             = 'zoom';              // L2 (agent zoom)
 const MODE_ADD_AGENT        = 'add_agent';         // L1 → add-agent role picker
+const MODE_COUNCIL          = 'council';           // L1 → Council (ask multiple models)
 
 let mode = MODE_PROJECTS;
 let projects = [];                // [{ id, name, agents, ... }]
@@ -2382,6 +2383,7 @@ function updateGridShortcuts() {
     { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
     {                    gamepad: 'triangle', keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
     { gamepad: 'square', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
+    { gamepad: 'l2', keyboard: 'C', label: 'Council', action: () => openCouncil() },
   ];
   if (!isLeadFocused) {
     items.push({ gamepad: 'options', keyboard: 'Space', label: 'Agent on / off',
@@ -3650,6 +3652,243 @@ async function exitZoom() {
       renderGrid();
     }
   );
+}
+
+/* ───────────────────────── Council ─────────────────────────
+ * L1 → the PM gathers a little context (intake), then three models answer one
+ * at a time, BLIND and SEQUENTIAL (no model sees another), then a chairman
+ * synthesizes. Backend: POST /council/intake, /council/member, /council/synthesis.
+ * Members set in Settings → Models. State machine lives in `councilState`. */
+let councilState = null;   // { phase, question, questions, idx, answers, models, members }
+
+function councilModelLabel(id) {
+  if (!id) return 'Model';
+  const tail = String(id).split('/').pop();
+  return tail.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function councilCrumbs() {
+  setBreadcrumbs([{ label: 'Projects' }, { label: sentenceCase(activeProject.name) }, { label: 'Council' }]);
+}
+
+function councilHeader(question) {
+  return `<header class="council-result-head"><div class="council-eyebrow">Council</div>` +
+         `<h2 class="council-q">${escapeHtml(question)}</h2></header>`;
+}
+
+function openCouncil() {
+  if (!activeProject) return;
+  mode = MODE_COUNCIL;
+  councilState = { phase: 'prompt' };
+  councilCrumbs();
+  surfaceEl.innerHTML = '';
+  const t = document.createElement('section');
+  t.className = 'council-tile';
+  t.innerHTML = `
+    <h2 class="council-h">Ask the Council</h2>
+    <p class="council-sub">The PM gathers a little context, then three models answer in turn and a chair synthesizes one recommendation.</p>
+    <textarea id="council-input" class="council-input" rows="3" placeholder="Pose a question or problem for the council…" spellcheck="false"></textarea>
+    <div class="council-actions">
+      <button type="button" class="role-cancel" id="council-cancel">Cancel</button>
+      <button type="button" class="role-confirm" id="council-ask">Ask the Council</button>
+    </div>`;
+  surfaceEl.appendChild(t);
+  const input = t.querySelector('#council-input');
+  const ask = () => { const q = input.value.trim(); if (q) startCouncilIntake(q); };
+  t.querySelector('#council-cancel').addEventListener('click', () => renderGrid());
+  t.querySelector('#council-ask').addEventListener('click', ask);
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
+    else if (e.key === 'Escape') { e.preventDefault(); renderGrid(); }
+  });
+  setTimeout(() => input.focus(), 0);
+  renderActionBar([]);
+  setShortcuts([{ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() }]);
+  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Ask', action: ask });
+}
+
+/* A centered "thinking" screen used while the PM prepares intake questions. */
+function renderCouncilThinking(question, label) {
+  mode = MODE_COUNCIL;
+  councilCrumbs();
+  surfaceEl.innerHTML = '';
+  const wrap = document.createElement('section');
+  wrap.className = 'council-result';
+  wrap.innerHTML = councilHeader(question) +
+    `<div class="council-thinking"><div class="typing-dots"><span></span><span></span><span></span></div>` +
+    `<p>${escapeHtml(label)}</p></div>`;
+  surfaceEl.appendChild(wrap);
+  renderActionBar([]);
+  setShortcuts([{ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() }]);
+  setPrimaryShortcut({ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() });
+}
+
+/* Step 1 — PM intake. Ask the server for clarifying questions; if there are
+ * none (question already clear, or intake failed) go straight to deliberation. */
+async function startCouncilIntake(question) {
+  councilState = { phase: 'loading', question, questions: [], idx: 0, answers: [], models: [], members: [] };
+  renderCouncilThinking(question, 'The PM is reviewing your question…');
+  try {
+    const r = await fetch('/council/intake', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    councilState.questions = Array.isArray(data.questions) ? data.questions : [];
+    councilState.models = Array.isArray(data.models) ? data.models : [];
+  } catch (err) {
+    // Intake is best-effort — never block the council on it.
+    console.warn('[council] intake failed:', err?.message || err);
+    councilState.questions = [];
+  }
+  if (councilState.questions.length) { councilState.phase = 'intake'; renderCouncilIntake(); }
+  else runCouncilDeliberation();
+}
+
+/* One clarifying question at a time, answered via clickable options. */
+function renderCouncilIntake() {
+  const st = councilState;
+  const cur = st.questions[st.idx];
+  mode = MODE_COUNCIL;
+  councilCrumbs();
+  surfaceEl.innerHTML = '';
+  const wrap = document.createElement('section');
+  wrap.className = 'council-intake';
+  wrap.innerHTML = councilHeader(st.question) +
+    `<div class="council-intake-meta">PM · question ${st.idx + 1} of ${st.questions.length}</div>` +
+    `<h3 class="council-intake-q">${escapeHtml(cur.q)}</h3>` +
+    `<div class="council-options">` +
+    cur.options.map((o, i) => `<button type="button" class="council-option" data-idx="${i}">` +
+      `<span class="council-opt-key">${i + 1}</span><span>${escapeHtml(o)}</span></button>`).join('') +
+    `</div>` +
+    `<input type="text" id="council-other" class="council-other-input" placeholder="Other — type your own answer…" spellcheck="false" />` +
+    `<div class="council-actions"><button type="button" class="role-cancel" id="council-skip">Skip</button></div>`;
+  surfaceEl.appendChild(wrap);
+  wrap.querySelectorAll('.council-option').forEach((b) =>
+    b.addEventListener('click', () => answerCouncilIntake(cur.options[Number(b.dataset.idx)])));
+  const other = wrap.querySelector('#council-other');
+  other.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); const v = other.value.trim(); if (v) answerCouncilIntake(v); }
+    else if (e.key === 'Escape') { e.preventDefault(); renderGrid(); }
+  });
+  wrap.querySelector('#council-skip').addEventListener('click', () => answerCouncilIntake(null));
+  renderActionBar([]);
+  setShortcuts([{ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() }]);
+  setPrimaryShortcut(null);
+}
+
+/* Record an answer (or skip when null), advance; deliberate after the last. */
+function answerCouncilIntake(value) {
+  const st = councilState;
+  const cur = st.questions[st.idx];
+  if (value != null && String(value).trim()) st.answers.push({ q: cur.q, a: String(value).trim() });
+  st.idx += 1;
+  if (st.idx < st.questions.length) renderCouncilIntake();
+  else runCouncilDeliberation();
+}
+
+/* Step 2 + 3 — members answer one at a time (blind), then the chair synthesizes. */
+function councilMemberSlot(i, label) {
+  return `<article class="council-card pending" id="council-member-${i}">` +
+    `<div class="council-card-model"><span class="council-num">${i + 1}</span>${escapeHtml(label)}</div>` +
+    `<div class="council-card-body"><div class="typing-dots"><span></span><span></span><span></span></div></div>` +
+    `</article>`;
+}
+
+function renderCouncilDeliberation() {
+  const st = councilState;
+  st.phase = 'deliberation';
+  mode = MODE_COUNCIL;
+  councilCrumbs();
+  surfaceEl.innerHTML = '';
+  const wrap = document.createElement('section');
+  wrap.className = 'council-result';
+  wrap.innerHTML = councilHeader(st.question) +
+    `<div class="council-thread">` +
+    [0, 1, 2].map((i) => councilMemberSlot(i, st.models[i] ? councilModelLabel(st.models[i]) : `Member ${i + 1}`)).join('') +
+    `</div>` +
+    `<section class="council-synth" id="council-synth" hidden></section>`;
+  surfaceEl.appendChild(wrap);
+  renderActionBar([]);
+  setShortcuts([{ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() }]);
+  setPrimaryShortcut({ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() });
+}
+
+function updateCouncilMember(i, m) {
+  const el = document.getElementById(`council-member-${i}`);
+  if (!el) return;
+  el.classList.remove('pending');
+  const label = m.model ? councilModelLabel(m.model) : `Member ${i + 1}`;
+  el.innerHTML =
+    `<div class="council-card-model"><span class="council-num">${i + 1}</span>${escapeHtml(label)}</div>` +
+    `<div class="council-card-body">${m.content ? renderMarkdown(m.content)
+      : `<p class="council-err">${escapeHtml(m.error || 'No response')}</p>`}</div>`;
+  try { attachCodeCopyHandlers(el); } catch {}
+}
+
+function setCouncilSynth(data, busy) {
+  const el = document.getElementById('council-synth');
+  if (!el) return;
+  el.hidden = false;
+  if (busy) {
+    el.innerHTML = `<div class="council-synth-label">Chairman synthesizing…</div>` +
+      `<div class="council-card-body"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+    return;
+  }
+  if (data && data.content) {
+    el.innerHTML = `<div class="council-synth-label">Chairman synthesis · ${escapeHtml(councilModelLabel(data.model))}</div>` +
+      `<div class="council-card-body">${renderMarkdown(data.content)}</div>`;
+    try { attachCodeCopyHandlers(el); } catch {}
+  } else {
+    el.innerHTML = `<div class="council-synth-label">Chairman synthesis</div>` +
+      `<p class="council-err">${escapeHtml((data && data.error) || 'No synthesis.')}</p>`;
+  }
+}
+
+async function runCouncilDeliberation() {
+  const st = councilState;
+  st.members = [];
+  renderCouncilDeliberation();
+  // Sequential: each member's bubble fills in turn — never all at once. Each
+  // call is blind (server sends only the question + PM context, no peer answers).
+  for (let i = 0; i < 3; i++) {
+    let member;
+    try {
+      const r = await fetch('/council/member', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: st.question, answers: st.answers, index: i }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      member = data;
+    } catch (err) {
+      member = { model: st.models[i] || null, content: '', error: String(err.message || err) };
+    }
+    st.members[i] = member;
+    updateCouncilMember(i, member);
+  }
+  setCouncilSynth(null, true);
+  try {
+    const r = await fetch('/council/synthesis', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: st.question, answers: st.answers, members: st.members }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    setCouncilSynth(data, false);
+  } catch (err) {
+    setCouncilSynth({ content: '', error: String(err.message || err) }, false);
+  }
+  st.phase = 'done';
+  renderActionBar([]);
+  setShortcuts([
+    { keyboard: 'N', label: 'New question', action: () => openCouncil() },
+    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() },
+  ]);
+  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Back', action: () => renderGrid() });
 }
 
 /** Slide to the next / previous project from L1 (project detail). */
@@ -5954,6 +6193,8 @@ const settingsApiMetaEl   = document.getElementById('settings-api-key-current');
 const settingsModelEl     = document.getElementById('settings-model');
 const settingsRouterModelEl = document.getElementById('settings-router-model');
 const settingsRoleModelsEl= document.getElementById('settings-role-models');
+const settingsCouncilEls  = [0, 1, 2].map((i) => document.getElementById(`settings-council-${i}`));
+const settingsInstructionsEl = document.getElementById('settings-instructions');
 const settingsSkillsListEl= document.getElementById('settings-skills-list');
 const ghStatusEl       = document.getElementById('settings-github-status');
 const ghConnectEl      = document.getElementById('settings-github-connect');
@@ -6056,6 +6297,14 @@ function populateRouterModelSelect(currentId) {
   // Server resolves this (defaults to the fast router model), so it's always a
   // concrete model — no "use default" entry needed.
   settingsRouterModelEl.appendChild(buildModelOptions(currentId, false));
+}
+
+function populateCouncilModels(models) {
+  settingsCouncilEls.forEach((sel, i) => {
+    if (!sel) return;
+    sel.innerHTML = '';
+    sel.appendChild(buildModelOptions(models[i] || '', false));
+  });
 }
 
 function populateRoleModels(byRole) {
@@ -6281,6 +6530,8 @@ async function openSettings() {
   populateModelSelect(s.OPENROUTER_MODEL || '');
   populateRouterModelSelect(s.OPENROUTER_ROUTER_MODEL || '');
   populateRoleModels(s.OPENROUTER_MODEL_BY_ROLE || {});
+  populateCouncilModels(s.OPENROUTER_COUNCIL_MODELS || []);
+  if (settingsInstructionsEl) settingsInstructionsEl.value = s.AI_INSTRUCTIONS || '';
   populateMcpList(s.MCP_PLUGINS || []);
   populateSkills();
   if (ghClientIdEl) ghClientIdEl.value = s.GITHUB_OAUTH_CLIENT_ID || '';
@@ -6464,6 +6715,8 @@ async function saveSettings() {
     if (v) byRole[sel.dataset.role] = v;
   }
   updates.OPENROUTER_MODEL_BY_ROLE = byRole;
+  updates.OPENROUTER_COUNCIL_MODELS = settingsCouncilEls.map((sel) => (sel?.value || '').trim()).filter(Boolean);
+  if (settingsInstructionsEl) updates.AI_INSTRUCTIONS = settingsInstructionsEl.value;
   updates.MCP_PLUGINS = settingsMcpEntries;
   updates.GIT_AUTOSAVE = !!settingsGitEnabledEl.checked;
   updates.GIT_AUTOSAVE_INTERVAL_MIN = Math.max(1, Math.min(120, Number(settingsGitIntervalEl.value) || 5));
@@ -6768,6 +7021,22 @@ window.addEventListener('keydown', (e) => {
       return;
     }
     if (e.key === 'Escape') { e.preventDefault(); goBackInCreateFlow(); return; }
+  } else if (mode === MODE_COUNCIL) {
+    // Inputs (prompt textarea, intake "Other") stopPropagation while focused, so
+    // this branch only fires when no field is focused. Behavior is phase-aware.
+    if (councilState?.phase === 'intake') {
+      if (e.key === 'Escape') { e.preventDefault(); renderGrid(); return; }
+      const cur = councilState.questions[councilState.idx];
+      const n = Number(e.key);
+      if (cur && Number.isInteger(n) && n >= 1 && cur.options[n - 1] !== undefined) {
+        e.preventDefault(); answerCouncilIntake(cur.options[n - 1]); return;
+      }
+      if (e.key === 's' || e.key === 'S') { e.preventDefault(); answerCouncilIntake(null); return; }
+    } else {
+      if (e.key === 'Escape')                  { e.preventDefault(); renderGrid(); return; }
+      else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openCouncil(); return; }
+      else if (e.key === 'Enter')              { e.preventDefault(); renderGrid(); return; }
+    }
   }
 
   // Viewer text container holds focus — Up jumps to the × button, Left hops
@@ -6828,6 +7097,7 @@ window.addEventListener('keydown', (e) => {
     else if (e.code === 'Space') { e.preventDefault(); toggleFocusedAgentEnabled(); }
     else if (e.key === '[')      { e.preventDefault(); cycleProject(-1); }
     else if (e.key === ']')      { e.preventDefault(); cycleProject(+1); }
+    else if (e.key === 'c' || e.key === 'C') { e.preventDefault(); openCouncil(); }
   } else if (entryMode === MODE_ZOOM) {
     // Chat bubble selection. ArrowUp from the surface enters the chat
     // history at the last bubble; once inside, ArrowUp/Down walks

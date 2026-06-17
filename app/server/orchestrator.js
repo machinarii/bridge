@@ -79,6 +79,12 @@ function skillsBlock(roleId, taskText) {
 
 /* Tile-spec contract is unchanged from Aurora MVP — see prior README. */
 
+/* User-defined custom instructions (Settings → Instructions). Empty by default. */
+function customInstructionsBlock() {
+  const ins = (process.env.AI_INSTRUCTIONS || '').trim();
+  return ins ? `\n\nAdditional user instructions (always follow):\n${ins}\n` : '';
+}
+
 function systemPrompt({ project, agent, sharedFrom, text }) {
   const role = getRole(agent.role);
   const charter = readProjectCharter(project, agent.role);
@@ -96,7 +102,7 @@ Your charter for this project:
 ${charter}
 ---
 ${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${topoLine}${sharedBlock}
-Stay in role and on-goal. Speak briefly, in first person when relevant. The user is talking to you specifically.
+Stay in role and on-goal. Speak briefly, in first person when relevant. The user is talking to you specifically.${customInstructionsBlock()}
 ${RESPONSE_STYLE}
 
 Your job: classify the user's intent and return a single JSON object describing the tile surface to render. No prose, no markdown, no code fences. JSON only.
@@ -315,7 +321,7 @@ Your charter for this project:
 ${charter}
 ---
 ${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${topoLine}${sharedBlock}
-Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.
+Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.${customInstructionsBlock()}
 ${RESPONSE_STYLE}`;
 }
 

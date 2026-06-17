@@ -128,6 +128,7 @@
       <div class="settings-tabs" role="tablist">
         <button type="button" class="settings-tab" data-tab="general" role="tab" aria-selected="true">General</button>
         <button type="button" class="settings-tab" data-tab="models" role="tab" aria-selected="false">Models</button>
+        <button type="button" class="settings-tab" data-tab="instructions" role="tab" aria-selected="false">Instructions</button>
         <button type="button" class="settings-tab" data-tab="skills" role="tab" aria-selected="false">Skills</button>
         <button type="button" class="settings-tab" data-tab="mcp" role="tab" aria-selected="false">MCP</button>
         <button type="button" class="settings-tab" data-tab="git" role="tab" aria-selected="false">Git</button>
@@ -157,7 +158,20 @@
       </section>
 
       <section class="settings-pane" data-tab="models" hidden>
+        <label class="settings-field council-field">
+          <span>Council members <small style="opacity:0.6">(three models the L1 Council asks — keep them distinct from your agents)</small></span>
+          <select id="settings-council-0"></select>
+          <select id="settings-council-1"></select>
+          <select id="settings-council-2"></select>
+        </label>
         <div id="settings-role-models"></div>
+      </section>
+
+      <section class="settings-pane" data-tab="instructions" hidden>
+        <label class="settings-field">
+          <span>Custom AI instructions <small style="opacity:0.6">(added to every agent + council prompt — empty by default)</small></span>
+          <textarea id="settings-instructions" rows="10" placeholder="e.g. Always answer concisely. Prefer TypeScript. Surface tradeoffs." spellcheck="false"></textarea>
+        </label>
       </section>
 
       <section class="settings-pane" data-tab="skills" hidden>

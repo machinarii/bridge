@@ -2,7 +2,9 @@
 
 ## Command center for multi-agentic orchestration using diverse input modalities (voice, trackpad/mouse, keyboard and gamepad) for ultimate productivity.
 
-Bridge is an **command center for managing multi-agent work** — a productivity surface for running teams of role-based AI agents across multiple projects. You describe intent; the orchestrator routes it to the right agents, and composes a consistent, navigable surface. Agents work **in parallel** — many run at once across your projects — and can define work topology so that agents can work dynamically. The goal is to make *coordinating a team of agents* — assigning, steering, and tracking their work — fast, low-friction and goal-oriented.
+> **Bridge brings autonomous, multi-step, and parallel task execution to agents through a graphical desktop interface.**
+
+Bridge is a **command center for managing multi-agent work** — a productivity surface for running teams of role-based AI agents across multiple projects. You describe intent; the orchestrator routes it to the right agents, and composes a consistent, navigable surface. Agents work **in parallel** — many run at once across your projects — and can define work topology so that agents can work dynamically. The goal is to make *coordinating a team of agents* — assigning, steering, and tracking their work — fast, low-friction and goal-oriented.
 
 It's built around **diverse input modalities**, so you can drive it however suits you (and however you're able to):
 
@@ -52,10 +54,12 @@ For the full vision and design rationale see the (local, unpublished) `docs/` fo
 - **Redo / regenerate** — re-roll a prompt's answer in place; each consecutive redo escalates temperature (variety) and reasoning effort (quality).
 - **Deterministic surfaces** — agents emit a small structured spec; a fixed renderer turns it into a stable, navigable UI (fast, cheap, accessible).
 - **Per-role model routing** — different OpenRouter model per role, plus a fast **router model** for team-voice classification.
+- **Council (multi-model decision)** — press **C** at a project to convene a council: the **PM first gathers context** (a few one-tap clarifying questions), then **three different models answer in turn**, each in its own bubble and **blind** to the others, and a **chairman** synthesizes one decisive recommendation. Members are configurable in Settings and default to three diverse problem-solvers no other agent uses.
+- **Custom AI instructions** — a freeform note in Settings → Instructions, injected into every agent prompt *and* the council so the whole system follows your house rules.
 - **Agent skills** — playbooks injected into each agent's prompts by role, adopted from the open Claude-skills ecosystem on GitHub (anthropics/skills, obra/superpowers, pbakaus/impeccable, trailofbits/skills, aklofas/kicad-happy, …) plus Bridge-native ones. Toggle them in Settings → Skills.
 - **Activity feed, memory, and file explorer** drawers. The Activity feed is **cross-project everywhere** — agent responses from all projects as project → agent · role → summary cards. The Explorer's files/folders are mouse-clickable (open / expand). Per-project notes with optional **git auto-save**.
 - **GitHub pairing** — connect your GitHub account from Settings via a **keyboard-free OAuth device flow** (scan a QR on your phone or open a pre-filled authorize link on-device).
-- **Settings** — OpenRouter key, default + per-role + router models, agent skill toggles, git auto-save, GitHub pairing (MCP plugins coming soon).
+- **Settings** — OpenRouter key, default + per-role + router + **council** models, **custom AI instructions**, agent skill toggles, git auto-save, GitHub pairing (MCP plugins coming soon).
 
 ---
 
@@ -219,6 +223,8 @@ docs/              # internal design + planning notes (git-ignored, not publishe
 app/server/
 ├── server.js        # Express: REST + SSE (projects, agents, notes, settings, skills, …)
 ├── orchestrator.js  # per-agent intent → tile spec, using the role charter + skills
+├── council.js       # Council: PM intake → blind sequential members → chair synthesis
+├── llm.js           # shared OpenRouter text/JSON completion helpers
 ├── team.js          # team voice: router → fan-out → synthesizer
 ├── projects.js      # projects store + per-project repo scaffold
 ├── state-dir.js     # central state-dir resolution (~/bridge-projects/.bridge) + legacy migration

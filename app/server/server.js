@@ -15,6 +15,7 @@ import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, getContext, lastActivityAt, truncateFrom } from './scratchpad.js';
 import { runTeamVoice, resolveDelegateSpec } from './team.js';
 import { startKickoff, handleLeadMessageDuringKickoff, declineKickoff, callOpenRouterText } from './kickoff.js';
+import { getCouncilModels, buildIntake, councilContext, askMember, synthesize } from './council.js';
 import { proposeBuildPlan, runScaffold } from './scaffold.js';
 import {
   notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
@@ -103,6 +104,8 @@ const SETTINGS_KEYS = [
   'GIT_AUTOSAVE',               // "on" | "off"
   'GIT_AUTOSAVE_INTERVAL_MIN',  // integer
   'LOCAL_STT_URL',              // e.g. http://localhost:8123/transcribe
+  'OPENROUTER_COUNCIL_MODELS',  // JSON: [m1, m2, m3] — the three Council members
+  'AI_INSTRUCTIONS',            // freeform custom instructions injected into agent + council prompts
 ];
 
 function maskKey(s) {
@@ -147,7 +150,64 @@ app.get('/settings', (_req, res) => {
     GIT_AUTOSAVE_INTERVAL_MIN: Number(process.env.GIT_AUTOSAVE_INTERVAL_MIN || 5),
     LOCAL_STT_URL: process.env.LOCAL_STT_URL || '',
     GITHUB_OAUTH_CLIENT_ID: process.env.GITHUB_OAUTH_CLIENT_ID || '',
+    OPENROUTER_COUNCIL_MODELS: getCouncilModels(),
+    AI_INSTRUCTIONS: process.env.AI_INSTRUCTIONS || '',
   });
+});
+
+/* ───────────────────────── Council ─────────────────────────
+ * Flow (see council.js): PM intake gathers context → three members answer
+ * BLIND and SEQUENTIALLY (one /council/member call per index, in turn — no
+ * member sees another's answer) → chairman synthesizes. Members are
+ * configurable in Settings and default to three problem-solving models no
+ * other agent uses. Inspired by karpathy/llm-council. */
+function councilQuestion(req, res) {
+  if (!process.env.OPENROUTER_API_KEY) { res.status(400).json({ error: 'OpenRouter API key not set' }); return null; }
+  const question = String(req.body?.question || '').trim();
+  if (!question) { res.status(400).json({ error: 'question required' }); return null; }
+  return question;
+}
+
+// PM intake — up to a few clarifying questions for the user to answer first.
+app.post('/council/intake', async (req, res) => {
+  const question = councilQuestion(req, res);
+  if (question === null) return;
+  try {
+    const questions = await buildIntake({ question, apiKey: process.env.OPENROUTER_API_KEY });
+    res.json({ questions, models: getCouncilModels() });
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// One member's answer (blind). The client calls this once per index, in turn.
+app.post('/council/member', async (req, res) => {
+  const question = councilQuestion(req, res);
+  if (question === null) return;
+  const models = getCouncilModels();
+  const index = Number(req.body?.index);
+  if (!Number.isInteger(index) || index < 0 || index >= models.length) {
+    return res.status(400).json({ error: 'valid member index required' });
+  }
+  try {
+    const context = councilContext(req.body?.answers);
+    res.json(await askMember({ apiKey: process.env.OPENROUTER_API_KEY, model: models[index], question, context }));
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// Chairman synthesis over the collected member answers.
+app.post('/council/synthesis', async (req, res) => {
+  const question = councilQuestion(req, res);
+  if (question === null) return;
+  try {
+    const context = councilContext(req.body?.answers);
+    const members = Array.isArray(req.body?.members) ? req.body.members : [];
+    res.json(await synthesize({ apiKey: process.env.OPENROUTER_API_KEY, model: getCouncilModels()[0], question, context, members }));
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
 });
 
 /* Proxy mic audio to the local Parakeet (or whichever) STT server
@@ -242,6 +302,8 @@ app.put('/settings', (req, res) => {
       else if (typeof v === 'number') updates[k] = String(v);
       else if (typeof v === 'string' && v.length > 0) updates[k] = v;
     }
+    // Allow explicitly clearing free-text instructions (the generic loop skips empty strings).
+    if (typeof req.body?.AI_INSTRUCTIONS === 'string') updates.AI_INSTRUCTIONS = req.body.AI_INSTRUCTIONS;
     if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'no updates' });
     writeEnvFile(updates);
     // If git autosave just turned on, reschedule the timer.
