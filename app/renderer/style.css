@@ -3212,7 +3212,7 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   padding: 40px 44px 32px;
   text-align: center;
 }
-.apikey-gate-mark { width: 64px; color: var(--accent); margin-bottom: 8px; }
+.apikey-gate-mark { width: 64px; color: #ffffff; margin-bottom: 8px; }  /* matches #brand-mark */
 .apikey-gate-card h1 {
   margin: 0 0 10px;
   font-family: 'Oxanium', sans-serif;
@@ -3225,18 +3225,20 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   flex: 1; min-height: var(--steam-input-h);
   padding: 0 14px;
   background: var(--bg); color: var(--fg);
-  border: 1px solid var(--bg-elev-2); border-radius: 10px;
+  border: 1px solid var(--bg-elev-2); border-radius: var(--steam-radius);
   font-family: 'JetBrains Mono', monospace; font-size: 15px;
 }
 #apikey-gate-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+/* Outline button — matches .role-confirm, the app's canonical confirm action. */
 #apikey-gate-save {
   min-height: var(--steam-input-h);
-  padding: 0 20px;
-  background: var(--accent); color: var(--bg);
-  border: none; border-radius: 10px;
-  font-family: 'Oxanium', sans-serif; font-size: 16px; font-weight: 600;
-  cursor: pointer;
+  padding: 0 22px;
+  background: transparent; color: var(--fg);
+  border: 1.75px solid rgba(255,255,255,0.32); border-radius: var(--steam-radius);
+  font-family: inherit; font-size: 16px; font-weight: 500;
+  cursor: pointer; transition: background 120ms, border-color 120ms;
 }
+#apikey-gate-save:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.5); }
 #apikey-gate-save:disabled { opacity: 0.55; cursor: wait; }
 .apikey-gate-error { margin: 14px 0 0; color: var(--danger); font-size: 15px; }
 .apikey-gate-note { margin: 18px 0 0; color: var(--fg-dim); font-size: 13px; }
