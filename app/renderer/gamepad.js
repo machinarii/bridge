@@ -32,7 +32,7 @@ export class GamepadInput extends EventTarget {
     super();
     this.prev = {};
     this.repeat = {};
-    this.pttDown = false;
+    this.pttDown = {};   // held state per pad index (see scan(): ptt-down/up)
     this.raf = null;
     window.addEventListener('gamepadconnected', (e) => {
       console.log('[gamepad] connected:', e.gamepad.id);
@@ -70,14 +70,18 @@ export class GamepadInput extends EventTarget {
   scan(pad) {
     const now = performance.now();
 
-    // PTT (R2) — analog trigger, treat as pressed when value > 0.5
+    // PTT (R2) — analog trigger, treat as pressed when value > 0.5. Track the
+    // held state PER PAD INDEX: a controller can register in multiple slots, and
+    // a shared flag let a ghost slot (R2 released) fire ptt-up in the very frame
+    // the real pad fired ptt-down — PTT "activating then deactivating instantly".
     const r2 = pad.buttons[PTT_INDEX];
     const r2Pressed = !!r2 && (r2.pressed || r2.value > 0.5);
-    if (r2Pressed && !this.pttDown) {
-      this.pttDown = true;
+    const padDown = !!this.pttDown[pad.index];
+    if (r2Pressed && !padDown) {
+      this.pttDown[pad.index] = true;
       this.dispatchEvent(new CustomEvent('ptt-down'));
-    } else if (!r2Pressed && this.pttDown) {
-      this.pttDown = false;
+    } else if (!r2Pressed && padDown) {
+      this.pttDown[pad.index] = false;
       this.dispatchEvent(new CustomEvent('ptt-up'));
     }
 
