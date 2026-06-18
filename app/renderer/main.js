@@ -259,6 +259,7 @@ function setPrimaryShortcut(item) {
 }
 
 const ring = new FocusRing();
+ring.onMove = () => playSfx('navigate');   // nav sound on every ring cursor move (all screens)
 const gp = new GamepadInput();
 const speech = new Speech();
 
@@ -681,7 +682,9 @@ function openEffortPicker() {
 }
 function moveEffortPicker(delta) {
   if (!effortPickerOpen) return;
+  const prev = effortPickerIdx;
   effortPickerIdx = Math.max(0, Math.min(EFFORT_LEVELS.length - 1, effortPickerIdx + delta));
+  if (effortPickerIdx !== prev) playSfx('navigate');
   renderEffortPicker();
 }
 function closeEffortPicker() { effortPickerOpen = false; effortPickerEl().hidden = true; setEffortHeld(false); }
@@ -1737,6 +1740,7 @@ function chooseTopology(id) { selectTopology(id); renderNewProjectName(); }
 function topoMoveCard(dir) {
   const n = TOPOLOGIES.length;
   const L = ring.elements.length;
+  const prev = ring.index;
   if (ring.index >= n) {
     // On the footer row (Cancel · Back): move between the footer buttons,
     // clamped to the row so Left/Right doesn't jump back into the cards.
@@ -1744,10 +1748,11 @@ function topoMoveCard(dir) {
   } else {
     ring.index = (ring.index + dir + n) % n;   // cycle among topology cards
   }
+  if (ring.index !== prev) playSfx('navigate');
   ring.paint();
 }
-function topoFocusBack() { ring.index = TOPOLOGIES.length; ring.paint(); }
-function topoFocusCards() { if (ring.index >= TOPOLOGIES.length) { ring.index = 0; ring.paint(); } }
+function topoFocusBack() { if (ring.index !== TOPOLOGIES.length) playSfx('navigate'); ring.index = TOPOLOGIES.length; ring.paint(); }
+function topoFocusCards() { if (ring.index >= TOPOLOGIES.length) { playSfx('navigate'); ring.index = 0; ring.paint(); } }
 
 function goBackInCreateFlow() {
   if (mode === MODE_NEW_PROJ_FEATURES) { stopMicVisualizer(); renderNewProjectGoal(); }
@@ -3325,6 +3330,7 @@ function focusBubble(i) {
   if (chatBubbles.length === 0) return false;
   const n = chatBubbles.length;
   const next = Math.max(0, Math.min(n - 1, i));
+  if (next !== chatBubbleIdx) playSfx('navigate');   // L2 chat: cursor moved to a new bubble
   chatBubbleIdx = next;
   // Paint directly rather than waiting on the focus event: re-focusing a
   // bubble that already holds DOM focus (common after a footer round-trip)
@@ -5091,6 +5097,7 @@ function focusLastNotifEntry() {
 function stepNotifEntry(delta) {
   const items = notificationMenuItems();
   if (items.length === 0) return false;
+  playSfx('navigate');   // notification menu: stepping entries / back to the bell
   const idx = items.indexOf(document.activeElement);
   if (idx < 0) { items[0].focus(); return true; }
   const next = idx + delta;
@@ -5543,6 +5550,14 @@ function paintFileFocus() {
   fileEntries.forEach((el, i) => el.classList.toggle('focused', i === fileFocus));
 }
 
+/* Step the explorer cursor by ±1, clamped, with the nav sound on an actual move. */
+function stepFileFocus(delta) {
+  const prev = fileFocus;
+  fileFocus = Math.max(0, Math.min(fileEntries.length - 1, fileFocus + delta));
+  if (fileFocus !== prev) playSfx('navigate');
+  paintFileFocus();
+}
+
 /* Right off the explorer list. With the viewer open, hand focus to its text
  * box; otherwise drop onto the main surface (first grid tile / agent view). */
 function exitExplorerRight() {
@@ -5992,8 +6007,8 @@ gp.addEventListener('press', (e) => {
     if (fileExplorerOpen && explorerFocused) {
       // Explorer is a vertical list — Up/Down walk it; Left no-op. Right exits
       // to the right (open viewer's text box, or the first grid tile).
-      if (b === 'up')                   { fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
-      if (b === 'down')                 { fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+      if (b === 'up')                   { stepFileFocus(-1); return; }
+      if (b === 'down')                 { stepFileFocus(+1); return; }
       if (b === 'left')                 { return; }
       if (b === 'right')                { exitExplorerRight(); return; }
       if (b === 'cross')                { openFocusedFile(); return; }
@@ -6020,8 +6035,8 @@ gp.addEventListener('press', (e) => {
     if (fileExplorerOpen && explorerFocused) {
       // Explorer is a vertical list — Up/Down walk it; Left no-op. Right exits
       // to the right (open viewer's text box, or the first grid tile).
-      if (b === 'up')                   { fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
-      if (b === 'down')                 { fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+      if (b === 'up')                   { stepFileFocus(-1); return; }
+      if (b === 'down')                 { stepFileFocus(+1); return; }
       if (b === 'left')                 { return; }
       if (b === 'right')                { exitExplorerRight(); return; }
       if (b === 'cross')                { openFocusedFile(); return; }
@@ -6600,6 +6615,7 @@ function focusNextInModal(delta) {
   if (items.length === 0) return;
   const i = items.indexOf(document.activeElement);
   const next = items[(i + delta + items.length) % items.length];
+  if (next && next !== document.activeElement) playSfx('navigate');   // settings: cursor move
   next?.focus();
 }
 
@@ -6621,6 +6637,7 @@ function handleSettingsGamepad(button) {
   if (isTab && (button === 'left' || button === 'right')) {
     const i = settingsTabEls.indexOf(active);
     const next = settingsTabEls[(i + (button === 'right' ? 1 : -1) + settingsTabEls.length) % settingsTabEls.length];
+    playSfx('navigate');
     selectSettingsTab(next.dataset.tab);
     next.focus();
     return;
@@ -6628,12 +6645,14 @@ function handleSettingsGamepad(button) {
   if (isTab && button === 'down') {
     const items = settingsFocusables();
     const firstPane = items.find(el => !settingsTabEls.includes(el) && el !== settingsCancelEl && el !== settingsSaveEl);
+    playSfx('navigate');
     (firstPane || settingsSaveEl)?.focus();
     return;
   }
   if (button === 'up')   { focusNextInModal(-1); return; }
   if (button === 'down') { focusNextInModal(+1); return; }
   if ((button === 'left' || button === 'right') && (active === settingsCancelEl || active === settingsSaveEl)) {
+    playSfx('navigate');
     (active === settingsSaveEl ? settingsCancelEl : settingsSaveEl)?.focus();
     return;
   }
@@ -6654,6 +6673,7 @@ settingsModalEl?.addEventListener('keydown', (e) => {
     e.preventDefault(); e.stopPropagation();
     const i = settingsTabEls.indexOf(active);
     const next = settingsTabEls[(i + (e.key === 'ArrowRight' ? 1 : -1) + settingsTabEls.length) % settingsTabEls.length];
+    playSfx('navigate');
     selectSettingsTab(next.dataset.tab);
     next.focus();
     return;
@@ -6664,6 +6684,7 @@ settingsModalEl?.addEventListener('keydown', (e) => {
     e.preventDefault(); e.stopPropagation();
     const items = settingsFocusables();
     const firstPane = items.find(el => !settingsTabEls.includes(el) && el !== settingsCancelEl && el !== settingsSaveEl);
+    playSfx('navigate');
     (firstPane || settingsSaveEl)?.focus();
     return;
   }
@@ -6675,6 +6696,7 @@ settingsModalEl?.addEventListener('keydown', (e) => {
     const prev = items[i - 1];
     if (prev && settingsTabEls.includes(prev)) {
       e.preventDefault(); e.stopPropagation();
+      playSfx('navigate');
       settingsTabEls.find(t => t.getAttribute('aria-selected') === 'true')?.focus();
       return;
     }
@@ -6943,8 +6965,8 @@ window.addEventListener('keydown', (e) => {
   // explorer holds focus. Right-arrow exits the explorer to the right.
   if (fileExplorerOpen && explorerFocused) {
     // Explorer is a vertical list — Up/Down walk it; Left is swallowed.
-    if (e.key === 'ArrowUp')    { e.preventDefault(); fileFocus = Math.max(0, fileFocus - 1); paintFileFocus(); return; }
-    if (e.key === 'ArrowDown')  { e.preventDefault(); fileFocus = Math.min(fileEntries.length - 1, fileFocus + 1); paintFileFocus(); return; }
+    if (e.key === 'ArrowUp')    { e.preventDefault(); stepFileFocus(-1); return; }
+    if (e.key === 'ArrowDown')  { e.preventDefault(); stepFileFocus(+1); return; }
     if (e.key === 'ArrowLeft')  { e.preventDefault(); return; }
     // Right exits the list to the right: into the open viewer's text box, or
     // (no viewer) onto the first grid tile.

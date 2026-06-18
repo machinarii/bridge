@@ -23,6 +23,7 @@ export class FocusRing {
     if (this.items.length === 0) return;
     this.index = (this.index + delta + this.items.length) % this.items.length;
     this.paint();
+    this.onMove?.();   // cursor moved — host wires this to the nav sound
     this.current()?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
