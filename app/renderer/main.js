@@ -1827,11 +1827,43 @@ function captureValueInner(text) {
     </div>`;
 }
 
+/* ── Shared mic stream ────────────────────────────────────────────────────
+ * One getUserMedia per hold, ref-counted across every consumer (footer-chip
+ * wave, capture-screen wave, and the recorder). Capture screens run all three;
+ * opening getUserMedia 2-3× concurrently could fail on the 2nd/3rd grab, whose
+ * error path calls setPttHeld(false) — that was PTT "activating then immediately
+ * deactivating" on the create-flow capture screens (chat runs fewer, so it
+ * survived). A cached promise makes concurrent acquirers share one stream. */
+let _micStream = null;
+let _micStreamPromise = null;
+let _micStreamUsers = 0;
+async function acquireMicStream() {
+  _micStreamUsers++;
+  if (!_micStreamPromise) _micStreamPromise = navigator.mediaDevices.getUserMedia({ audio: true });
+  try {
+    _micStream = await _micStreamPromise;
+    return _micStream;
+  } catch (err) {
+    _micStreamUsers = Math.max(0, _micStreamUsers - 1);
+    _micStreamPromise = null;
+    throw err;
+  }
+}
+function releaseMicStream() {
+  _micStreamUsers = Math.max(0, _micStreamUsers - 1);
+  if (_micStreamUsers === 0) {
+    if (_micStream) { try { _micStream.getTracks().forEach(t => t.stop()); } catch {} }
+    _micStream = null;
+    _micStreamPromise = null;
+  }
+}
+
 async function startMicVisualizer() {
   // No-op if we already have a running visualizer.
   if (micViz) { animateMicBars(); return; }
+  let stream;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await acquireMicStream();
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) throw new Error('AudioContext unavailable');
     const ac = new Ctx();
@@ -1844,15 +1876,16 @@ async function startMicVisualizer() {
     animateMicBars();
   } catch (err) {
     console.warn('[mic-viz] failed:', err.message);
+    if (stream) releaseMicStream();   // acquired but setup failed — balance the ref
   }
 }
 
 function stopMicVisualizer() {
   if (micVizFrame) { cancelAnimationFrame(micVizFrame); micVizFrame = null; }
   if (micViz) {
-    try { micViz.stream.getTracks().forEach(t => t.stop()); } catch {}
     try { micViz.ac.close(); } catch {}
     micViz = null;
+    releaseMicStream();   // shared stream — release, don't stop tracks directly
   }
 }
 
@@ -4220,8 +4253,9 @@ let chipVizFrame = null;
 let _chipLoud = 0;
 async function startChipMic() {
   if (chipViz) { animateChipBars(); return; }
+  let stream;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await acquireMicStream();
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) throw new Error('no AudioContext');
     const ac = new Ctx();
@@ -4231,14 +4265,17 @@ async function startChipMic() {
     src.connect(an);
     chipViz = { ac, an, stream, data: new Uint8Array(an.frequencyBinCount) };
     animateChipBars();
-  } catch (err) { console.warn('[chip-mic] failed:', err.message); }
+  } catch (err) {
+    console.warn('[chip-mic] failed:', err.message);
+    if (stream) releaseMicStream();
+  }
 }
 function stopChipMic() {
   if (chipVizFrame) { cancelAnimationFrame(chipVizFrame); chipVizFrame = null; }
   if (chipViz) {
-    try { chipViz.stream.getTracks().forEach(t => t.stop()); } catch {}
     try { chipViz.ac.close(); } catch {}
     chipViz = null;
+    releaseMicStream();   // shared stream — release, don't stop tracks directly
   }
 }
 function animateChipBars() {
@@ -4257,8 +4294,9 @@ function animateChipBars() {
 }
 
 async function startLocalRecording() {
+  let stream;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await acquireMicStream();
     const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
       ? 'audio/webm;codecs=opus' : 'audio/webm';
     localRecorder = new MediaRecorder(stream, { mimeType: mime });
@@ -4274,7 +4312,7 @@ async function startLocalRecording() {
       }
     };
     localRecorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
+      releaseMicStream();   // shared stream — release our ref (don't stop tracks others may use)
       const blob = new Blob(localRecChunks, { type: mime });
       localRecorder = null;
       localRecChunks = [];
@@ -4283,6 +4321,7 @@ async function startLocalRecording() {
     localRecorder.start(450);   // timeslice → periodic dataavailable for live partials
     setIndicator('listening', 'Listening…');
   } catch (err) {
+    if (stream) releaseMicStream();
     pttActive = false;
     setPttHeld(false);
     setIndicator('error', `Mic: ${err.message}`);
