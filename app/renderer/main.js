@@ -7,7 +7,7 @@ import { GAMEPAD_ICON_SVG } from './gamepad-icons.js';
 
 // Bump on each renderer change so we can confirm a FRESH bundle is running
 // (Electron can serve a stale cached main.js — see app/electron/main.js).
-const BUILD_ID = 'gate-fix-8';
+const BUILD_ID = 'gate-fix-9';
 console.log('[bridge] renderer build', BUILD_ID);
 
 // Safety net: no async path should ever blank the app silently. Surface it.
@@ -7440,36 +7440,43 @@ async function ensureApiKey() {
   gate.addEventListener('keyup', stop);
   input.addEventListener('focusout', refocus);
 
-  await new Promise((resolve) => {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const key = input.value.trim();
+  const status = (msg, kind) => {   // visible feedback so a Save never looks silent
+    errEl.style.color = kind === 'err' ? 'var(--danger)' : 'var(--fg-dim)';
+    errEl.textContent = msg; errEl.hidden = false;
+  };
+  const submitKey = async (resolve) => {
+    console.log('[gate] save: submit fired');
+    const key = input.value.trim();
+    if (!key) { status('Enter your OpenRouter API key to continue.', 'err'); input.focus(); return; }
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Checking…';
+    status('Checking your key…', 'info');
+    try {
+      const vr = await fetch('/settings/verify-key', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }),
+      });
+      const v = await vr.json();
+      console.log('[gate] save: verify-key →', vr.status, v);
+      if (!v.valid) throw new Error(v.error || 'Invalid key');
+      const s = await fetch('/settings', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ OPENROUTER_API_KEY: key }),
+      });
+      console.log('[gate] save: PUT /settings →', s.status);
+      if (!s.ok) throw new Error('Could not save the key — try again.');
       errEl.hidden = true;
-      if (!key) { errEl.textContent = 'Enter your OpenRouter API key to continue.'; errEl.hidden = false; input.focus(); return; }
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Checking…';
-      try {
-        const v = await (await fetch('/settings/verify-key', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key }),
-        })).json();
-        if (!v.valid) throw new Error(v.error || 'Invalid key');
-        const s = await fetch('/settings', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ OPENROUTER_API_KEY: key }),
-        });
-        if (!s.ok) throw new Error('Could not save the key — try again.');
-        resolve();
-      } catch (err) {
-        console.error('[gate] save failed:', err);
-        errEl.textContent = err.message || 'Something went wrong — try again.';
-        errEl.hidden = false;
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'Save & continue';
-      }
-    });
+      console.log('[gate] save: success — closing gate');
+      resolve();
+    } catch (err) {
+      console.error('[gate] save failed:', err);
+      status(err.message || 'Something went wrong — try again.', 'err');
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save & continue';
+    }
+  };
+  // Button is type=button (no native submit at all); also accept Enter in the field.
+  await new Promise((resolve) => {
+    saveBtn.addEventListener('click', () => submitKey(resolve));
+    form.addEventListener('submit', (e) => { e.preventDefault(); submitKey(resolve); });
   });
 
   window.removeEventListener('keydown', trap, true);
