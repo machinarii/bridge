@@ -47,6 +47,13 @@ const RENDERER_DIR = resolve(__dirname, '..', 'renderer');
 const ASSETS_DIR   = resolve(__dirname, '..', 'assets');
 
 const app = express();
+// TEMP diagnostic: log every request so a gate Save (or a stray reload) is
+// visible server-side. Remove once the gate issue is resolved.
+app.use((req, res, next) => {
+  const t0 = Date.now();
+  res.on('finish', () => console.log(`[req] ${req.method} ${req.url} → ${res.statusCode} (${Date.now() - t0}ms)`));
+  next();
+});
 app.use(express.json({ limit: '64kb' }));
 app.use('/assets', express.static(ASSETS_DIR, { maxAge: '1d', immutable: true }));
 // Renderer HTML/JS/CSS: never cache, so a reload always picks up the latest
