@@ -5,6 +5,17 @@ import { FocusRing } from './focus.js';
 import { renderTile, renderActionBar } from './tiles.js';
 import { GAMEPAD_ICON_SVG } from './gamepad-icons.js';
 
+// Bump on each renderer change so we can confirm a FRESH bundle is running
+// (Electron can serve a stale cached main.js — see app/electron/main.js).
+const BUILD_ID = 'gate-fix-7';
+console.log('[bridge] renderer build', BUILD_ID);
+
+// Safety net: no async path should ever blank the app silently. Surface it.
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('[bridge] unhandled rejection:', e.reason);
+  try { setIndicator('error', 'Unexpected error'); } catch { /* indicator not ready */ }
+});
+
 /* Render a gamepad glyph: inline the PlayStation SVG icon when we have one
  * (mono, follows the chip color via currentColor), else fall back to the
  * legacy text symbol so unmapped buttons still show something. */
@@ -863,6 +874,7 @@ function readNavState() {
 /* ---------- Bootstrap ---------- */
 async function loadProjects() {
   const [pj, rj] = await Promise.all([fetch('/projects'), fetch('/roles')]);
+  if (!pj.ok || !rj.ok) throw new Error(`projects ${pj.status} / roles ${rj.status}`);
   // L0 lists projects most-recently-created first.
   projects = ((await pj.json()).projects || [])
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -7388,11 +7400,21 @@ async function ensureApiKey() {
     // the field so the text cursor still works; Down hops to the button.
     if (e.type === 'keydown' && ARROWS.includes(e.key)) {
       if (document.activeElement === saveBtn) {
-        input.focus(); e.preventDefault(); e.stopImmediatePropagation(); return;
+        // Button has no cursor: Left/Up return to the field; Right/Down stay put.
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          input.focus(); e.preventDefault(); e.stopImmediatePropagation();
+        }
+        return;
       }
       if (document.activeElement === input) {
-        if (e.key === 'ArrowDown') { saveBtn.focus(); e.preventDefault(); e.stopImmediatePropagation(); }
-        return;   // keep Left/Right/Up for the text cursor
+        // Down always hops to the button; Right hops only when the caret is at
+        // the end (no selection) so in-field Left/Right still move the cursor.
+        const caretAtEnd = input.selectionStart === input.value.length &&
+                           input.selectionStart === input.selectionEnd;
+        if (e.key === 'ArrowDown' || (e.key === 'ArrowRight' && caretAtEnd)) {
+          saveBtn.focus(); e.preventDefault(); e.stopImmediatePropagation();
+        }
+        return;   // Left / Up / mid-text Right stay native for the text cursor
       }
       input.focus(); e.preventDefault(); e.stopImmediatePropagation(); return;
     }
@@ -7460,32 +7482,51 @@ async function ensureApiKey() {
 }
 
 /* ---------- Boot ---------- */
-(async () => {
-  await ensureApiKey();
-  await loadProjects();
-  // Restore the last screen the user was on (survives page refresh).
-  const saved = readNavState();
-  let restored = false;
-  if (saved?.projectId) {
-    const p = projects.find(pp => pp.id === saved.projectId);
-    if (p) {
-      activeProject = withLeadFirst(p);
-      gridIndex   = saved.gridIndex   || 0;
-      zoomedIndex = saved.zoomedIndex || 0;
-      if (saved.mode === MODE_ZOOM) { renderZoom(); restored = true; }
-      else if (saved.mode === MODE_GRID) { renderGrid(); restored = true; }
+// Tolerate a transient server hiccup right after the key is saved — the gate
+// has already closed, so an unguarded throw here would blank the app.
+async function loadProjectsWithRetry(tries = 5) {
+  for (let i = 1; ; i++) {
+    try { return await loadProjects(); }
+    catch (err) {
+      if (i >= tries) throw err;
+      console.warn('[bridge] loadProjects retry', i, '—', err?.message || err);
+      await new Promise((r) => setTimeout(r, 400));
     }
   }
-  if (!restored) {
-    if (saved?.pickerIndex) pickerIndex = saved.pickerIndex;
-    renderProjects();
+}
+
+(async () => {
+  try {
+    await ensureApiKey();
+    await loadProjectsWithRetry();
+    // Restore the last screen the user was on (survives page refresh).
+    const saved = readNavState();
+    let restored = false;
+    if (saved?.projectId) {
+      const p = projects.find(pp => pp.id === saved.projectId);
+      if (p) {
+        activeProject = withLeadFirst(p);
+        gridIndex   = saved.gridIndex   || 0;
+        zoomedIndex = saved.zoomedIndex || 0;
+        if (saved.mode === MODE_ZOOM) { renderZoom(); restored = true; }
+        else if (saved.mode === MODE_GRID) { renderGrid(); restored = true; }
+      }
+    }
+    if (!restored) {
+      if (saved?.pickerIndex) pickerIndex = saved.pickerIndex;
+      renderProjects();
+    }
+    rehydrateAgentStatuses();   // busy verbs + "…" bubble survive the reload
+    staggerInCards();
+    staggerInFooter();
+    setIndicator('idle', 'Connected');
+    startConnectionPing();
+    console.log('[bridge] booted into', mode);
+  } catch (err) {
+    // Never leave a blank screen — show what happened and let the user recover.
+    console.error('[bridge] boot failed:', err);
+    setIndicator('error', 'Failed to load — reload to retry');
   }
-  rehydrateAgentStatuses();   // busy verbs + "…" bubble survive the reload
-  staggerInCards();
-  staggerInFooter();
-  setIndicator('idle', 'Connected');
-  startConnectionPing();
-  console.log('[bridge] booted into', mode);
 })();
 
 /* Ping /health every 5 s — flip the indicator to red on failure, back to
