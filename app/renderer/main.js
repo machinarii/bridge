@@ -7,7 +7,7 @@ import { GAMEPAD_ICON_SVG } from './gamepad-icons.js';
 
 // Bump on each renderer change so we can confirm a FRESH bundle is running
 // (Electron can serve a stale cached main.js — see app/electron/main.js).
-const BUILD_ID = 'gate-fix-7';
+const BUILD_ID = 'gate-fix-8';
 console.log('[bridge] renderer build', BUILD_ID);
 
 // Safety net: no async path should ever blank the app silently. Surface it.
@@ -7502,20 +7502,28 @@ async function loadProjectsWithRetry(tries = 5) {
     // Restore the last screen the user was on (survives page refresh).
     const saved = readNavState();
     let restored = false;
-    if (saved?.projectId) {
-      const p = projects.find(pp => pp.id === saved.projectId);
-      if (p) {
-        activeProject = withLeadFirst(p);
-        gridIndex   = saved.gridIndex   || 0;
-        zoomedIndex = saved.zoomedIndex || 0;
-        if (saved.mode === MODE_ZOOM) { renderZoom(); restored = true; }
-        else if (saved.mode === MODE_GRID) { renderGrid(); restored = true; }
+    try {
+      if (saved?.projectId) {
+        const p = projects.find(pp => pp.id === saved.projectId);
+        if (p) {
+          activeProject = withLeadFirst(p);
+          gridIndex   = saved.gridIndex   || 0;
+          zoomedIndex = saved.zoomedIndex || 0;
+          if (saved.mode === MODE_ZOOM) { renderZoom(); restored = true; }
+          else if (saved.mode === MODE_GRID) { renderGrid(); restored = true; }
+        }
       }
+    } catch (err) {
+      console.error('[bridge] restore failed — falling back to projects:', err);
+      restored = false;
     }
     if (!restored) {
       if (saved?.pickerIndex) pickerIndex = saved.pickerIndex;
       renderProjects();
     }
+    // Never strand the user on a blank surface — if the restored view rendered
+    // nothing, drop back to the projects home screen.
+    if (!surfaceEl.firstChild) { activeProject = null; renderProjects(); }
     rehydrateAgentStatuses();   // busy verbs + "…" bubble survive the reload
     staggerInCards();
     staggerInFooter();
