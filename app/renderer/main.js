@@ -6,9 +6,16 @@ import { renderTile, renderActionBar } from './tiles.js';
 import { GAMEPAD_ICON_SVG } from './gamepad-icons.js';
 
 // Bump on each renderer change so we can confirm a FRESH bundle is running
-// (Electron can serve a stale cached main.js — see app/electron/main.js).
-const BUILD_ID = 'gate-fix-9';
-console.log('[bridge] renderer build', BUILD_ID);
+// (the browser/Electron can serve a stale cached main.js / index.html).
+const BUILD_ID = 'gate-fix-10';
+console.log('[bridge] renderer build', BUILD_ID,
+  '| index build', document.querySelector('meta[name="bridge-build"]')?.content || '(MISSING — stale index.html)');
+
+// Belt-and-suspenders: the first-launch gate's <form> must NEVER navigate the
+// page. A native GET submit (→ "/?") was reloading the app and looking like
+// "Save does nothing". Kill it here at module load, unconditionally — even when
+// ensureApiKey() returns early (key already set) and never attaches its handler.
+document.getElementById('apikey-gate-form')?.addEventListener('submit', (e) => e.preventDefault());
 
 // Safety net: no async path should ever blank the app silently. Surface it.
 window.addEventListener('unhandledrejection', (e) => {
