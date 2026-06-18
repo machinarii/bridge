@@ -47,13 +47,6 @@ const RENDERER_DIR = resolve(__dirname, '..', 'renderer');
 const ASSETS_DIR   = resolve(__dirname, '..', 'assets');
 
 const app = express();
-// TEMP diagnostic: log every request so a gate Save (or a stray reload) is
-// visible server-side. Remove once the gate issue is resolved.
-app.use((req, res, next) => {
-  const t0 = Date.now();
-  res.on('finish', () => console.log(`[req] ${req.method} ${req.url} → ${res.statusCode} (${Date.now() - t0}ms)`));
-  next();
-});
 app.use(express.json({ limit: '64kb' }));
 app.use('/assets', express.static(ASSETS_DIR, { maxAge: '1d', immutable: true }));
 // Renderer HTML/JS/CSS: never cache, so a reload always picks up the latest
@@ -285,14 +278,12 @@ app.get('/settings/models', async (_req, res) => {
  * gate so a typo'd key is rejected up front instead of failing on first chat. */
 app.post('/settings/verify-key', async (req, res) => {
   const key = String(req.body?.key || '').trim();
-  console.log(`[gate] POST /settings/verify-key — keyLen=${key.length}`);
   if (!key) return res.status(400).json({ valid: false, error: 'key required' });
   try {
     const r = await fetch('https://openrouter.ai/api/v1/key', {
       headers: { 'Authorization': `Bearer ${key}` },
       signal: AbortSignal.timeout(8000),
     });
-    console.log(`[gate] verify-key → openrouter ${r.status}`);
     if (r.ok) return res.json({ valid: true });
     res.json({ valid: false, error: r.status === 401 ? 'Invalid key' : `OpenRouter returned ${r.status}` });
   } catch (err) {
@@ -302,7 +293,6 @@ app.post('/settings/verify-key', async (req, res) => {
 });
 
 app.put('/settings', (req, res) => {
-  console.log('[gate] PUT /settings — keys:', Object.keys(req.body || {}).join(',') || '(none)');
   try {
     const updates = {};
     for (const k of SETTINGS_KEYS) {
