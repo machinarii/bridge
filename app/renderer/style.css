@@ -3204,6 +3204,10 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   display: flex; align-items: center; justify-content: center;
   z-index: 1000;
 }
+/* The id's display:flex above defeats the [hidden] attribute, so the gate was
+   ALWAYS visible — overlaying the booted app with a dead Save button whenever a
+   key was already set (every other modal has this same guard). */
+#apikey-gate[hidden] { display: none !important; }
 .apikey-gate-card {
   width: min(560px, calc(100vw - 48px));
   background: var(--bg-elev);

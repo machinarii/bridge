@@ -7,7 +7,7 @@ import { GAMEPAD_ICON_SVG } from './gamepad-icons.js';
 
 // Bump on each renderer change so we can confirm a FRESH bundle is running
 // (the browser/Electron can serve a stale cached main.js / index.html).
-const BUILD_ID = 'gate-fix-10';
+const BUILD_ID = 'gate-fix-11';
 console.log('[bridge] renderer build', BUILD_ID,
   '| index build', document.querySelector('meta[name="bridge-build"]')?.content || '(MISSING — stale index.html)');
 
