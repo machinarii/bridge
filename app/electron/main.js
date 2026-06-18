@@ -206,6 +206,10 @@ async function createWindow() {
   });
   // Wait briefly for the server to finish setup, then load.
   await new Promise(r => setTimeout(r, 250));
+  // Drop any cached renderer bundle so a relaunch always runs the latest
+  // main.js/style.css (Chromium's in-memory cache can otherwise replay a stale
+  // copy even though the server sends Cache-Control: no-store).
+  try { await session.defaultSession.clearCache(); } catch (err) { console.warn('[bridge] clearCache failed:', err?.message || err); }
   await mainWin.loadURL(`http://127.0.0.1:${PORT}/`);
   mainWin.on('closed', () => { mainWin = null; });
 }
@@ -242,6 +246,7 @@ app.whenReady().then(async () => {
         { role: 'about' },
         { type: 'separator' },
         { role: 'reload' },
+        { role: 'forceReload' },   // ⌘⇧R — bypass cache for a guaranteed-fresh bundle
         { role: 'toggleDevTools' },
         { type: 'separator' },
         { role: 'quit' },
