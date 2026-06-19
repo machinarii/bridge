@@ -1198,6 +1198,17 @@ body[data-mode="zoom"] #surface {
   background: var(--fg-dim);
   transition: background 200ms, box-shadow 200ms;
 }
+/* Council tile — an agent-style tile, accent-tinted so it reads as the advisory
+   surface (cross-model council) rather than a team member. */
+.agent-tile.council-tile {
+  border-color: color-mix(in srgb, var(--accent) 38%, rgba(255,255,255,0.06));
+  background:
+    radial-gradient(ellipse 140% 90% at 50% -10%, color-mix(in srgb, var(--accent) 20%, transparent) 0%, transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 7%, transparent) 0%, transparent 100%);
+}
+.agent-tile.council-tile .role,
+.agent-tile.council-tile .status-verb { color: var(--accent); opacity: 0.92; }
+.agent-tile.council-tile .status .dot { background: var(--accent); }
 /* v2 §8 — Speaking indicator: while an agent's TTS plays, its tile
  * (L1) and surface (L2) get a soft pulsing outline so the user
  * always knows which agent is currently talking. */
