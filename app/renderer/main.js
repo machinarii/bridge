@@ -2180,7 +2180,7 @@ function renderGrid() {
     councilTile.style.setProperty('--tile-color', projectColor);
     councilTile.innerHTML = `
       <h2 class="name">Council</h2>
-      <div class="role">Advisory · three models</div>
+      <div class="role">Advisory Team</div>
       <div class="status"><span class="dot"></span><span class="status-verb">Ask the council</span></div>`;
     councilTile.addEventListener('click', () => { gridIndex = councilIdx; ring.set(tileEls); ring.index = councilIdx; ring.paint(); enterZoom(); });
     grid.appendChild(councilTile);
@@ -2512,6 +2512,7 @@ async function enterZoom(specOverride) {
   // index. The Council tile opens the council; the "+ Add agent" tile opens the
   // role picker with the same zoom-in morph as a real agent tile.
   if (mode !== MODE_ZOOM && ring.current()?.dataset.council === 'true') {
+    playSfx('zoomin');   // L1 → council, same as zooming into an agent
     openCouncil();
     return;
   }
@@ -3746,7 +3747,8 @@ function councilModelLabel(id) {
 }
 
 function councilCrumbs() {
-  setBreadcrumbs([{ label: 'Projects' }, { label: sentenceCase(activeProject.name) }, { label: 'Council' }]);
+  // Match the agent L2 breadcrumb — trail back to the project; the header shows "Council".
+  setBreadcrumbs([{ label: 'Projects' }, { label: sentenceCase(activeProject.name) }]);
 }
 
 
@@ -3755,6 +3757,11 @@ function councilCrumbs() {
  * that container with a "Council" header and returns the scrollable body. */
 function councilShell(status) {
   mode = MODE_COUNCIL;
+  // Reuse the ENTIRE agent L2 experience: data-mode="zoom" applies all the
+  // agent-view CSS (transparent surface, header dissolve, chat masks), and we
+  // add the same surface close button. Keybinds key off the JS `mode`
+  // (MODE_COUNCIL), and nothing in JS reads body.dataset.mode, so this is safe.
+  document.body.dataset.mode = 'zoom';
   councilCrumbs();
   document.documentElement.style.setProperty('--agent-color', getProjectColor(activeProject));
   surfaceEl.innerHTML = '';
@@ -3764,7 +3771,7 @@ function councilShell(status) {
     <div class="agent-header">
       <div class="agent-title">
         <span class="name-large">Council</span>
-        <span class="role-large">Advisory · three models</span>
+        <span class="role-large">Advisory Team</span>
         <span class="agent-status">${escapeHtml(status || '')}</span>
       </div>
     </div>
@@ -3774,8 +3781,12 @@ function councilShell(status) {
       <span class="for-keyboard">Hold <kbd>V</kbd> to talk</span>
     </div>`;
   surfaceEl.appendChild(view);
+  surfaceEl.appendChild(createSurfaceCloseButton(() => exitCouncilToGrid()));
   return view.querySelector('.council-body');
 }
+
+/* Leave the council back to the team grid — mirrors exitZoom (sound + render). */
+function exitCouncilToGrid() { playSfx('zoomout'); renderGrid(); }
 
 /* The council footer mirrors an agent's L2 footer — you ask by talking or
  * typing, exactly like any other agent. Back returns to the team grid. */
@@ -3786,7 +3797,7 @@ function councilFooterShortcuts() {
     { keyboard: '/', label: 'Type prompt', action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     { gamepad: 'triangle', keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
     { gamepad: 'square', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
-    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() },
+    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => exitCouncilToGrid() },
   ]);
   setPrimaryShortcut(null);
 }
@@ -3865,7 +3876,7 @@ function renderCouncilIntake() {
   other.addEventListener('keydown', (e) => {
     e.stopPropagation();
     if (e.key === 'Enter') { e.preventDefault(); const v = other.value.trim(); if (v) answerCouncilIntake(v); }
-    else if (e.key === 'Escape') { e.preventDefault(); renderGrid(); }
+    else if (e.key === 'Escape') { e.preventDefault(); exitCouncilToGrid(); }
   });
   body.querySelector('#council-skip').addEventListener('click', () => answerCouncilIntake(null));
   councilFooterShortcuts();
@@ -7143,7 +7154,7 @@ window.addEventListener('keydown', (e) => {
     // Inputs (prompt textarea, intake "Other") stopPropagation while focused, so
     // this branch only fires when no field is focused. Behavior is phase-aware.
     if (councilState?.phase === 'intake') {
-      if (e.key === 'Escape') { e.preventDefault(); renderGrid(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); exitCouncilToGrid(); return; }
       const cur = councilState.questions[councilState.idx];
       const n = Number(e.key);
       if (cur && Number.isInteger(n) && n >= 1 && cur.options[n - 1] !== undefined) {
@@ -7151,7 +7162,7 @@ window.addEventListener('keydown', (e) => {
       }
       if (e.key === 's' || e.key === 'S') { e.preventDefault(); answerCouncilIntake(null); return; }
     } else if (e.key === 'Escape') {
-      e.preventDefault(); renderGrid(); return;   // ask again by talking / typing, like any agent
+      e.preventDefault(); exitCouncilToGrid(); return;   // ask again by talking / typing, like any agent
     }
   }
 
