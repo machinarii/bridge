@@ -1104,8 +1104,10 @@ body[data-mode="add_agent"] #surface {
     var(--bg-elev);
 }
 
-/* L2 lets .agent-view BE the visible container — no nested chrome. */
-body[data-mode="zoom"] #surface {
+/* L2 lets .agent-view BE the visible container — no nested chrome. The council
+ * reuses that same container, so give its surface the same transparent chrome. */
+body[data-mode="zoom"] #surface,
+#surface:has(.council-view) {
   background: transparent;
   border: none;
   padding: 0;
@@ -1198,17 +1200,7 @@ body[data-mode="zoom"] #surface {
   background: var(--fg-dim);
   transition: background 200ms, box-shadow 200ms;
 }
-/* Council tile — an agent-style tile, accent-tinted so it reads as the advisory
-   surface (cross-model council) rather than a team member. */
-.agent-tile.council-tile {
-  border-color: color-mix(in srgb, var(--accent) 38%, rgba(255,255,255,0.06));
-  background:
-    radial-gradient(ellipse 140% 90% at 50% -10%, color-mix(in srgb, var(--accent) 20%, transparent) 0%, transparent 60%),
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 7%, transparent) 0%, transparent 100%);
-}
-.agent-tile.council-tile .role,
-.agent-tile.council-tile .status-verb { color: var(--accent); opacity: 0.92; }
-.agent-tile.council-tile .status .dot { background: var(--accent); }
+/* Council tile is just an agent tile (same look/feel) — the name distinguishes it. */
 /* v2 §8 — Speaking indicator: while an agent's TTS plays, its tile
  * (L1) and surface (L2) get a soft pulsing outline so the user
  * always knows which agent is currently talking. */
@@ -3264,59 +3256,31 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
 .apikey-gate-error { margin: 14px 0 0; color: var(--danger); font-size: 15px; }
 .apikey-gate-note { margin: 18px 0 0; color: var(--fg-dim); font-size: 13px; }
 
-/* ── Council (multi-model ask) ───────────────────────────────────────── */
-.council-tile { max-width: 760px; margin: 7vh auto 0; display: flex; flex-direction: column; gap: 14px; padding: 0 24px; }
-.council-h { font-size: 2rem; font-weight: 400; letter-spacing: -0.01em; }
-.council-sub { color: var(--fg-dim); font-weight: 300; }
-.council-input { width: 100%; min-height: 120px; resize: none; border-radius: var(--radius);
+/* ── Council — reuses the agent L2 chrome (.agent-view + chat bubbles). The
+   bits below only style the sub-elements that live INSIDE the chat bubbles. ── */
+.settings-field.council-field select { margin-top: 6px; }
+.council-err { color: var(--danger); }
+.council-think-label { color: var(--fg-dim); margin: 8px 0 0; font-weight: 300; }
+
+/* Prompt composer — sits in the council chat body. */
+.council-compose { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+.council-input { width: 100%; min-height: 110px; resize: none; border-radius: var(--radius);
   border: 1px solid #25303f; background: var(--bg-elev); color: var(--fg);
-  font-family: inherit; font-size: var(--steam-body-fs, 17px); font-weight: 300; line-height: 1.5; padding: 16px 18px; }
+  font-family: inherit; font-size: var(--steam-body-fs, 17px); font-weight: 300; line-height: 1.5; padding: 14px 16px; }
 .council-input:focus { outline: none; border-color: var(--accent); }
 .council-actions { display: flex; justify-content: flex-end; gap: 10px; }
-.council-result { max-width: 1120px; margin: 0 auto; padding: 24px clamp(16px,3vw,40px) 72px; overflow-y: auto; height: 100%; }
-.council-result-head { margin-bottom: 20px; }
-.council-eyebrow { font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); font-weight: 500; }
-.council-q { font-size: 1.5rem; font-weight: 400; letter-spacing: -0.01em; margin-top: 6px; max-width: 70ch; }
-.council-members { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 20px; }
-.council-card { background: var(--bg-elev); border: 1px solid #1d2734; border-radius: var(--radius);
-  padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; min-height: 120px; }
-.council-card.busy { align-items: center; justify-content: center; color: var(--fg-dim); }
-.council-card-model { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 0.95rem;
-  color: var(--fg); border-bottom: 1px solid #1d2734; padding-bottom: 8px; }
-.council-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
-  border-radius: 50%; background: var(--accent); color: #0b0f14; font-size: 0.8rem; font-weight: 600; flex: 0 0 auto; }
-.council-card-body { font-weight: 300; font-size: 0.95rem; line-height: 1.55; color: var(--fg); overflow-wrap: anywhere; }
-.council-card-body p { margin: 0 0 0.6em; }
-.council-card-body :last-child { margin-bottom: 0; }
-.council-err { color: var(--danger); }
-.council-synth { background: color-mix(in srgb, var(--accent) 8%, var(--bg-elev));
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, #1d2734); border-radius: var(--radius); padding: 18px 20px; }
-.council-synth-label { font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 10px; }
-.settings-field.council-field select { margin-top: 6px; }
 
-/* Sequential deliberation — members answer one at a time, stacked as bubbles. */
-.council-thread { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
-.council-thread .council-card { min-height: 0; }
-.council-card.pending { color: var(--fg-dim); }
-.council-card:not(.pending) { animation: council-arrive 0.32s ease both; }
-@keyframes council-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-.council-thinking { display: flex; flex-direction: column; align-items: center; gap: 14px;
-  color: var(--fg-dim); padding: 12vh 0; font-weight: 300; }
-
-/* PM intake — one clarifying question at a time, clickable options. */
-.council-intake { max-width: 760px; margin: 0 auto; padding: 24px clamp(16px,3vw,40px) 72px; overflow-y: auto; height: 100%; }
-.council-intake-meta { font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--accent); font-weight: 600; margin-bottom: 8px; }
-.council-intake-q { font-size: 1.2rem; font-weight: 400; letter-spacing: -0.01em; margin: 0 0 18px; max-width: 60ch; }
-.council-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+/* PM intake — clarifying question + clickable options, inside a PM bubble. */
+.council-intake-q { font-size: 1.05rem; font-weight: 400; margin: 0 0 12px; }
+.council-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .council-option { display: flex; align-items: center; gap: 12px; text-align: left; width: 100%;
   background: var(--bg-elev); border: 1px solid #25303f; border-radius: var(--radius);
-  color: var(--fg); font: inherit; font-weight: 300; padding: 14px 16px; cursor: pointer; transition: border-color 0.12s, background 0.12s; }
+  color: var(--fg); font: inherit; font-weight: 300; padding: 12px 14px; cursor: pointer; transition: border-color 0.12s, background 0.12s; }
 .council-option:hover, .council-option:focus-visible { outline: none; border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, var(--bg-elev)); }
 .council-opt-key { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
   border-radius: 6px; background: #25303f; color: var(--fg-dim); font-size: 0.8rem; font-weight: 600; flex: 0 0 auto; }
 .council-option:hover .council-opt-key { background: var(--accent); color: #0b0f14; }
 .council-other-input { width: 100%; border-radius: var(--radius); border: 1px solid #25303f;
-  background: var(--bg-elev); color: var(--fg); font: inherit; font-weight: 300; padding: 12px 16px; margin-bottom: 16px; }
+  background: var(--bg-elev); color: var(--fg); font: inherit; font-weight: 300; padding: 10px 14px; margin-bottom: 12px; }
 .council-other-input:focus { outline: none; border-color: var(--accent); }
