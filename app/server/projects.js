@@ -16,6 +16,7 @@ import { getRole, listRoles, FALLBACK_NAMES } from './roles.js';
 import { writeBaselineCharters, deepenCharters, charterFileNameFor, legacyCharterFileNames } from './charters.js';
 import { resolveRepoPath, ensureRepo, commitIfChanged } from './workspace.js';
 import { clearContext } from './scratchpad.js';
+import { clearLearnings } from './learnings.js';
 import { stateDir, ensureStateDir } from './state-dir.js';
 
 function projectsFile() { return join(stateDir(), 'projects.json'); }
@@ -201,6 +202,7 @@ export async function createProject({ name, goal, features, roleIds, topology })
   // created before (same date → same id), wipe any stale scratchpad so the new
   // project starts with empty chats (no inherited kickoff turns).
   for (const a of agents) clearContext(a.id);
+  clearLearnings(id);   // a reused project id must not inherit a prior project's learnings
 
   const leadAgentId = agents.find(a => a.role === 'pm').id;
 
@@ -341,6 +343,7 @@ export function deleteProject(id) {
   // clear each agent's entry explicitly — otherwise a reused id inherits it.
   try { rmSync(resolve(stateDir(), id), { recursive: true, force: true }); } catch {}
   for (const a of (removed.agents || [])) { try { clearContext(a.id); } catch {} }
+  try { clearLearnings(id); } catch {}
   return { ok: true, id, name: removed.name };
 }
 
