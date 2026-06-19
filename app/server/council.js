@@ -109,9 +109,17 @@ export function chairPrompt({ question, context, members }) {
   return (
     `You are the chairman of an advisory council. ${answered.length} members answered the question below. ` +
     `Synthesize their answers into one clear, decisive recommendation: note where they agree, resolve where ` +
-    `they disagree (say which view is stronger and why), and end with a concise "Recommendation". Use markdown.` +
+    `they disagree (say which view is stronger and why), and end with a concise "Recommendation". Use markdown. ` +
+    `After the recommendation, on the very last line, output "TAKEAWAY: " followed by the single decisive ` +
+    `sentence the team should remember (no markdown on that line).` +
     `${aiInstructionsBlock()}\n\nQuestion:\n${question}${context || ''}\n\nMember answers:\n${combined}`
   );
+}
+
+/** Pull the chair's one-line "TAKEAWAY:" out of the synthesis (for the learnings store). */
+export function extractTakeaway(content) {
+  const m = String(content || '').match(/^\s*TAKEAWAY:\s*(.+?)\s*$/im);
+  return m ? m[1].trim() : '';
 }
 
 export async function synthesize({ apiKey, model, question, context, members, callText } = {}) {
@@ -121,5 +129,5 @@ export async function synthesize({ apiKey, model, question, context, members, ca
   const key = apiKey ?? process.env.OPENROUTER_API_KEY;
   const call = callText || callOpenRouterText;
   const content = await call({ apiKey: key, model: chair, prompt: chairPrompt({ question, context, members: answered }), timeoutMs: MEMBER_TIMEOUT_MS });
-  return { model: chair, content: content || '' };
+  return { model: chair, content: content || '', takeaway: extractTakeaway(content) };
 }

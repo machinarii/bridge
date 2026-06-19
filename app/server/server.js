@@ -16,6 +16,7 @@ import { setLastSpec, getContext, lastActivityAt, truncateFrom } from './scratch
 import { runTeamVoice, resolveDelegateSpec } from './team.js';
 import { startKickoff, handleLeadMessageDuringKickoff, declineKickoff, callOpenRouterText } from './kickoff.js';
 import { getCouncilModels, buildIntake, councilContext, askMember, synthesize } from './council.js';
+import { addLearning, getLearnings } from './learnings.js';
 import { proposeBuildPlan, runScaffold } from './scaffold.js';
 import {
   notifyStateChange, rescheduleAutosave, initProjectRepo, autosaveStatus,
@@ -205,7 +206,14 @@ app.post('/council/synthesis', async (req, res) => {
   try {
     const context = councilContext(req.body?.answers);
     const members = Array.isArray(req.body?.members) ? req.body.members : [];
-    res.json(await synthesize({ apiKey: process.env.OPENROUTER_API_KEY, model: getCouncilModels()[0], question, context, members }));
+    const result = await synthesize({ apiKey: process.env.OPENROUTER_API_KEY, model: getCouncilModels()[0], question, context, members });
+    // Persist the chair's one-line takeaway as a project learning so the team
+    // inherits the council's decision in future turns.
+    const pid = req.body?.projectId;
+    if (pid && result.takeaway && getProject(pid)) {
+      addLearning(pid, { key: `council:${question}`.slice(0, 80), insight: result.takeaway, type: 'decision', confidence: 8, source: 'council' });
+    }
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: String(err?.message || err) });
   }
@@ -544,6 +552,21 @@ app.patch('/projects/:pid/agents/:aid', (req, res) => {
 app.get('/projects/:pid/notes', (req, res) => {
   if (!getProject(req.params.pid)) return res.status(404).json({ error: 'unknown project' });
   res.json({ items: listNotes(req.params.pid) });
+});
+
+/* Per-project learnings — durable insights injected into agent prompts so the
+ * team stops re-deriving settled decisions / re-finding the same bugs. */
+app.get('/projects/:pid/learnings', (req, res) => {
+  if (!getProject(req.params.pid)) return res.status(404).json({ error: 'unknown project' });
+  const role = req.query.role ? String(req.query.role) : null;
+  res.json({ learnings: getLearnings(req.params.pid, { role }) });
+});
+
+app.post('/projects/:pid/learnings', (req, res) => {
+  if (!getProject(req.params.pid)) return res.status(404).json({ error: 'unknown project' });
+  const rec = addLearning(req.params.pid, req.body || {});
+  if (!rec) return res.status(400).json({ error: 'insight required' });
+  res.json({ ok: true, learning: rec });
 });
 
 app.get('/projects/:pid/notes/:nid', (req, res) => {

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   getCouncilModels, intakePrompt, normalizeIntake, buildIntake,
   councilContext, memberPrompt, askMember, chairPrompt, synthesize, aiInstructionsBlock,
+  extractTakeaway,
 } from './council.js';
 
 function withEnv(vars, fn) {
@@ -117,7 +118,19 @@ test('synthesize: calls chair with assembled prompt when members answered', asyn
   const out = await synthesize({ model: 'chair/x', question: 'Q', context: '', members: [{ model: 'a/1', content: 'Hi' }], callText: async (o) => { seen = o; return 'final'; } });
   assert.equal(seen.model, 'chair/x');
   assert.match(seen.prompt, /chairman/);
-  assert.deepEqual(out, { model: 'chair/x', content: 'final' });
+  assert.deepEqual(out, { model: 'chair/x', content: 'final', takeaway: '' });
+});
+
+test('synthesize: extracts the chair TAKEAWAY line into the result', async () => {
+  const out = await synthesize({ model: 'chair/x', question: 'Q', context: '', members: [{ model: 'a/1', content: 'Hi' }],
+    callText: async () => 'Recommendation: do X.\nTAKEAWAY: Ship X behind a flag.' });
+  assert.equal(out.takeaway, 'Ship X behind a flag.');
+});
+
+test('extractTakeaway: pulls the last TAKEAWAY line, empty when absent', () => {
+  assert.equal(extractTakeaway('blah\nTAKEAWAY: Use SQLite.'), 'Use SQLite.');
+  assert.equal(extractTakeaway('no takeaway here'), '');
+  assert.equal(extractTakeaway(''), '');
 });
 
 test('aiInstructionsBlock: empty by default, injected when set', () => {

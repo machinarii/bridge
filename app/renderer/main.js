@@ -3932,7 +3932,7 @@ async function runCouncilDeliberation() {
   try {
     const r = await fetch('/council/synthesis', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: st.question, answers: st.answers, members: st.members }),
+      body: JSON.stringify({ question: st.question, answers: st.answers, members: st.members, projectId: activeProject?.id }),
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);

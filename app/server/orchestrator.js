@@ -5,6 +5,7 @@ import { readProjectCharter } from './charters.js';
 import { selectSkillsForTask, loadSkillPlaybook } from './skills.js';
 import { getRole } from './roles.js';
 import { getModelForRole, getRouterModel } from './models.js';
+import { learningsBlock } from './learnings.js';
 import { emitStatus, emitActivity, emitToken } from './events.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -101,7 +102,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${topoLine}${sharedBlock}
+${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}
 Stay in role and on-goal. Speak briefly, in first person when relevant. The user is talking to you specifically.${customInstructionsBlock()}
 ${RESPONSE_STYLE}
 
@@ -320,7 +321,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${topoLine}${sharedBlock}
+${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}
 Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.${customInstructionsBlock()}
 ${RESPONSE_STYLE}`;
 }
