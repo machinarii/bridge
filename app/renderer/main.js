@@ -3768,9 +3768,27 @@ function councilShell(status) {
         <span class="agent-status">${escapeHtml(status || '')}</span>
       </div>
     </div>
-    <div class="chat-scroll council-body"></div>`;
+    <div class="chat-scroll council-body"></div>
+    <div class="agent-view-hint">
+      <span class="for-gamepad">Hold <kbd>R2</kbd> to talk</span>
+      <span class="for-keyboard">Hold <kbd>V</kbd> to talk</span>
+    </div>`;
   surfaceEl.appendChild(view);
   return view.querySelector('.council-body');
+}
+
+/* The council footer mirrors an agent's L2 footer — you ask by talking or
+ * typing, exactly like any other agent. Back returns to the team grid. */
+function councilFooterShortcuts() {
+  renderActionBar([]);
+  setShortcuts([
+    { gamepad: 'r2', keyboard: 'V', label: 'Hold to talk', action: () => startPTT() },
+    { keyboard: '/', label: 'Type prompt', action: () => { typedWrap.hidden = false; typedInput.focus(); } },
+    { gamepad: 'triangle', keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
+    { gamepad: 'square', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
+    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() },
+  ]);
+  setPrimaryShortcut(null);
 }
 
 /* A chat bubble matching the agent view. kind: 'user' | 'agent'. */
@@ -3785,39 +3803,14 @@ function councilBubble({ kind, author = '', role = '', html = '', id = '', cls =
 
 function councilQuestionBubble(q) { return councilBubble({ kind: 'user', html: escapeHtml(q) }); }
 
-function councilBackShortcuts() {
-  renderActionBar([]);
-  setShortcuts([{ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() }]);
-  setPrimaryShortcut({ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() });
-}
 
 function openCouncil() {
   if (!activeProject) return;
   councilState = { phase: 'prompt' };
-  const body = councilShell('Ask a question');
-  body.innerHTML =
-    councilBubble({ kind: 'agent', author: 'Council', role: 'three models',
-      html: 'Pose a question and I’ll convene three models — the PM gathers a little context, each model answers in turn, then a chair synthesizes one recommendation.' }) +
-    `<div class="council-compose">
-       <textarea id="council-input" class="council-input" rows="3" placeholder="Pose a question or problem for the council…" spellcheck="false"></textarea>
-       <div class="council-actions">
-         <button type="button" class="role-cancel" id="council-cancel">Cancel</button>
-         <button type="button" class="role-confirm" id="council-ask">Ask the Council</button>
-       </div>
-     </div>`;
-  const input = body.querySelector('#council-input');
-  const ask = () => { const q = input.value.trim(); if (q) startCouncilIntake(q); };
-  body.querySelector('#council-cancel').addEventListener('click', () => renderGrid());
-  body.querySelector('#council-ask').addEventListener('click', ask);
-  input.addEventListener('keydown', (e) => {
-    e.stopPropagation();
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
-    else if (e.key === 'Escape') { e.preventDefault(); renderGrid(); }
-  });
-  setTimeout(() => input.focus(), 0);
-  renderActionBar([]);
-  setShortcuts([{ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() }]);
-  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Ask', action: ask });
+  // An empty agent-style chat: the user asks by holding to talk or typing "/",
+  // exactly like any other agent on L2. No bespoke composer.
+  councilShell('');
+  councilFooterShortcuts();
 }
 
 /* "Thinking" state while the PM prepares intake questions — a PM bubble. */
@@ -3827,7 +3820,7 @@ function renderCouncilThinking(question, label) {
     councilBubble({ kind: 'agent', author: 'Project Manager', role: 'reviewing',
       html: `<div class="typing-dots"><span></span><span></span><span></span></div>` +
             `<p class="council-think-label">${escapeHtml(label)}</p>` });
-  councilBackShortcuts();
+  councilFooterShortcuts();
 }
 
 /* Step 1 — PM intake. Ask the server for clarifying questions; if there are
@@ -3875,9 +3868,7 @@ function renderCouncilIntake() {
     else if (e.key === 'Escape') { e.preventDefault(); renderGrid(); }
   });
   body.querySelector('#council-skip').addEventListener('click', () => answerCouncilIntake(null));
-  renderActionBar([]);
-  setShortcuts([{ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() }]);
-  setPrimaryShortcut(null);
+  councilFooterShortcuts();
 }
 
 /* Record an answer (or skip when null), advance; deliberate after the last. */
@@ -3903,7 +3894,7 @@ function renderCouncilDeliberation() {
   const body = councilShell('Deliberating…');
   body.innerHTML = councilQuestionBubble(st.question) +
     [0, 1, 2].map((i) => councilMemberSlot(i, st.models[i] ? councilModelLabel(st.models[i]) : `Member ${i + 1}`)).join('');
-  councilBackShortcuts();
+  councilFooterShortcuts();
 }
 
 function updateCouncilMember(i, m) {
@@ -3975,12 +3966,7 @@ async function runCouncilDeliberation() {
     setCouncilSynth({ content: '', error: String(err.message || err) }, false);
   }
   st.phase = 'done';
-  renderActionBar([]);
-  setShortcuts([
-    { keyboard: 'N', label: 'New question', action: () => openCouncil() },
-    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() },
-  ]);
-  setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Back', action: () => renderGrid() });
+  councilFooterShortcuts();   // ask again just by talking / typing, like any agent
 }
 
 /** Slide to the next / previous project from L1 (project detail). */
@@ -4155,7 +4141,7 @@ async function executeAction(action, sourceSpec) {
 }
 
 /* ---------- PTT + intent submission ---------- */
-const PTT_MODES = new Set([MODE_PROJECTS, MODE_ZOOM, MODE_GRID, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL, MODE_NEW_PROJ_FEATURES]);
+const PTT_MODES = new Set([MODE_PROJECTS, MODE_ZOOM, MODE_GRID, MODE_COUNCIL, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL, MODE_NEW_PROJ_FEATURES]);
 
 /* If LOCAL_STT_URL is configured on the server, mic capture goes
  * through MediaRecorder and POSTs to /transcribe. Otherwise we fall
@@ -4455,6 +4441,7 @@ function dispatchTranscript(text) {
   if (mode === MODE_NEW_PROJ_NAME) { newProjName = titleCaseName(stripNamePunct(text)); renderNewProjectName(); return; }
   if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = text; renderNewProjectGoal(); return; }
   if (mode === MODE_NEW_PROJ_FEATURES) { newProjFeatures = text; renderNewProjectFeatures(); return; }
+  if (mode === MODE_COUNCIL) { startCouncilIntake(text); return; }
   if (mode === MODE_ZOOM) { submitIntent(text); return; }
   if (mode === MODE_GRID) { submitTeamIntent(text); return; }
   if (mode === MODE_PROJECTS) { dispatchHomeUtterance(text); return; }
@@ -7163,10 +7150,8 @@ window.addEventListener('keydown', (e) => {
         e.preventDefault(); answerCouncilIntake(cur.options[n - 1]); return;
       }
       if (e.key === 's' || e.key === 'S') { e.preventDefault(); answerCouncilIntake(null); return; }
-    } else {
-      if (e.key === 'Escape')                  { e.preventDefault(); renderGrid(); return; }
-      else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openCouncil(); return; }
-      else if (e.key === 'Enter')              { e.preventDefault(); renderGrid(); return; }
+    } else if (e.key === 'Escape') {
+      e.preventDefault(); renderGrid(); return;   // ask again by talking / typing, like any agent
     }
   }
 
@@ -7311,6 +7296,7 @@ function submitTypedText(text) {
   if (mode === MODE_NEW_PROJ_NAME) { newProjName = titleCaseName(text.trim()); renderNewProjectName(); return; }
   if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = text.trim(); renderNewProjectGoal(); return; }
   if (mode === MODE_NEW_PROJ_FEATURES) { newProjFeatures = text.trim(); renderNewProjectFeatures(); return; }
+  if (mode === MODE_COUNCIL) { startCouncilIntake(text.trim()); return; }
   if (mode === MODE_ZOOM) { submitIntent(text); return; }
   if (mode === MODE_GRID) { submitTeamIntent(text); return; }
 }
