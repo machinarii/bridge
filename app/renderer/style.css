@@ -1881,6 +1881,11 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   color: var(--fg-dim);
   font-size: 0.85em;
   flex: 1 1 auto;
+  min-width: 0;
+  /* Wrap to a second line rather than letting later chips (e.g. Council on the
+     crowded L1 rail) overflow off-screen behind the action bar. */
+  flex-wrap: wrap;
+  row-gap: 0.2rem;
 }
 #shortcuts-rail .sc {
   display: inline-flex; align-items: center; gap: 0.4rem;
