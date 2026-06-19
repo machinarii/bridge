@@ -7,11 +7,15 @@
  *   metricsFile() → absolute path of the log (for tooling/tests)
  */
 
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, statSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { stateDir, ensureStateDir } from './state-dir.js';
 
 export function metricsFile() { return join(stateDir(), 'agent-metrics.jsonl'); }
+
+// Bound the log: once it passes this size, roll to a single .1 generation
+// (overwriting any prior roll). Overridable for tests via BRIDGE_METRICS_MAX_BYTES.
+function maxBytes() { return Number(process.env.BRIDGE_METRICS_MAX_BYTES) || 50 * 1024 * 1024; }
 
 let _warned = false;
 
@@ -30,7 +34,9 @@ export function recordModelCall({ model = null, role = null, kind = null, latenc
       completionTokens: usage?.completion_tokens ?? null,
       totalTokens: usage?.total_tokens ?? null,
     };
-    appendFileSync(metricsFile(), JSON.stringify(rec) + '\n', 'utf8');
+    const f = metricsFile();
+    appendFileSync(f, JSON.stringify(rec) + '\n', 'utf8');
+    if (statSync(f).size > maxBytes()) renameSync(f, f + '.1');   // roll, keep one prior generation
   } catch (err) {
     if (!_warned) { _warned = true; console.warn('[metrics] logging disabled:', err.message); }
   }

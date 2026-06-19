@@ -7,7 +7,12 @@ import { join } from 'node:path';
 let tmp, metrics;
 before(async () => { tmp = mkdtempSync(join(tmpdir(), 'bridge-metrics-')); process.env.BRIDGE_STATE_DIR = tmp; metrics = await import('./metrics.js'); });
 after(() => { try { rmSync(tmp, { recursive: true, force: true }); } catch {} });
-beforeEach(() => { if (existsSync(metrics.metricsFile())) writeFileSync(metrics.metricsFile(), ''); delete process.env.BRIDGE_METRICS; });
+beforeEach(() => {
+  if (existsSync(metrics.metricsFile())) writeFileSync(metrics.metricsFile(), '');
+  if (existsSync(metrics.metricsFile() + '.1')) rmSync(metrics.metricsFile() + '.1');
+  delete process.env.BRIDGE_METRICS;
+  delete process.env.BRIDGE_METRICS_MAX_BYTES;
+});
 
 function lines() {
   const f = metrics.metricsFile();
@@ -50,4 +55,10 @@ test('appends one line per call', () => {
   metrics.recordModelCall({ model: 'a/x', ok: true });
   metrics.recordModelCall({ model: 'b/y', ok: true });
   assert.equal(lines().length, 2);
+});
+
+test('rolls to a .1 generation once the file passes the size cap', () => {
+  process.env.BRIDGE_METRICS_MAX_BYTES = '200';   // tiny cap so a couple calls trip it
+  for (let i = 0; i < 10; i++) metrics.recordModelCall({ model: 'a/x', role: 'r', ok: true });
+  assert.ok(existsSync(metrics.metricsFile() + '.1'), 'a rolled .1 file was created');
 });

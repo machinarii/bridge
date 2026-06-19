@@ -51,8 +51,10 @@ export async function callOpenRouterJSON({ apiKey, model, prompt, timeoutMs = PL
     });
     if (!r.ok) { console.warn(`[openrouter] ${model} (json) → HTTP ${r.status}`); recordModelCall({ model, ...meta, latencyMs: Date.now() - t0, ok: false }); return '{}'; }
     const data = await r.json();
-    recordModelCall({ model, ...meta, latencyMs: Date.now() - t0, usage: data?.usage, ok: true });
-    return data?.choices?.[0]?.message?.content || '{}';
+    const content = data?.choices?.[0]?.message?.content || '';
+    if (!content) console.warn(`[openrouter] ${model} (json) → empty content (finish_reason: ${data?.choices?.[0]?.finish_reason || '?'})`);
+    recordModelCall({ model, ...meta, latencyMs: Date.now() - t0, usage: data?.usage, ok: !!content });
+    return content || '{}';
   } catch (err) {
     console.warn(`[openrouter] ${model} (json) → ${err?.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : (err?.message || err)}`);
     recordModelCall({ model, ...meta, latencyMs: Date.now() - t0, ok: false });
