@@ -2170,6 +2170,23 @@ function renderGrid() {
     return tile;
   });
 
+  // "Council" tile — sits with the team like an agent; selecting it opens the
+  // cross-model council (no shortcut key — it's a tile you pick like any agent).
+  {
+    const councilIdx = tileEls.length;
+    const councilTile = document.createElement('div');
+    councilTile.className = 'agent-tile council-tile';
+    councilTile.dataset.council = 'true';
+    councilTile.style.setProperty('--tile-color', 'var(--accent)');
+    councilTile.innerHTML = `
+      <h2 class="name">Council</h2>
+      <div class="role">Advisory · three models</div>
+      <div class="status"><span class="dot"></span><span class="status-verb">Ask the council</span></div>`;
+    councilTile.addEventListener('click', () => { gridIndex = councilIdx; ring.set(tileEls); ring.index = councilIdx; ring.paint(); enterZoom(); });
+    grid.appendChild(councilTile);
+    tileEls.push(councilTile);
+  }
+
   // "+ Add agent" tile — last cell when room remains (cap at cols*MAX_ROWS).
   if (tileEls.length < cols * MAX_ROWS) {
     const addIdx = tileEls.length;
@@ -2440,7 +2457,6 @@ function updateGridShortcuts() {
     { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
     {                    gamepad: 'triangle', keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
     { gamepad: 'square', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
-    { gamepad: 'l2', keyboard: 'C', label: 'Council', action: () => openCouncil() },
   ];
   if (!isLeadFocused) {
     items.push({ gamepad: 'options', keyboard: 'Space', label: 'Agent on / off',
@@ -2492,10 +2508,14 @@ function gridMove(dir) {
 
 async function enterZoom(specOverride) {
   if (!activeProject) return;
-  // The "+ Add agent" tile sits at index activeProject.agents.length —
-  // pressing Enter on it opens the role picker with the same zoom-in morph
-  // as a real agent tile (rather than snapping straight in).
-  if (mode !== MODE_ZOOM && gridIndex === activeProject.agents.length) {
+  // Non-agent grid tiles are routed by their dataset (order-independent), not by
+  // index. The Council tile opens the council; the "+ Add agent" tile opens the
+  // role picker with the same zoom-in morph as a real agent tile.
+  if (mode !== MODE_ZOOM && ring.current()?.dataset.council === 'true') {
+    openCouncil();
+    return;
+  }
+  if (mode !== MODE_ZOOM && ring.current()?.dataset.addAgent === 'true') {
     await ensureRolesLoaded();   // prefetch so the picker renders synchronously inside the morph
     const addTile = ring.current();
     const addRect = addTile?.getBoundingClientRect();
@@ -7194,7 +7214,6 @@ window.addEventListener('keydown', (e) => {
     else if (e.code === 'Space') { e.preventDefault(); toggleFocusedAgentEnabled(); }
     else if (e.key === '[')      { e.preventDefault(); cycleProject(-1); }
     else if (e.key === ']')      { e.preventDefault(); cycleProject(+1); }
-    else if (e.key === 'c' || e.key === 'C') { e.preventDefault(); openCouncil(); }
   } else if (entryMode === MODE_ZOOM) {
     // Chat bubble selection. ArrowUp from the surface enters the chat
     // history at the last bubble; once inside, ArrowUp/Down walks
