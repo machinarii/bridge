@@ -2175,9 +2175,9 @@ function renderGrid() {
   {
     const councilIdx = tileEls.length;
     const councilTile = document.createElement('div');
-    councilTile.className = 'agent-tile council-tile';
+    councilTile.className = 'agent-tile';
     councilTile.dataset.council = 'true';
-    councilTile.style.setProperty('--tile-color', 'var(--accent)');
+    councilTile.style.setProperty('--tile-color', projectColor);
     councilTile.innerHTML = `
       <h2 class="name">Council</h2>
       <div class="role">Advisory · three models</div>
@@ -3749,32 +3749,66 @@ function councilCrumbs() {
   setBreadcrumbs([{ label: 'Projects' }, { label: sentenceCase(activeProject.name) }, { label: 'Council' }]);
 }
 
-function councilHeader(question) {
-  return `<header class="council-result-head"><div class="council-eyebrow">Council</div>` +
-         `<h2 class="council-q">${escapeHtml(question)}</h2></header>`;
+
+/* The council reuses the agent L2 chrome — the .agent-view container + chat
+ * bubbles — so it looks and feels like talking to an agent. councilShell builds
+ * that container with a "Council" header and returns the scrollable body. */
+function councilShell(status) {
+  mode = MODE_COUNCIL;
+  councilCrumbs();
+  document.documentElement.style.setProperty('--agent-color', getProjectColor(activeProject));
+  surfaceEl.innerHTML = '';
+  const view = document.createElement('section');
+  view.className = 'agent-view council-view';
+  view.innerHTML = `
+    <div class="agent-header">
+      <div class="agent-title">
+        <span class="name-large">Council</span>
+        <span class="role-large">Advisory · three models</span>
+        <span class="agent-status">${escapeHtml(status || '')}</span>
+      </div>
+    </div>
+    <div class="chat-scroll council-body"></div>`;
+  surfaceEl.appendChild(view);
+  return view.querySelector('.council-body');
+}
+
+/* A chat bubble matching the agent view. kind: 'user' | 'agent'. */
+function councilBubble({ kind, author = '', role = '', html = '', id = '', cls = '' }) {
+  const authorHtml = author
+    ? `<div class="bubble-author"><span class="bubble-author-name">${escapeHtml(author)}</span>` +
+      (role ? `<span class="bubble-author-role">${escapeHtml(role)}</span>` : '') + `</div>`
+    : '';
+  return `<div class="bubble ${kind}${author ? ' foreign' : ''}${cls ? ' ' + cls : ''}"${id ? ` id="${id}"` : ''}>` +
+    `${authorHtml}<div class="bubble-content">${html}</div></div>`;
+}
+
+function councilQuestionBubble(q) { return councilBubble({ kind: 'user', html: escapeHtml(q) }); }
+
+function councilBackShortcuts() {
+  renderActionBar([]);
+  setShortcuts([{ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() }]);
+  setPrimaryShortcut({ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() });
 }
 
 function openCouncil() {
   if (!activeProject) return;
-  mode = MODE_COUNCIL;
   councilState = { phase: 'prompt' };
-  councilCrumbs();
-  surfaceEl.innerHTML = '';
-  const t = document.createElement('section');
-  t.className = 'council-tile';
-  t.innerHTML = `
-    <h2 class="council-h">Ask the Council</h2>
-    <p class="council-sub">The PM gathers a little context, then three models answer in turn and a chair synthesizes one recommendation.</p>
-    <textarea id="council-input" class="council-input" rows="3" placeholder="Pose a question or problem for the council…" spellcheck="false"></textarea>
-    <div class="council-actions">
-      <button type="button" class="role-cancel" id="council-cancel">Cancel</button>
-      <button type="button" class="role-confirm" id="council-ask">Ask the Council</button>
-    </div>`;
-  surfaceEl.appendChild(t);
-  const input = t.querySelector('#council-input');
+  const body = councilShell('Ask a question');
+  body.innerHTML =
+    councilBubble({ kind: 'agent', author: 'Council', role: 'three models',
+      html: 'Pose a question and I’ll convene three models — the PM gathers a little context, each model answers in turn, then a chair synthesizes one recommendation.' }) +
+    `<div class="council-compose">
+       <textarea id="council-input" class="council-input" rows="3" placeholder="Pose a question or problem for the council…" spellcheck="false"></textarea>
+       <div class="council-actions">
+         <button type="button" class="role-cancel" id="council-cancel">Cancel</button>
+         <button type="button" class="role-confirm" id="council-ask">Ask the Council</button>
+       </div>
+     </div>`;
+  const input = body.querySelector('#council-input');
   const ask = () => { const q = input.value.trim(); if (q) startCouncilIntake(q); };
-  t.querySelector('#council-cancel').addEventListener('click', () => renderGrid());
-  t.querySelector('#council-ask').addEventListener('click', ask);
+  body.querySelector('#council-cancel').addEventListener('click', () => renderGrid());
+  body.querySelector('#council-ask').addEventListener('click', ask);
   input.addEventListener('keydown', (e) => {
     e.stopPropagation();
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
@@ -3786,20 +3820,14 @@ function openCouncil() {
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Ask', action: ask });
 }
 
-/* A centered "thinking" screen used while the PM prepares intake questions. */
+/* "Thinking" state while the PM prepares intake questions — a PM bubble. */
 function renderCouncilThinking(question, label) {
-  mode = MODE_COUNCIL;
-  councilCrumbs();
-  surfaceEl.innerHTML = '';
-  const wrap = document.createElement('section');
-  wrap.className = 'council-result';
-  wrap.innerHTML = councilHeader(question) +
-    `<div class="council-thinking"><div class="typing-dots"><span></span><span></span><span></span></div>` +
-    `<p>${escapeHtml(label)}</p></div>`;
-  surfaceEl.appendChild(wrap);
-  renderActionBar([]);
-  setShortcuts([{ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() }]);
-  setPrimaryShortcut({ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() });
+  const body = councilShell('Reviewing…');
+  body.innerHTML = councilQuestionBubble(question) +
+    councilBubble({ kind: 'agent', author: 'Project Manager', role: 'reviewing',
+      html: `<div class="typing-dots"><span></span><span></span><span></span></div>` +
+            `<p class="council-think-label">${escapeHtml(label)}</p>` });
+  councilBackShortcuts();
 }
 
 /* Step 1 — PM intake. Ask the server for clarifying questions; if there are
@@ -3825,34 +3853,28 @@ async function startCouncilIntake(question) {
   else runCouncilDeliberation();
 }
 
-/* One clarifying question at a time, answered via clickable options. */
+/* One clarifying question at a time, as a PM bubble with clickable options. */
 function renderCouncilIntake() {
   const st = councilState;
   const cur = st.questions[st.idx];
-  mode = MODE_COUNCIL;
-  councilCrumbs();
-  surfaceEl.innerHTML = '';
-  const wrap = document.createElement('section');
-  wrap.className = 'council-intake';
-  wrap.innerHTML = councilHeader(st.question) +
-    `<div class="council-intake-meta">PM · question ${st.idx + 1} of ${st.questions.length}</div>` +
-    `<h3 class="council-intake-q">${escapeHtml(cur.q)}</h3>` +
-    `<div class="council-options">` +
-    cur.options.map((o, i) => `<button type="button" class="council-option" data-idx="${i}">` +
-      `<span class="council-opt-key">${i + 1}</span><span>${escapeHtml(o)}</span></button>`).join('') +
-    `</div>` +
-    `<input type="text" id="council-other" class="council-other-input" placeholder="Other — type your own answer…" spellcheck="false" />` +
-    `<div class="council-actions"><button type="button" class="role-cancel" id="council-skip">Skip</button></div>`;
-  surfaceEl.appendChild(wrap);
-  wrap.querySelectorAll('.council-option').forEach((b) =>
+  const body = councilShell('Gathering context');
+  const opts = cur.options.map((o, i) =>
+    `<button type="button" class="council-option" data-idx="${i}"><span class="council-opt-key">${i + 1}</span><span>${escapeHtml(o)}</span></button>`).join('');
+  body.innerHTML = councilQuestionBubble(st.question) +
+    councilBubble({ kind: 'agent', author: 'Project Manager', role: `question ${st.idx + 1} of ${st.questions.length}`,
+      html: `<p class="council-intake-q">${escapeHtml(cur.q)}</p>` +
+            `<div class="council-options">${opts}</div>` +
+            `<input type="text" id="council-other" class="council-other-input" placeholder="Other — type your own answer…" spellcheck="false" />` +
+            `<div class="council-actions"><button type="button" class="role-cancel" id="council-skip">Skip</button></div>` });
+  body.querySelectorAll('.council-option').forEach((b) =>
     b.addEventListener('click', () => answerCouncilIntake(cur.options[Number(b.dataset.idx)])));
-  const other = wrap.querySelector('#council-other');
+  const other = body.querySelector('#council-other');
   other.addEventListener('keydown', (e) => {
     e.stopPropagation();
     if (e.key === 'Enter') { e.preventDefault(); const v = other.value.trim(); if (v) answerCouncilIntake(v); }
     else if (e.key === 'Escape') { e.preventDefault(); renderGrid(); }
   });
-  wrap.querySelector('#council-skip').addEventListener('click', () => answerCouncilIntake(null));
+  body.querySelector('#council-skip').addEventListener('click', () => answerCouncilIntake(null));
   renderActionBar([]);
   setShortcuts([{ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() }]);
   setPrimaryShortcut(null);
@@ -3868,31 +3890,20 @@ function answerCouncilIntake(value) {
   else runCouncilDeliberation();
 }
 
-/* Step 2 + 3 — members answer one at a time (blind), then the chair synthesizes. */
+/* Step 2 + 3 — members answer one at a time (blind), then the chair synthesizes.
+ * Each is a chat bubble in the council body, just like an agent's reply. */
 function councilMemberSlot(i, label) {
-  return `<article class="council-card pending" id="council-member-${i}">` +
-    `<div class="council-card-model"><span class="council-num">${i + 1}</span>${escapeHtml(label)}</div>` +
-    `<div class="council-card-body"><div class="typing-dots"><span></span><span></span><span></span></div></div>` +
-    `</article>`;
+  return councilBubble({ kind: 'agent', author: label, role: 'council member', id: `council-member-${i}`, cls: 'pending',
+    html: `<div class="typing-dots"><span></span><span></span><span></span></div>` });
 }
 
 function renderCouncilDeliberation() {
   const st = councilState;
   st.phase = 'deliberation';
-  mode = MODE_COUNCIL;
-  councilCrumbs();
-  surfaceEl.innerHTML = '';
-  const wrap = document.createElement('section');
-  wrap.className = 'council-result';
-  wrap.innerHTML = councilHeader(st.question) +
-    `<div class="council-thread">` +
-    [0, 1, 2].map((i) => councilMemberSlot(i, st.models[i] ? councilModelLabel(st.models[i]) : `Member ${i + 1}`)).join('') +
-    `</div>` +
-    `<section class="council-synth" id="council-synth" hidden></section>`;
-  surfaceEl.appendChild(wrap);
-  renderActionBar([]);
-  setShortcuts([{ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() }]);
-  setPrimaryShortcut({ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderGrid() });
+  const body = councilShell('Deliberating…');
+  body.innerHTML = councilQuestionBubble(st.question) +
+    [0, 1, 2].map((i) => councilMemberSlot(i, st.models[i] ? councilModelLabel(st.models[i]) : `Member ${i + 1}`)).join('');
+  councilBackShortcuts();
 }
 
 function updateCouncilMember(i, m) {
@@ -3901,29 +3912,32 @@ function updateCouncilMember(i, m) {
   el.classList.remove('pending');
   const label = m.model ? councilModelLabel(m.model) : `Member ${i + 1}`;
   el.innerHTML =
-    `<div class="council-card-model"><span class="council-num">${i + 1}</span>${escapeHtml(label)}</div>` +
-    `<div class="council-card-body">${m.content ? renderMarkdown(m.content)
+    `<div class="bubble-author"><span class="bubble-author-name">${escapeHtml(label)}</span><span class="bubble-author-role">council member</span></div>` +
+    `<div class="bubble-content">${m.content ? renderMarkdown(m.content)
       : `<p class="council-err">${escapeHtml(m.error || 'No response')}</p>`}</div>`;
   try { attachCodeCopyHandlers(el); } catch {}
+  el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
+/* Append/fill the chair's synthesis bubble (created on demand so an empty
+ * [hidden] bubble never shows — the .bubble display would defeat [hidden]). */
 function setCouncilSynth(data, busy) {
-  const el = document.getElementById('council-synth');
-  if (!el) return;
-  el.hidden = false;
+  const bodyEl = surfaceEl.querySelector('.council-body');
+  if (!bodyEl) return;
+  let el = document.getElementById('council-synth');
+  if (!el) { el = document.createElement('div'); el.id = 'council-synth'; el.className = 'bubble agent foreign'; bodyEl.appendChild(el); }
   if (busy) {
-    el.innerHTML = `<div class="council-synth-label">Chairman synthesizing…</div>` +
-      `<div class="council-card-body"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
-    return;
-  }
-  if (data && data.content) {
-    el.innerHTML = `<div class="council-synth-label">Chairman synthesis · ${escapeHtml(councilModelLabel(data.model))}</div>` +
-      `<div class="council-card-body">${renderMarkdown(data.content)}</div>`;
+    el.innerHTML = `<div class="bubble-author"><span class="bubble-author-name">Chairman</span><span class="bubble-author-role">synthesizing…</span></div>` +
+      `<div class="bubble-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+  } else if (data && data.content) {
+    el.innerHTML = `<div class="bubble-author"><span class="bubble-author-name">Chairman</span><span class="bubble-author-role">synthesis · ${escapeHtml(councilModelLabel(data.model))}</span></div>` +
+      `<div class="bubble-content">${renderMarkdown(data.content)}</div>`;
     try { attachCodeCopyHandlers(el); } catch {}
   } else {
-    el.innerHTML = `<div class="council-synth-label">Chairman synthesis</div>` +
-      `<p class="council-err">${escapeHtml((data && data.error) || 'No synthesis.')}</p>`;
+    el.innerHTML = `<div class="bubble-author"><span class="bubble-author-name">Chairman</span></div>` +
+      `<div class="bubble-content"><p class="council-err">${escapeHtml((data && data.error) || 'No synthesis.')}</p></div>`;
   }
+  el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 async function runCouncilDeliberation() {
