@@ -107,6 +107,7 @@ const SETTINGS_KEYS = [
   'LOCAL_STT_URL',              // e.g. http://localhost:8123/transcribe
   'OPENROUTER_COUNCIL_MODELS',  // JSON: [m1, m2, m3] — the three Council members
   'AI_INSTRUCTIONS',            // freeform custom instructions injected into agent + council prompts
+  'OPENROUTER_TIERS',           // "on"|"off" — per-role model tiering (craft roles → cheaper model)
 ];
 
 function maskKey(s) {
@@ -154,6 +155,7 @@ app.get('/settings', (_req, res) => {
     GITHUB_OAUTH_CLIENT_ID: process.env.GITHUB_OAUTH_CLIENT_ID || '',
     OPENROUTER_COUNCIL_MODELS: getCouncilModels(),
     AI_INSTRUCTIONS: process.env.AI_INSTRUCTIONS || '',
+    OPENROUTER_TIERS: (process.env.OPENROUTER_TIERS || 'off') === 'on',
   });
 });
 

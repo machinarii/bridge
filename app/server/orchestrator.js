@@ -6,6 +6,7 @@ import { selectSkillsForTask, loadSkillPlaybook } from './skills.js';
 import { getRole } from './roles.js';
 import { getModelForRole, getRouterModel } from './models.js';
 import { learningsBlock } from './learnings.js';
+import { recordModelCall } from './metrics.js';
 import { emitStatus, emitActivity, emitToken } from './events.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -223,6 +224,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
     // v2 status: producing tokens. The software engineer's generation reads as
     // "Building" (it's writing code), everyone else as "Drafting".
     emitStatus(projectId, agentId, agent?.role === 'sw_engineer' ? 'building' : 'drafting');
+    const t0 = Date.now();
     const resp = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: {
@@ -236,9 +238,11 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
 
     if (!resp.ok) {
       const errText = await resp.text();
+      recordModelCall({ model, role: agent.role, kind: 'agent', latencyMs: Date.now() - t0, ok: false });
       throw new Error(`OpenRouter ${resp.status}: ${errText.slice(0, 200)}`);
     }
     const data = await resp.json();
+    recordModelCall({ model, role: agent.role, kind: 'agent', latencyMs: Date.now() - t0, usage: data?.usage, ok: true });
     const raw = data?.choices?.[0]?.message?.content || '';
     appendTurn(agentId, 'assistant', raw);
     const spec = parseSpec(raw);

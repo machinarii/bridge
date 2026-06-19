@@ -6292,6 +6292,7 @@ let ghPollTimer = null;
 const settingsMcpListEl   = document.getElementById('settings-mcp-list');
 const settingsMcpAddEl    = document.getElementById('settings-mcp-add');
 const settingsGitEnabledEl= document.getElementById('settings-git-enabled');
+const settingsTiersEl     = document.getElementById('settings-tiers');
 const settingsGitIntervalEl = document.getElementById('settings-git-interval');
 const settingsSttUrlEl    = document.getElementById('settings-stt-url');
 const settingsGitStateEl   = document.getElementById('settings-git-state');
@@ -6620,6 +6621,7 @@ async function openSettings() {
   if (ghDeviceEl) ghDeviceEl.hidden = true;
   refreshGithubStatus();
   settingsGitEnabledEl.checked = !!s.GIT_AUTOSAVE;
+  if (settingsTiersEl) settingsTiersEl.checked = !!s.OPENROUTER_TIERS;
   settingsGitIntervalEl.value = Number(s.GIT_AUTOSAVE_INTERVAL_MIN || 5);
   if (settingsSttUrlEl) settingsSttUrlEl.value = s.LOCAL_STT_URL || '';
   // Keep the local STT cache in sync with the server.
@@ -6808,6 +6810,7 @@ async function saveSettings() {
   if (settingsInstructionsEl) updates.AI_INSTRUCTIONS = settingsInstructionsEl.value;
   updates.MCP_PLUGINS = settingsMcpEntries;
   updates.GIT_AUTOSAVE = !!settingsGitEnabledEl.checked;
+  updates.OPENROUTER_TIERS = !!settingsTiersEl?.checked;
   updates.GIT_AUTOSAVE_INTERVAL_MIN = Math.max(1, Math.min(120, Number(settingsGitIntervalEl.value) || 5));
   if (settingsSttUrlEl) {
     const url = settingsSttUrlEl.value.trim();

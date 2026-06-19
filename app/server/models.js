@@ -8,11 +8,31 @@ export function getDefaultModel() {
   return process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
 }
 
+/* Per-role model tiering (OFF by default — set OPENROUTER_TIERS=on to opt in).
+ * 'reason' roles do open-ended strategy/judgment and ride the flagship default;
+ * 'craft' roles execute well-scoped production work where a faster, cheaper
+ * model holds quality. Cuts cost/latency on the bulk of turns without touching
+ * the high-stakes reasoning paths. Any explicit per-role override still wins. */
+const CRAFT_MODEL_DEFAULT = 'anthropic/claude-sonnet-4.6';
+const ROLE_TIER = {
+  pm: 'reason', security: 'reason', legal: 'reason', data_sci: 'reason', ux_research: 'reason',
+  sw_engineer: 'craft', hw_engineer: 'craft', ee_engineer: 'craft',
+  designer: 'craft', qa: 'craft', copywriter: 'craft', marketing: 'craft',
+};
+
+export function tiersEnabled() { return (process.env.OPENROUTER_TIERS || 'off') === 'on'; }
+
+function tierModel(tier) {
+  if (tier === 'craft') return process.env.OPENROUTER_CRAFT_MODEL || CRAFT_MODEL_DEFAULT;
+  return getDefaultModel();   // 'reason' → the flagship default (opus-4.8)
+}
+
 export function getModelForRole(roleId) {
   try {
     const map = JSON.parse(process.env.OPENROUTER_MODEL_BY_ROLE || '{}');
     if (roleId && typeof map[roleId] === 'string' && map[roleId]) return map[roleId];
   } catch {}
+  if (tiersEnabled() && ROLE_TIER[roleId]) return tierModel(ROLE_TIER[roleId]);
   return getDefaultModel();
 }
 
