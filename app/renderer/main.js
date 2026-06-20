@@ -2181,7 +2181,7 @@ function renderGrid() {
     councilTile.innerHTML = `
       <h2 class="name">Council</h2>
       <div class="role">Advisory Team</div>
-      <div class="status"><span class="dot"></span><span class="status-verb">Ask the council</span></div>`;
+      <div class="status"><span class="dot"></span><span class="status-verb">Idle</span></div>`;
     councilTile.addEventListener('click', () => { gridIndex = councilIdx; ring.set(tileEls); ring.index = councilIdx; ring.paint(); enterZoom(); });
     grid.appendChild(councilTile);
     tileEls.push(councilTile);
