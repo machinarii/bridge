@@ -3258,10 +3258,12 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
 }
 .apikey-gate-mark { width: 64px; color: #ffffff; margin-bottom: 8px; }  /* matches #brand-mark */
 .apikey-gate-card h1 {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   font-family: 'Oxanium', sans-serif;
   font-size: 26px; font-weight: 600; color: var(--fg);
 }
+/* App description — matches the Settings → About tagline. */
+.apikey-gate-tagline { margin: 0 0 18px; font-size: var(--steam-body-fs); color: var(--fg-dim); }
 .apikey-gate-copy { margin: 0 0 22px; font-size: var(--steam-body-fs); color: var(--fg-dim); line-height: 1.5; }
 .apikey-gate-copy a { color: var(--accent); }
 #apikey-gate-form { display: flex; gap: 10px; }
