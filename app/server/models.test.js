@@ -8,21 +8,21 @@ function withEnv(vars, fn) {
   try { return fn(); } finally { for (const k of Object.keys(vars)) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; } }
 }
 
-test('tiering off by default: every role gets the flat default model', () => {
-  withEnv({ OPENROUTER_TIERS: undefined, OPENROUTER_MODEL_BY_ROLE: undefined, OPENROUTER_MODEL: undefined }, () => {
-    assert.equal(tiersEnabled(), false);
-    assert.equal(getModelForRole('designer'), getDefaultModel());
-    assert.equal(getModelForRole('pm'), getDefaultModel());
+test('tiering on by default: craft roles get the cheaper model, reason roles the flagship', () => {
+  withEnv({ OPENROUTER_TIERS: undefined, OPENROUTER_MODEL_BY_ROLE: undefined, OPENROUTER_CRAFT_MODEL: undefined, OPENROUTER_MODEL: undefined }, () => {
+    assert.equal(tiersEnabled(), true);
+    assert.match(getModelForRole('designer'), /sonnet/);    // craft
+    assert.match(getModelForRole('sw_engineer'), /sonnet/);  // craft
+    assert.equal(getModelForRole('pm'), getDefaultModel());       // reason → flagship
+    assert.equal(getModelForRole('security'), getDefaultModel());  // reason → flagship
   });
 });
 
-test('tiering on: craft roles get the cheaper craft model, reason roles ride the flagship', () => {
-  withEnv({ OPENROUTER_TIERS: 'on', OPENROUTER_MODEL_BY_ROLE: undefined, OPENROUTER_CRAFT_MODEL: undefined, OPENROUTER_MODEL: undefined }, () => {
-    assert.equal(tiersEnabled(), true);
-    assert.match(getModelForRole('designer'), /sonnet/);   // craft
-    assert.match(getModelForRole('sw_engineer'), /sonnet/); // craft
-    assert.equal(getModelForRole('pm'), getDefaultModel());      // reason → flagship
-    assert.equal(getModelForRole('security'), getDefaultModel()); // reason → flagship
+test('tiering can be disabled: every role falls back to the flat default', () => {
+  withEnv({ OPENROUTER_TIERS: 'off', OPENROUTER_MODEL_BY_ROLE: undefined, OPENROUTER_MODEL: undefined }, () => {
+    assert.equal(tiersEnabled(), false);
+    assert.equal(getModelForRole('designer'), getDefaultModel());
+    assert.equal(getModelForRole('pm'), getDefaultModel());
   });
 });
 
