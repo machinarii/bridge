@@ -133,7 +133,9 @@ test('executeKickoff runs once and is idempotent', async () => {
     const designer = p.agents.find(a => a.role === 'designer');
     const deps = {
       apiKey: 'k',
-      callText: async () => 'body',
+      // Question generation requires real options now; return a valid one for that
+      // prompt, plain doc bodies otherwise.
+      callText: async ({ prompt } = {}) => /pipe-separated/.test(prompt || '') ? 'Pick the focus? | A | B' : 'body',
       callJSON: async () => JSON.stringify({ assignments: [{ agentId: designer.id, task: 'Sketch the UI.' }] }),
     };
     const first = await executeKickoff(p.id, deps);
@@ -166,7 +168,8 @@ test('generateKickoffDocs deepens charters using the generated PRD', async () =>
 test('approval routing: yes runs, question replies, not-awaiting passes through', async () => {
   const p = await createProject({ name: 'Approve KO', goal: 'do V', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
   try {
-    const deps = { apiKey: 'k', callText: async () => 'b',
+    const deps = { apiKey: 'k',
+      callText: async ({ prompt } = {}) => /pipe-separated/.test(prompt || '') ? 'Pick the focus? | A | B' : 'b',
       callJSON: async () => JSON.stringify({ assignments: [] }) };
     assert.equal((await handleLeadMessageDuringKickoff(p.id, 'hi', deps)).handled, false);
     setKickoff(p.id, { status: 'awaiting_approval', planTurnIndex: 0 });
