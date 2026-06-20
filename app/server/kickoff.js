@@ -579,7 +579,11 @@ async function generateQuestions(project, opts = {}) {
     prompt: `You are ${who}, PM of project "${project.name}". Goal: "${project.goal}". ` +
       `The kickoff is approved. List the 3-5 most important questions you genuinely need answered ` +
       `to move forward (scope, priorities, constraints, unknowns), ordered most-important first. ` +
-      `For each question, give 2-4 short, distinct answer options the user can choose from. ` +
+      `For each question give 2-4 short, distinct answer options the user can pick from — even for ` +
+      `either/or or open-ended questions, offer concrete options they can choose or refine (e.g. for a ` +
+      `name/goal conflict: "Hiking trail routing" | "Tide-pool creature ID" | "Both"). ` +
+      `EVERY line MUST contain the question AND at least two pipe-separated options. ` +
+      `Never output a note, preamble, or a question with no options. ` +
       `Output ONLY one question per line as "Question? | option one | option two | option three" ` +
       `— pipe-separated, the question first then its options, no numbering, no bullets, no preamble.` + RESPONSE_STYLE,
   });
@@ -593,7 +597,9 @@ async function generateQuestions(project, opts = {}) {
       const [q, ...options] = parts;
       return { q, options: options.slice(0, 4) };
     })
-    .filter(Boolean)
+    // Drop malformed lines with no real options — they would render as a bare
+    // "Other" bubble with nothing to pick. A kickoff question must offer choices.
+    .filter(item => item && item.q && item.options.length >= 2)
     .slice(0, 5);
 }
 
