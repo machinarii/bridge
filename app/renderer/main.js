@@ -3818,9 +3818,12 @@ function councilQuestionBubble(q) { return councilBubble({ kind: 'user', html: e
 function openCouncil() {
   if (!activeProject) return;
   councilState = { phase: 'prompt' };
-  // An empty agent-style chat: the user asks by holding to talk or typing "/",
-  // exactly like any other agent on L2. No bespoke composer.
-  councilShell('');
+  // Open like any agent on L2 (talk or "/" to ask), with a default bubble that
+  // explains how the council works — no status/mode notification for it. The
+  // conversation replaces this greeting once the user asks.
+  const body = councilShell('');
+  body.innerHTML = councilBubble({ kind: 'agent', author: 'Council', role: 'Advisory Team',
+    html: 'Ask a question and I’ll convene three models on it. The PM gathers a little context first, then each model answers independently — none sees the others — and a chair synthesizes one clear recommendation.' });
   councilFooterShortcuts();
 }
 
