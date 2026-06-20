@@ -6439,6 +6439,20 @@ function populateRoleModels(byRole) {
     row.append(label, select);
     settingsRoleModelsEl.appendChild(row);
   }
+  // Council members render as three more rows below the agent roles (under
+  // Legal), in the same role-model-row style. The selects keep their ids
+  // (settings-council-N) so settingsCouncilEls + save still work; we just
+  // relocate them from the hidden holder into labeled rows.
+  settingsCouncilEls.forEach((select, i) => {
+    if (!select) return;
+    const row = document.createElement('div');
+    row.className = 'role-model-row';
+    const label = document.createElement('div');
+    label.className = 'role-label';
+    label.textContent = `Council Member ${i + 1}`;
+    row.append(label, select);   // appendChild moves the existing select node here
+    settingsRoleModelsEl.appendChild(row);
+  });
 }
 
 function populateMcpList(entries) {
