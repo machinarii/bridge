@@ -895,7 +895,7 @@ kbd {
   display: flex; flex-direction: column; gap: 0.45rem;
   font-size: 1.05rem; font-weight: 300; color: var(--fg-dim);
 }
-.settings-field input,
+.settings-field input:not([type="checkbox"]),
 .settings-field select,
 .settings-field textarea {
   background: rgba(255,255,255,0.04);
@@ -909,6 +909,28 @@ kbd {
   outline: none;
   appearance: none;
 }
+
+/* Inline checkbox row (e.g. "Tier models by role") — horizontal, with a real
+   compact checkbox (matches .git-toggle), not the full-width text-input box. */
+.settings-field.settings-check {
+  flex-direction: row; align-items: center; gap: 0.75rem;
+}
+.settings-check input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 32px; height: 32px; padding: 0; min-height: 0; flex: 0 0 auto;
+  border-radius: 8px; border: 1.75px solid rgba(255,255,255,0.45);
+  background: rgba(255,255,255,0.04); cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.settings-check input[type="checkbox"]:hover { border-color: rgba(255,255,255,0.65); }
+.settings-check input[type="checkbox"]:focus,
+.settings-check input[type="checkbox"]:focus-visible { outline: 2px solid var(--focus, #ffffff); outline-offset: 2px; }
+.settings-check input[type="checkbox"]:checked {
+  background-color: var(--focus, #ffffff); border-color: var(--focus, #ffffff);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='none' stroke='%230b0f14' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' d='M3 8.5l3 3 7-7'/></svg>");
+  background-repeat: no-repeat; background-position: center; background-size: 20px 20px;
+}
+.settings-check > span { color: var(--fg); }
 .settings-field textarea {
   resize: vertical;
   line-height: 1.5;
