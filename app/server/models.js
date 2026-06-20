@@ -28,13 +28,20 @@ function tierModel(tier) {
   return getDefaultModel();   // 'reason' → the flagship default (opus-4.8)
 }
 
+/* The model a role uses WITHOUT an explicit override — i.e. its tier-assigned
+ * model (or the flat default when tiering is off / the role isn't tiered). This
+ * is what "use default" resolves to, surfaced in the Settings UI. */
+export function defaultModelForRole(roleId) {
+  if (tiersEnabled() && ROLE_TIER[roleId]) return tierModel(ROLE_TIER[roleId]);
+  return getDefaultModel();
+}
+
 export function getModelForRole(roleId) {
   try {
     const map = JSON.parse(process.env.OPENROUTER_MODEL_BY_ROLE || '{}');
     if (roleId && typeof map[roleId] === 'string' && map[roleId]) return map[roleId];
   } catch {}
-  if (tiersEnabled() && ROLE_TIER[roleId]) return tierModel(ROLE_TIER[roleId]);
-  return getDefaultModel();
+  return defaultModelForRole(roleId);
 }
 
 /* Default model for team-voice routing (cheap classification). Chosen for

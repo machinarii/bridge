@@ -6377,12 +6377,20 @@ function selectSettingsTab(name) {
 }
 settingsTabEls.forEach(t => t.addEventListener('click', () => selectSettingsTab(t.dataset.tab)));
 
-function buildModelOptions(currentId, includeUseDefault = false) {
+/* Friendly name for a model id (uses the loaded model list, else prettifies). */
+function modelDisplayName(id) {
+  if (!id) return '';
+  const m = settingsModelsList.find(x => x.id === id);
+  return m && m.name && m.name !== m.id ? m.name : councilModelLabel(id);
+}
+
+function buildModelOptions(currentId, includeUseDefault = false, defaultModelId = '') {
   const frag = document.createDocumentFragment();
   if (includeUseDefault) {
     const opt = document.createElement('option');
     opt.value = '';
-    opt.textContent = '— Use default —';
+    // Show what "default" resolves to for this role (its tier-assigned model).
+    opt.textContent = defaultModelId ? `Default · ${modelDisplayName(defaultModelId)}` : '— Use default —';
     if (!currentId) opt.selected = true;
     frag.appendChild(opt);
   }
@@ -6425,7 +6433,7 @@ function populateCouncilModels(models) {
   });
 }
 
-function populateRoleModels(byRole) {
+function populateRoleModels(byRole, defaultByRole = {}) {
   settingsRoleModelsEl.innerHTML = '';
   for (const role of settingsRolesList) {
     const row = document.createElement('div');
@@ -6435,7 +6443,7 @@ function populateRoleModels(byRole) {
     label.textContent = role.label;
     const select = document.createElement('select');
     select.dataset.role = role.id;
-    select.appendChild(buildModelOptions(byRole[role.id] || '', true));
+    select.appendChild(buildModelOptions(byRole[role.id] || '', true, defaultByRole[role.id] || ''));
     row.append(label, select);
     settingsRoleModelsEl.appendChild(row);
   }
@@ -6662,7 +6670,7 @@ async function openSettings() {
   await Promise.all([ensureModelsList(), ensureRolesList()]);
   populateModelSelect(s.OPENROUTER_MODEL || '');
   populateRouterModelSelect(s.OPENROUTER_ROUTER_MODEL || '');
-  populateRoleModels(s.OPENROUTER_MODEL_BY_ROLE || {});
+  populateRoleModels(s.OPENROUTER_MODEL_BY_ROLE || {}, s.OPENROUTER_MODEL_DEFAULT_BY_ROLE || {});
   populateCouncilModels(s.OPENROUTER_COUNCIL_MODELS || []);
   if (settingsInstructionsEl) settingsInstructionsEl.value = s.AI_INSTRUCTIONS || '';
   populateMcpList(s.MCP_PLUGINS || []);

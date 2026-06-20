@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { listRoles } from './roles.js';
-import { getRouterModel } from './models.js';
+import { getRouterModel, defaultModelForRole } from './models.js';
 import { listSkills, getSkill, withSkillEnabled } from './skills.js';
 import { githubStatus, startDeviceFlow, disconnectGithub, setGithubPersist, detectAndStore } from './github.js';
 import { listProjects, getProject, createProject, setAgentEnabled, addAgent, removeAgent, renameProject, deleteProject, migrateCharterFilenames } from './projects.js';
@@ -147,6 +147,9 @@ app.get('/settings', (_req, res) => {
     OPENROUTER_API_KEY_SET: !!process.env.OPENROUTER_API_KEY,
     OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.8',
     OPENROUTER_MODEL_BY_ROLE: parseJsonEnv('OPENROUTER_MODEL_BY_ROLE', {}),
+    // The tier-resolved model each role uses with no explicit override — shown
+    // in the Settings UI so each row's "default" reflects the active tier.
+    OPENROUTER_MODEL_DEFAULT_BY_ROLE: Object.fromEntries(listRoles().map(r => [r.id, defaultModelForRole(r.id)])),
     OPENROUTER_ROUTER_MODEL: getRouterModel(),  // resolved (defaults to the fast router model)
     MCP_PLUGINS: parseJsonEnv('MCP_PLUGINS', []),
     GIT_AUTOSAVE: (process.env.GIT_AUTOSAVE || 'off') === 'on',
