@@ -6873,7 +6873,9 @@ async function saveSettings() {
   if (settingsInstructionsEl) updates.AI_INSTRUCTIONS = settingsInstructionsEl.value;
   updates.MCP_PLUGINS = settingsMcpEntries;
   updates.GIT_AUTOSAVE = !!settingsGitEnabledEl.checked;
-  updates.OPENROUTER_TIERS = !!settingsTiersEl?.checked;
+  // Only write the tiering flag when its control is present — otherwise a save
+  // would silently clobber the setting (no checkbox in the UI right now).
+  if (settingsTiersEl) updates.OPENROUTER_TIERS = !!settingsTiersEl.checked;
   updates.GIT_AUTOSAVE_INTERVAL_MIN = Math.max(1, Math.min(120, Number(settingsGitIntervalEl.value) || 5));
   if (settingsSttUrlEl) {
     const url = settingsSttUrlEl.value.trim();
