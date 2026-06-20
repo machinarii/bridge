@@ -8,11 +8,12 @@ export function getDefaultModel() {
   return process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
 }
 
-/* Per-role model tiering (OFF by default — set OPENROUTER_TIERS=on to opt in).
- * 'reason' roles do open-ended strategy/judgment and ride the flagship default;
- * 'craft' roles execute well-scoped production work where a faster, cheaper
- * model holds quality. Cuts cost/latency on the bulk of turns without touching
- * the high-stakes reasoning paths. Any explicit per-role override still wins. */
+/* Per-role model tiering (ON by default — set OPENROUTER_TIERS=off to disable).
+ * Each role gets a tier-assigned model out of the box: 'reason' roles do
+ * open-ended strategy/judgment and ride the flagship default; 'craft' roles
+ * execute well-scoped production work where a faster, cheaper model holds
+ * quality. Cuts cost/latency on the bulk of turns without touching the
+ * high-stakes reasoning paths. Any explicit per-role override still wins. */
 const CRAFT_MODEL_DEFAULT = 'anthropic/claude-sonnet-4.6';
 const ROLE_TIER = {
   pm: 'reason', security: 'reason', legal: 'reason', data_sci: 'reason', ux_research: 'reason',
@@ -20,7 +21,7 @@ const ROLE_TIER = {
   designer: 'craft', qa: 'craft', copywriter: 'craft', marketing: 'craft',
 };
 
-export function tiersEnabled() { return (process.env.OPENROUTER_TIERS || 'off') === 'on'; }
+export function tiersEnabled() { return (process.env.OPENROUTER_TIERS || 'on') !== 'off'; }
 
 function tierModel(tier) {
   if (tier === 'craft') return process.env.OPENROUTER_CRAFT_MODEL || CRAFT_MODEL_DEFAULT;

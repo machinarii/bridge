@@ -155,7 +155,7 @@ app.get('/settings', (_req, res) => {
     GITHUB_OAUTH_CLIENT_ID: process.env.GITHUB_OAUTH_CLIENT_ID || '',
     OPENROUTER_COUNCIL_MODELS: getCouncilModels(),
     AI_INSTRUCTIONS: process.env.AI_INSTRUCTIONS || '',
-    OPENROUTER_TIERS: (process.env.OPENROUTER_TIERS || 'off') === 'on',
+    OPENROUTER_TIERS: (process.env.OPENROUTER_TIERS || 'on') !== 'off',
   });
 });
 
