@@ -201,7 +201,9 @@ async function createWindow() {
   // Open external links in the user's default browser, not inside
   // the Electron window.
   mainWin.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url)) { shell.openExternal(url); return { action: 'deny' }; }
+    // Open web + mail links in the OS default app (browser / mail client),
+    // never as a blank Electron window.
+    if (/^(https?|mailto):/.test(url)) { shell.openExternal(url); return { action: 'deny' }; }
     return { action: 'allow' };
   });
   // Wait briefly for the server to finish setup, then load.
