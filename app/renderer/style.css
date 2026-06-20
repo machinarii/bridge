@@ -619,10 +619,10 @@ kbd {
   font-size: 1.5rem; letter-spacing: 0.04em;
   display: flex; align-items: center; gap: 0.65rem;
 }
-.settings-about .about-mark { width: 30px; height: auto; color: var(--accent, #6ea8ff); }
+.settings-about .about-mark { width: 30px; height: auto; color: #ffffff; }
 /* A touch more air above the credit block, separating it from the tagline. */
 .settings-about .about-credit { margin: 1.25rem 0 0; font-size: 1.05rem; font-weight: 400; }
-.settings-about a { color: var(--accent, #6ea8ff); text-decoration: none; }
+.settings-about a { color: var(--fg); text-decoration: none; }
 .settings-about a:hover { text-decoration: underline; }
 .settings-pane {
   display: flex; flex-direction: column; gap: 1rem;
