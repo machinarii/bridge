@@ -828,6 +828,42 @@ kbd {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+#settings-health {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.health-head {
+  display: grid;
+  gap: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+
+.health-stamp,
+.health-meta {
+  color: var(--fg-dim);
+  font-size: 0.85rem;
+}
+
+.health-row {
+  display: grid;
+  grid-template-columns: 140px 80px 1fr;
+  gap: 0.5rem;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  background: rgba(255,255,255,0.02);
+}
+
+.health-name { color: var(--fg); font-size: 0.92rem; }
+.health-state { font-size: 0.82rem; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+.health-detail { color: var(--fg-dim); font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.health-ok { border-color: rgba(80, 220, 140, 0.45); }
+.health-warn { border-color: rgba(230, 190, 80, 0.45); }
+.health-err { border-color: rgba(220, 90, 90, 0.45); }
 #settings-mcp-add {
   display: flex;
   flex-direction: column;

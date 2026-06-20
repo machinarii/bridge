@@ -3717,7 +3717,7 @@ function _setL2Shortcuts() {
 }
 
 async function exitZoom() {
-  if (inflightController) { inflightController.abort(); inflightController = null; }
+  if (inflightController) { inflightController.abort(); inflightController = null; maybeCancelCurrentOperation(); }
   stopSpeaking();
   playSfx('zoomout');   // L2 → L1
   const fromAgentId = currentAgent()?.id;
@@ -3994,7 +3994,7 @@ function cycleProject(delta) {
   const nextIdx = curIdx + delta;
   // No wrap-around — rubberband at the first / last project.
   if (nextIdx < 0 || nextIdx >= projects.length) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
-  if (inflightController) { inflightController.abort(); inflightController = null; }
+  if (inflightController) { inflightController.abort(); inflightController = null; maybeCancelCurrentOperation(); }
   stopSpeaking();
   playSfx(delta > 0 ? 'swooshNext' : 'swooshPrev');   // project → project slide
   slideAgent(delta, () => {
@@ -4010,7 +4010,7 @@ function openAgentById(agentId) {
   if (!activeProject) return;
   const i = activeProject.agents.findIndex(a => a.id === agentId);
   if (i < 0 || i === zoomedIndex) return;
-  if (inflightController) { inflightController.abort(); inflightController = null; }
+  if (inflightController) { inflightController.abort(); inflightController = null; maybeCancelCurrentOperation(); }
   stopSpeaking();
   _focusLastOnNextChatRender = true;   // land on the target agent's last bubble
   slideAgent(i > zoomedIndex ? 1 : -1, () => { zoomedIndex = i; renderZoom(); });
@@ -4024,7 +4024,7 @@ function cycleAgent(delta) {
   while (i >= 0 && i < n && !activeProject.agents[i].enabled) i += delta;
   // Ran off the end (no further agent that way) — rubberband instead of cycling.
   if (i < 0 || i >= n) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
-  if (inflightController) { inflightController.abort(); inflightController = null; }
+  if (inflightController) { inflightController.abort(); inflightController = null; maybeCancelCurrentOperation(); }
   stopSpeaking();
   playSfx(delta > 0 ? 'swooshNext' : 'swooshPrev');   // agent → agent slide
   _focusLastOnNextChatRender = true;   // switched to another agent → focus its last bubble
@@ -5370,7 +5370,7 @@ function pickerMove(dir) {
   updatePickerShortcuts();
 }
 async function exitToProjects() {
-  if (inflightController) { inflightController.abort(); inflightController = null; }
+  if (inflightController) { inflightController.abort(); inflightController = null; maybeCancelCurrentOperation(); }
   stopSpeaking();
   playSfx('zoomout');   // L1 → L0
   closeFileViewer();
@@ -6328,6 +6328,7 @@ const ghDeviceStateEl  = document.getElementById('settings-github-device-state')
 let ghPollTimer = null;
 const settingsMcpListEl   = document.getElementById('settings-mcp-list');
 const settingsMcpAddEl    = document.getElementById('settings-mcp-add');
+const settingsHealthEl    = document.getElementById('settings-health');
 const settingsGitEnabledEl= document.getElementById('settings-git-enabled');
 const settingsTiersEl     = document.getElementById('settings-tiers');
 const settingsGitIntervalEl = document.getElementById('settings-git-interval');
@@ -6358,6 +6359,8 @@ let settingsOpen = false;
 let settingsModelsList = []; // shared OpenRouter model list
 let settingsRolesList = []; // [{ id, label }]
 let settingsMcpEntries = []; // [{ id, name, enabled }]
+let settingsHealthTimer = null;
+let currentCancelToken = null;
 
 /* Visual placeholder shown in the API key input when the server
  * already has a key. Treated as "unchanged" on save — sending it
@@ -6376,6 +6379,7 @@ settingsApiKeyEl?.addEventListener('blur', () => {
 function selectSettingsTab(name) {
   for (const t of settingsTabEls) t.setAttribute('aria-selected', String(t.dataset.tab === name));
   for (const p of settingsPaneEls) p.hidden = (p.dataset.tab !== name);
+  if (name === 'health') refreshHealthPane();
 }
 settingsTabEls.forEach(t => t.addEventListener('click', () => selectSettingsTab(t.dataset.tab)));
 
@@ -6687,6 +6691,14 @@ async function openSettings() {
   // Keep the local STT cache in sync with the server.
   localSttUrl = s.LOCAL_STT_URL || '';
   paintGitState();
+  await refreshHealthPane();
+  if (settingsHealthTimer) clearInterval(settingsHealthTimer);
+  settingsHealthTimer = setInterval(() => {
+    if (!settingsOpen) return;
+    if (settingsTabEls.find(t => t.dataset.tab === 'health' && t.getAttribute('aria-selected') === 'true')) {
+      refreshHealthPane();
+    }
+  }, 8000);
   // Land focus on the first tab so the user can immediately navigate
   // with arrows / d-pad.
   setTimeout(() => settingsTabEls[0]?.focus(), 0);
@@ -6696,6 +6708,25 @@ function closeSettings() {
   settingsModalEl.hidden = true;
   settingsOpen = false;
   stopGithubPoll();
+  if (settingsHealthTimer) { clearInterval(settingsHealthTimer); settingsHealthTimer = null; }
+}
+
+async function maybeCancelCurrentOperation() {
+  if (!currentCancelToken) return false;
+  try { await cancelOperation(currentCancelToken); }
+  catch {}
+  currentCancelToken = null;
+  return true;
+}
+
+async function refreshHealthPane() {
+  if (!settingsHealthEl) return;
+  try {
+    const payload = await fetchHealth();
+    renderHealth(settingsHealthEl, payload);
+  } catch (err) {
+    settingsHealthEl.innerHTML = `<p class="settings-meta">Health checks unavailable: ${escapeHtml(err?.message || String(err))}</p>`;
+  }
 }
 
 /** Every focusable in the modal, in visual order: tabs → active-pane
@@ -7369,6 +7400,9 @@ async function submitIntent(text, regenerate = 0) {
   if (inflightController) inflightController.abort();
   inflightController = new AbortController();
   const myCtl = inflightController;
+  try {
+    currentCancelToken = await createOperationToken({ kind: 'agent_interpret', projectId: activeProject.id, ownerAgentId: targetId });
+  } catch { currentCancelToken = null; }
   const targetId = agent.id;
 
   agentBusy[targetId] = true;
@@ -7379,7 +7413,12 @@ async function submitIntent(text, regenerate = 0) {
     const r = await fetch(`/projects/${activeProject.id}/agents/${targetId}/interpret`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, regenerate, effort: effortForAgent(activeProject.id, targetId) }),
+      body: JSON.stringify({
+        text,
+        regenerate,
+        effort: effortForAgent(activeProject.id, targetId),
+        cancelToken: currentCancelToken,
+      }),
       signal: myCtl.signal,
     });
     if (!r.ok) throw new Error(`server ${r.status}`);
@@ -7398,6 +7437,7 @@ async function submitIntent(text, regenerate = 0) {
   } finally {
     agentBusy[targetId] = false;
     if (myCtl === inflightController) inflightController = null;
+    currentCancelToken = null;
     resetStreaming();
   }
 }
@@ -7406,6 +7446,9 @@ async function submitTeamIntent(text) {
   if (inflightController) inflightController.abort();
   inflightController = new AbortController();
   const myCtl = inflightController;
+  try {
+    currentCancelToken = await createOperationToken({ kind: 'team_interpret', projectId: activeProject.id, ownerAgentId: leadId });
+  } catch { currentCancelToken = null; }
 
   const leadId = activeProject.leadAgentId;
   agentBusy[leadId] = true;
@@ -7451,6 +7494,7 @@ async function submitTeamIntent(text) {
   } finally {
     for (const a of activeProject.agents) agentBusy[a.id] = false;
     if (myCtl === inflightController) inflightController = null;
+    currentCancelToken = null;
   }
 }
 
