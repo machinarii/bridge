@@ -638,8 +638,11 @@ kbd {
 }
 .settings-pane .settings-field { width: 100%; }
 /* Keep content top-aligned identically on every tab: no first-child top margin,
- * so the gap under the tab bar is consistent and the content doesn't jump. */
-.settings-pane > *:first-child { margin-top: 0; }
+ * so the gap under the tab bar is consistent and the content doesn't jump. The
+ * MCP/Skills panes wrap their content in a list div, so the wrapper's first
+ * child (e.g. the "No MCP plugins" meta <p>) needs the same reset. */
+.settings-pane > *:first-child,
+.settings-pane > div:first-child > *:first-child { margin-top: 0; }
 /* Git tab — force every direct + descendant element to align to the
  * left of the pane regardless of any inherited centering. */
 .settings-pane[data-tab="git"] {
