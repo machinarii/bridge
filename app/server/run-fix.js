@@ -9,6 +9,7 @@ import { writeFiles, commitIfChanged } from './workspace.js';
 import { getModelForRole } from './models.js';
 import { runInContainer } from './sandbox.js';
 import { verifyProject } from './verify.js';
+import { throwIfCanceled } from './cancel.js';
 
 /** Repo source files (excluding node_modules/.git), each under fileMax bytes,
  * capped at totalMax bytes total — bounded context for the fix prompt. */
@@ -77,10 +78,12 @@ export function classifyFailure(step, output) {
 
 /** Verify → fix → re-verify until green or maxRounds. Each fix round applies the
  * model's edits and commits them. Returns {ok, rounds, lastStep, lastOutput, daemonDown}. */
-export async function runAndFix(projectId, { callText, runner = runInContainer, image, apiKey, maxRounds = 3 } = {}) {
+export async function runAndFix(projectId, { callText, runner = runInContainer, image, apiKey, maxRounds = 3, cancelToken = null } = {}) {
   let round = 0;
+  throwIfCanceled(cancelToken);
   let result = await verifyProject(projectId, { runner, image });
   while (!result.ok && !result.daemonDown && round < maxRounds) {
+    throwIfCanceled(cancelToken);
     round++;
     const edits = await proposeFixes(projectId, result, callText, { apiKey });
     if (!edits.length) break;

@@ -16,6 +16,7 @@ import { startTeamReview, currentReviewAgent, recordPlan, teamReviewQuestion } f
 import { enqueueTask } from './executor.js';
 import { runAndFix, classifyFailure } from './run-fix.js';
 import { startPreview } from './preview.js';
+import { createCancelToken, completeToken } from './cancel.js';
 
 // After kickoff Q&A, the PM proposes a build plan as a selectable question.
 const BUILD_CHOICES = ['Build it', 'Hold off — let me adjust'];
@@ -759,9 +760,11 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     emitStatus(projectId, buildAgentId, 'scaffolding');
     emitActivity(projectId, `${sweName}: scaffolding…`, buildAgentId);
     const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+    const token = opts.cancelToken || createCancelToken({ kind: 'scaffold', projectId, ownerAgentId: buildAgentId });
     let r;
-    try { r = await runScaffold(projectId, { callText: opts.callText || callOpenRouterText, apiKey }); }
+    try { r = await runScaffold(projectId, { callText: opts.callText || callOpenRouterText, apiKey, cancelToken: token }); }
     catch (e) { r = { ok: false, reason: String(e?.message || e) }; }
+    finally { completeToken(token); }
     const issueNote = r.ok && r.issues?.length
       ? ` ⚠️ ${r.issues.length} file${r.issues.length === 1 ? '' : 's'} have syntax issues I'd fix in a follow-up pass: ${r.issues.map(i => '`' + i.path + '`').join(', ')}.`
       : '';
@@ -801,7 +804,29 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     emitStatus(projectId, buildAgentId, 'testing');
     emitActivity(projectId, `${sweName}: running install / build / test…`, buildAgentId);
     const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
-    const r = await runAndFix(projectId, { callText: opts.callText || callOpenRouterText, runner: opts.runner, apiKey });
+    const token = opts.cancelToken || createCancelToken({ kind: 'run_fix', projectId, ownerAgentId: buildAgentId });
+    let r;
+    try {
+      r = await runAndFix(projectId, {
+        callText: opts.callText || callOpenRouterText,
+        runner: opts.runner,
+        apiKey,
+        cancelToken: token,
+      });
+    } catch (err) {
+      if (err?.code === 'CANCELED') {
+        const spec = closingSpec('Run canceled. The current repo state is unchanged. Say "Run it" to resume later.');
+        appendTurn(buildAgentId, 'assistant', spec);
+        setKickoff(projectId, { status: 'run_pending' });
+        emitStatus(projectId, buildAgentId, 'idle');
+        emitActivity(projectId, `${sweName}: run canceled`, buildAgentId);
+        completeToken(token);
+        return { handled: true, intent: 'run_canceled', spec };
+      }
+      throw err;
+    } finally {
+      completeToken(token);
+    }
     let body;
     if (r.daemonDown) body = "I couldn't reach the Docker engine — start it (e.g. `colima start`) and say \"Run it\" again.";
     else if (r.ok) {

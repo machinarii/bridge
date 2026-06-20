@@ -8,6 +8,9 @@ import { getModelForRole, getRouterModel } from './models.js';
 import { learningsBlock } from './learnings.js';
 import { recordModelCall } from './metrics.js';
 import { emitStatus, emitActivity, emitToken } from './events.js';
+import { validateTileSpec, repairPrompt } from './schema.js';
+import { throwIfCanceled } from './cancel.js';
+import { callOpenRouterJSON } from './llm.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -175,7 +178,7 @@ function samplingFor({ effort, regenerate }) {
   return out;
 }
 
-export async function interpretIntent({ projectId, agentId, text, sharedFrom, regenerate = 0, effort = 'high', handoff }) {
+export async function interpretIntent({ projectId, agentId, text, sharedFrom, regenerate = 0, effort = 'high', handoff, cancelToken = null }) {
   const project = getProject(projectId);
   if (!project) throw new Error(`unknown project: ${projectId}`);
   const agent = project.agents.find(a => a.id === agentId);
@@ -195,6 +198,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
 
   // v2 status: agent is reading context, evaluating inputs.
   emitStatus(projectId, agentId, 'analyzing');
+  throwIfCanceled(cancelToken);
 
   if (!apiKey || apiKey.includes('replace-me')) {
     const spec = fallbackSpec(text, 'OPENROUTER_API_KEY missing — using local classifier.');
@@ -242,10 +246,20 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
       throw new Error(`OpenRouter ${resp.status}: ${errText.slice(0, 200)}`);
     }
     const data = await resp.json();
+    throwIfCanceled(cancelToken);
     recordModelCall({ model, role: agent.role, kind: 'agent', latencyMs: Date.now() - t0, usage: data?.usage, ok: true });
     const raw = data?.choices?.[0]?.message?.content || '';
     appendTurn(agentId, 'assistant', raw);
-    const spec = parseSpec(raw);
+    let spec = validateTileSpec(raw) || parseSpec(raw);
+    if (!validateTileSpec(raw)) {
+      const repaired = await callOpenRouterJSON({
+        apiKey,
+        model: getRouterModel(),
+        prompt: repairPrompt({ kind: 'tile', raw }),
+        meta: { role: agent.role, kind: 'repair' },
+      });
+      spec = validateTileSpec(repaired) || spec;
+    }
     // A reply with choices asks the user something → "Waiting for response";
     // otherwise it's a finished deliverable → "Task complete" (clears on view).
     const needsResponse = Array.isArray(spec?.choices) && spec.choices.length > 0;

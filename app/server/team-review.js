@@ -10,6 +10,8 @@ import { getModelForRole } from './models.js';
 import { getRole, kickoffPriority } from './roles.js';
 import { charterFileNameFor } from './charters.js';
 import { generateBuildPlan } from './scaffold.js';
+import { validateReviewQuestion, repairPrompt } from './schema.js';
+import { callOpenRouterJSON } from './llm.js';
 
 /* A specialist's domain plan lives as a "## Plan" section INSIDE its role
  * charter file (docs/roles/role-<slug>.md) — not a separate plan-*.md. */
@@ -125,19 +127,7 @@ export async function maybeFinishTeamReview(projectId, { callText, apiKey } = {}
  * handles fenced blocks and surrounding prose. Returns {q, options} with a
  * real, non-empty question, or null if there's nothing usable. */
 export function parseReviewQuestion(raw) {
-  const s = String(raw || '');
-  const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const cand = fenced ? fenced[1]
-    : (s.indexOf('{') >= 0 ? s.slice(s.indexOf('{'), s.lastIndexOf('}') + 1) : '');
-  try {
-    const o = JSON.parse(cand);
-    const q = String(o?.question || '').trim();
-    if (!q) return null;
-    const options = Array.isArray(o?.options)
-      ? o.options.map(x => String(x).trim()).filter(Boolean).slice(0, 4)
-      : [];
-    return { q, options };
-  } catch { return null; }
+  return validateReviewQuestion(raw);
 }
 
 /** Generate ONE focused domain question (with 2-4 short options) from a
@@ -164,7 +154,16 @@ export async function teamReviewQuestion(projectId, agentId, { callText, apiKey,
     let raw = '';
     try { raw = String(await callText({ apiKey, model: getModelForRole(agent.role), prompt, timeoutMs: 30_000 }) || ''); }
     catch (err) { console.warn(`[team-review] question call failed for ${agent.name} (${agent.role}):`, err?.message || err); continue; }
-    const parsed = parseReviewQuestion(raw);
+    let parsed = parseReviewQuestion(raw);
+    if (!parsed) {
+      const repaired = await callOpenRouterJSON({
+        apiKey,
+        model: getModelForRole(agent.role),
+        prompt: repairPrompt({ kind: 'review_question', raw }),
+        meta: { role: agent.role, kind: 'review_repair' },
+      });
+      parsed = parseReviewQuestion(repaired);
+    }
     if (parsed) return parsed;
     if (attempt < retries) console.warn(`[team-review] empty/unparseable question for ${agent.name} (${agent.role}); retrying`);
   }

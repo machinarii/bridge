@@ -24,6 +24,10 @@ import {
 import { subscribe as subscribeEvents, publish as publishEvent, statusSnapshot } from './events.js';
 import { listTasks } from './tasks.js';
 import { resolveBlockedForAgent } from './executor.js';
+import { hydrateSecretsIntoEnv, readSecret, writeSecret, deleteSecret } from './secrets.js';
+import { healthSnapshot } from './health.js';
+import { createCancelToken, cancelToken, tokenStatus, cleanupStale } from './cancel.js';
+import { countRequest, countCanceled, snapshotMetrics } from './server-metrics.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -36,9 +40,8 @@ if (existsSync(envPath)) {
 }
 
 // Default to the bundled local Parakeet STT so voice works out of the box on
-// first launch. The renderer health-gates this (GET /stt-health) and silently
-// falls back to the browser speech engine when the sidecar isn't reachable, so
-// defaulting it on never breaks voice if Parakeet is absent.
+// first launch. Voice always targets this local endpoint; when the sidecar is
+// unavailable the renderer surfaces an STT error instead of switching engines.
 if (!process.env.LOCAL_STT_URL) {
   process.env.LOCAL_STT_URL = `http://127.0.0.1:${process.env.PARAKEET_PORT || 8123}/transcribe`;
 }
@@ -49,6 +52,7 @@ const ASSETS_DIR   = resolve(__dirname, '..', 'assets');
 
 const app = express();
 app.use(express.json({ limit: '64kb' }));
+app.use((_req, _res, next) => { countRequest(); next(); });
 app.use('/assets', express.static(ASSETS_DIR, { maxAge: '1d', immutable: true }));
 // Renderer HTML/JS/CSS: never cache, so a reload always picks up the latest
 // build (the browser was serving stale index.html / main.js otherwise).
@@ -140,11 +144,12 @@ function parseJsonEnv(name, fallback) {
   catch { return fallback; }
 }
 
-app.get('/settings', (_req, res) => {
+app.get('/settings', async (_req, res) => {
+  const openrouterKey = await readSecret('OPENROUTER_API_KEY');
   res.set('Cache-Control', 'no-store');   // the gate must never read a stale key verdict
   res.json({
-    OPENROUTER_API_KEY: maskKey(process.env.OPENROUTER_API_KEY || ''),
-    OPENROUTER_API_KEY_SET: !!process.env.OPENROUTER_API_KEY,
+    OPENROUTER_API_KEY: maskKey(openrouterKey || ''),
+    OPENROUTER_API_KEY_SET: !!openrouterKey,
     OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'anthropic/claude-opus-4.8',
     OPENROUTER_MODEL_BY_ROLE: parseJsonEnv('OPENROUTER_MODEL_BY_ROLE', {}),
     // The tier-resolved model each role uses with no explicit override — shown
@@ -249,7 +254,7 @@ app.post('/transcribe', express.raw({ type: '*/*', limit: '25mb' }), async (req,
 });
 
 /* Quick reachability check for the local STT sidecar, so the renderer can
- * decide whether to use local Parakeet or fall back to the browser engine. */
+ * surface a clear voice-status hint in capture UIs and settings. */
 app.get('/stt-health', async (_req, res) => {
   const target = process.env.LOCAL_STT_URL;
   if (!target) return res.json({ available: false });
@@ -260,6 +265,34 @@ app.get('/stt-health', async (_req, res) => {
   } catch {
     res.json({ available: false });
   }
+});
+
+// Per-operation cancellation API (build/run and other long jobs).
+app.post('/operations', (req, res) => {
+  const token = createCancelToken({
+    kind: req.body?.kind,
+    projectId: req.body?.projectId,
+    ownerAgentId: req.body?.ownerAgentId,
+  });
+  res.json({ token });
+});
+
+app.get('/operations/:token', (req, res) => {
+  const st = tokenStatus(req.params.token);
+  if (!st) return res.status(404).json({ error: 'unknown token' });
+  res.json(st);
+});
+
+app.post('/operations/:token/cancel', (req, res) => {
+  const ok = cancelToken(req.params.token, req.body?.reason || 'Canceled by user');
+  if (ok) countCanceled();
+  res.json({ ok });
+});
+
+// Runtime health checks shown in Settings -> Health.
+app.get('/health/system', async (req, res) => {
+  const snap = await healthSnapshot(req.query?.projectId ? String(req.query.projectId) : null);
+  res.json({ ...snap, metrics: snapshotMetrics() });
 });
 
 let _modelsCache = null;
@@ -305,7 +338,7 @@ app.post('/settings/verify-key', async (req, res) => {
   }
 });
 
-app.put('/settings', (req, res) => {
+app.put('/settings', async (req, res) => {
   try {
     const updates = {};
     for (const k of SETTINGS_KEYS) {
@@ -320,7 +353,17 @@ app.put('/settings', (req, res) => {
     // Allow explicitly clearing free-text instructions (the generic loop skips empty strings).
     if (typeof req.body?.AI_INSTRUCTIONS === 'string') updates.AI_INSTRUCTIONS = req.body.AI_INSTRUCTIONS;
     if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'no updates' });
-    writeEnvFile(updates);
+    if (Object.prototype.hasOwnProperty.call(updates, 'OPENROUTER_API_KEY')) {
+      await writeSecret('OPENROUTER_API_KEY', updates.OPENROUTER_API_KEY);
+      delete updates.OPENROUTER_API_KEY;
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'GITHUB_TOKEN')) {
+      const token = updates.GITHUB_TOKEN;
+      if (token) await writeSecret('GITHUB_TOKEN', token);
+      else await deleteSecret('GITHUB_TOKEN');
+      delete updates.GITHUB_TOKEN;
+    }
+    if (Object.keys(updates).length) writeEnvFile(updates);
     // If git autosave just turned on, reschedule the timer.
     rescheduleAutosave();
     res.json({ ok: true });
@@ -350,9 +393,13 @@ app.patch('/skills/:id', (req, res) => {
   }
 });
 
-// GitHub pairing (OAuth device flow). Token + login persist to .env.
-setGithubPersist(({ token, login }) =>
-  writeEnvFile({ GITHUB_TOKEN: token || '', GITHUB_LOGIN: login || '' }));
+// GitHub pairing (OAuth device flow). Keep token in keychain when available;
+// login remains in .env for display and reconnect UX.
+setGithubPersist(async ({ token, login }) => {
+  if (token) await writeSecret('GITHUB_TOKEN', token);
+  else await deleteSecret('GITHUB_TOKEN');
+  writeEnvFile({ GITHUB_LOGIN: login || '' });
+});
 
 app.get('/github', (_req, res) => res.json(githubStatus()));
 
@@ -627,7 +674,10 @@ app.post('/projects/:pid/build-plan', async (req, res) => {
 
 app.post('/projects/:pid/scaffold', async (req, res) => {
   try {
-    const r = await runScaffold(req.params.pid, { callText: callOpenRouterText });
+    const r = await runScaffold(req.params.pid, {
+      callText: callOpenRouterText,
+      cancelToken: req.body?.cancelToken ? String(req.body.cancelToken) : null,
+    });
     res.json(r);
   } catch (err) { res.status(500).json({ error: String(err.message) }); }
 });
@@ -649,7 +699,10 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
     const ko0 = project0?.kickoff;
     const onBuildAgent = ko0 && aid === ko0.buildAgentId && ['build_pending', 'run_pending'].includes(ko0.status);
     if (project0 && (aid === project0.leadAgentId || onBuildAgent)) {
-      const ko = await handleLeadMessageDuringKickoff(pid, text, { agentId: aid });
+      const ko = await handleLeadMessageDuringKickoff(pid, text, {
+        agentId: aid,
+        cancelToken: req.body?.cancelToken ? String(req.body.cancelToken) : null,
+      });
       // The Q&A flow (one question at a time) and approval both hand back a
       // spec to surface directly as the PM's reply.
       if (ko.handled && ko.spec) {
@@ -738,6 +791,12 @@ app.post('/projects/:pid/team/interpret', async (req, res) => {
   }
 });
 
+app.get('/projects/:pid/health', async (req, res) => {
+  if (!getProject(req.params.pid)) return res.status(404).json({ error: 'unknown project' });
+  const snap = await healthSnapshot(req.params.pid);
+  res.json({ ...snap, metrics: snapshotMetrics() });
+});
+
 app.get('/projects/:pid/file/*', (req, res) => {
   try {
     const body = readProjectFile(req.params.pid, req.params[0]);
@@ -751,6 +810,8 @@ app.get('/projects/:pid/file/*', (req, res) => {
 migrateLegacyOnce();
 rescheduleAutosave();
 migrateCharterFilenames();
+cleanupStale();
+await hydrateSecretsIntoEnv();
 
 // Bind to loopback only: the API is unauthenticated and some endpoints lead to
 // code execution (scaffold → Docker), so it must not be reachable from the LAN.
@@ -759,4 +820,8 @@ migrateCharterFilenames();
 app.listen(PORT, '127.0.0.1', () => {
   console.log(`[bridge] orchestrator listening on http://127.0.0.1:${PORT}`);
   console.log(`[bridge] renderer at http://127.0.0.1:${PORT}/`);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.warn('[server] unhandledRejection:', err?.message || err);
 });

@@ -9,6 +9,7 @@ import { writeFiles, commitAll, commitIfChanged } from './workspace.js';
 import { getModelForRole } from './models.js';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { throwIfCanceled } from './cancel.js';
 
 /* The scaffold is verified in an OFFLINE sandbox (Phase B): `npm install`,
  * build, and test run in a throwaway Linux container with no network services
@@ -112,7 +113,7 @@ async function regenerateFile(callText, project, plan, file, error, docs, apiKey
  * files until they parse or `fixRounds` is exhausted. Returns
  * {ok, commitSha, fileCount, issues, fixRounds}. On a generation failure nothing
  * is written/committed and build.status becomes 'error'. */
-export async function scaffoldProject(projectId, { callText, apiKey, batchSize = 6, fixRounds = 2 } = {}) {
+export async function scaffoldProject(projectId, { callText, apiKey, batchSize = 6, fixRounds = 2, cancelToken = null } = {}) {
   const p = getProject(projectId);
   const build = p?.build;
   if (!build?.plan?.files?.length) return { ok: false, reason: 'no build plan' };
@@ -123,6 +124,7 @@ export async function scaffoldProject(projectId, { callText, apiKey, batchSize =
     const out = [];
     const files = build.plan.files;
     for (let i = 0; i < files.length; i += batchSize) {
+      throwIfCanceled(cancelToken);
       const batch = files.slice(i, i + batchSize);
       out.push(...await Promise.all(batch.map(f => generateFile(callText, p, build.plan, f, docs, apiKey))));
     }
@@ -134,6 +136,7 @@ export async function scaffoldProject(projectId, { callText, apiKey, batchSize =
     let issues = staticCheck(repoPath, out);
     let round = 0;
     while (issues.length && round < fixRounds) {
+      throwIfCanceled(cancelToken);
       round++;
       const fixes = await Promise.all(issues.map(issue => {
         const purpose = build.plan.files.find(f => f.path === issue.path)?.purpose || '';

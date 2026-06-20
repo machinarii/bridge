@@ -4,6 +4,8 @@ import { renderMarkdown, attachCodeCopyHandlers } from './md.js';
 import { FocusRing } from './focus.js';
 import { renderTile, renderActionBar } from './tiles.js';
 import { GAMEPAD_ICON_SVG } from './gamepad-icons.js';
+import { renderHealth, fetchHealth } from './health.js';
+import { createOperationToken, cancelOperation } from './operations.js';
 
 // Bump on each renderer change so we can confirm a FRESH bundle is running
 // (the browser/Electron can serve a stale cached main.js / index.html).
