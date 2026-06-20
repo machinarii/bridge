@@ -6694,7 +6694,7 @@ function settingsFocusables() {
   const tabs = settingsTabEls;
   const activePane = settingsPaneEls.find(p => !p.hidden);
   const paneFocusables = activePane
-    ? [...activePane.querySelectorAll('input, select, button, [tabindex]:not([tabindex="-1"])')]
+    ? [...activePane.querySelectorAll('input, select, textarea, button, [tabindex]:not([tabindex="-1"])')]
         .filter(el => !el.disabled && el.offsetParent !== null)
     : [];
   const actions = [settingsCancelEl, settingsSaveEl].filter(Boolean);
@@ -6758,6 +6758,19 @@ settingsModalEl?.addEventListener('keydown', (e) => {
 
   const active = document.activeElement;
   const isTab = settingsTabEls.includes(active);
+
+  // Inside a multi-line textarea (e.g. Instructions), arrows move the caret;
+  // only hop focus at the text edges — Left/Right always edit, Up navigates out
+  // only when the caret is at the very start, Down only at the very end. At a
+  // boundary we fall through to the normal nav branches below.
+  const ta = active && active.tagName === 'TEXTAREA' ? active : null;
+  if (ta) {
+    const atStart = ta.selectionStart === 0 && ta.selectionEnd === 0;
+    const atEnd = ta.selectionStart === ta.value.length && ta.selectionEnd === ta.value.length;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') return;
+    if (e.key === 'ArrowUp' && !atStart) return;
+    if (e.key === 'ArrowDown' && !atEnd) return;
+  }
 
   // Left/Right cycles tabs when a tab is focused.
   if (isTab && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
