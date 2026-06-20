@@ -6310,7 +6310,7 @@ const settingsApiMetaEl   = document.getElementById('settings-api-key-current');
 const settingsModelEl     = document.getElementById('settings-model');
 const settingsRouterModelEl = document.getElementById('settings-router-model');
 const settingsRoleModelsEl= document.getElementById('settings-role-models');
-const settingsCouncilEls  = [0, 1, 2].map((i) => document.getElementById(`settings-council-${i}`));
+const settingsCouncilEls  = [null, null, null];   // council-member selects, created by populateRoleModels
 const settingsInstructionsEl = document.getElementById('settings-instructions');
 const settingsSkillsListEl= document.getElementById('settings-skills-list');
 const ghStatusEl       = document.getElementById('settings-github-status');
@@ -6440,19 +6440,20 @@ function populateRoleModels(byRole) {
     settingsRoleModelsEl.appendChild(row);
   }
   // Council members render as three more rows below the agent roles (under
-  // Legal), in the same role-model-row style. The selects keep their ids
-  // (settings-council-N) so settingsCouncilEls + save still work; we just
-  // relocate them from the hidden holder into labeled rows.
-  settingsCouncilEls.forEach((select, i) => {
-    if (!select) return;
+  // Legal), in the same role-model-row style. The selects are created here (and
+  // stored in settingsCouncilEls for save); populateCouncilModels fills options.
+  for (let i = 0; i < 3; i++) {
     const row = document.createElement('div');
     row.className = 'role-model-row';
     const label = document.createElement('div');
     label.className = 'role-label';
     label.textContent = `Council Member ${i + 1}`;
-    row.append(label, select);   // appendChild moves the existing select node here
+    const select = document.createElement('select');
+    select.id = `settings-council-${i}`;
+    settingsCouncilEls[i] = select;
+    row.append(label, select);
     settingsRoleModelsEl.appendChild(row);
-  });
+  }
 }
 
 function populateMcpList(entries) {
