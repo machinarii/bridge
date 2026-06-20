@@ -12,6 +12,8 @@ import { interpretIntent, RESPONSE_STYLE } from './orchestrator.js';
 import { appendTurn, getContext } from './scratchpad.js';
 import { getModelForRole, getDefaultModel, getRouterModel } from './models.js';
 import { emitStatus, emitActivity, emitDelegate, emitNotification } from './events.js';
+import { validateRouting, validateTileSpec, repairPrompt } from './schema.js';
+import { callOpenRouterJSON as callJson } from './llm.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const FANOUT_CAP = 5;
@@ -25,8 +27,7 @@ const DIGEST_MAX_CHARS = 120;
 const MAX_DELEGATION_DEPTH = 3;
 
 export function parseRoutingOutput(raw) {
-  const cleaned = String(raw).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-  const obj = JSON.parse(cleaned);
+  const obj = validateRouting(raw, { sharedFromMax: SHARED_FROM_MAX, sharedSnippetMax: SHARED_SNIPPET_MAX_CHARS });
   if (!obj || typeof obj !== 'object') throw new Error('routing not object');
   if (!Array.isArray(obj.assignments)) obj.assignments = [];
   for (const a of obj.assignments) {
@@ -122,7 +123,17 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
   emitStatus(projectId, lead.id, 'analyzing');
   emitActivity(projectId, `${lead.name}: routing "${text.slice(0, 60)}"`, lead.id);
   const routingRaw = await callOpenRouterJSON({ apiKey, model: getRouterModel(), prompt: routingPrompt, timeoutMs: ROUTING_TIMEOUT_MS });
-  const routing = parseRoutingOutput(routingRaw);
+  let routing;
+  try { routing = parseRoutingOutput(routingRaw); }
+  catch {
+    const repaired = await callJson({
+      apiKey,
+      model: getRouterModel(),
+      prompt: repairPrompt({ kind: 'routing', raw: routingRaw }),
+      meta: { role: 'pm', kind: 'routing_repair' },
+    });
+    routing = parseRoutingOutput(repaired);
+  }
   const { kept, dropped } = applyCostCap(routing.assignments, FANOUT_CAP);
   if (dropped.length) console.log(`[team] cost cap dropped ${dropped.length} assignments`);
 
@@ -223,9 +234,8 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
     RESPONSE_STYLE;
   emitStatus(projectId, lead.id, 'drafting');
   const synthRaw = await callOpenRouterJSON({ apiKey, model: leadModel, prompt: synthPrompt, timeoutMs: SYNTHESIS_TIMEOUT_MS });
-  let summary;
-  try { summary = JSON.parse(synthRaw.trim().replace(/^```(?:json)?/i,'').replace(/```$/, '')); }
-  catch {
+  let summary = validateTileSpec(synthRaw);
+  if (!summary) {
     summary = {
       intent: 'answer', template: 'reader',
       context: 'Team', title: lead.name,
