@@ -78,6 +78,7 @@ export const SKILLS = [
   // — security (trailofbits/skills, AgriciDaniel/claude-cybersecurity) —
   { id: 'security-analysis', name: 'Security static analysis', description: 'Hunt vulnerabilities with CodeQL, Semgrep, and differential code review playbooks.', roles: ['security'], source: 'https://github.com/trailofbits/skills' },
   { id: 'security-audit',    name: 'Cybersecurity code audit', description: 'Comprehensive security review — vulnerabilities, authorization, secrets, supply chain, IaC, and business-logic flaws, mapped to OWASP/CWE/ATT&CK.', roles: ['security'], source: 'https://github.com/AgriciDaniel/claude-cybersecurity' },
+  { id: 'skillspector',      name: 'Skill security scanner', description: 'Vet an AI agent skill before installing it — scan a SKILL.md, repo, or zip for prompt injection, data exfiltration, excessive agency, and supply-chain risk (NVIDIA SkillSpector).', roles: ['security'], source: 'https://github.com/NVIDIA/SkillSpector' },
 
   // — electronics & embedded —
   { id: 'kicad',             name: 'KiCad PCB design',     description: 'Design schematics and PCB layouts in KiCad — capture, footprints, DRC/ERC, EMC pre-compliance, SPICE checks, and fab outputs (Gerbers, BOM).', roles: ['ee_engineer'], source: 'https://github.com/aklofas/kicad-happy' },
@@ -165,6 +166,7 @@ const TASK_KEYWORDS = {
   'd3-visualization':  ['chart', 'visualiz', 'graph', 'd3', 'plot', 'dashboard'],
   'security-analysis': ['vulnerab', 'codeql', 'semgrep', 'static analysis', 'cve', 'exploit'],
   'security-audit':    ['audit', 'vulnerab', 'secret', 'supply chain', 'owasp', 'authoriz', 'security review', 'pentest'],
+  'skillspector':      ['skillspector', 'agent skill', 'skill.md', 'vet skill', 'install skill', 'malicious skill', 'skill security', 'scan skill'],
   'kicad':             ['pcb', 'schematic', 'kicad', 'circuit', 'board', 'layout', 'footprint', 'gerber', 'bom', 'emc', 'spice', 'power tree'],
   'circuit-synth':     ['circuit', 'netlist', 'schematic', 'python circuit', 'generate kicad'],
   'embedded-systems':  ['firmware', 'microcontroller', 'mcu', 'rtos', 'esp32', 'stm32', 'embedded', 'bare-metal', 'driver', 'bring-up'],
