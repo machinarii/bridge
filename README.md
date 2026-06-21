@@ -211,7 +211,7 @@ app/
 ├── server/        # Express orchestrator: API, OpenRouter calls, static serving
 ├── renderer/      # UI: input, speech, gamepad icons, deterministic surfaces
 ├── assets/fonts/  # local font files (git-ignored — not redistributed, see Fonts)
-└── stt/           # optional local Parakeet (MLX) speech-to-text sidecar
+└── stt/           # local Parakeet (MLX) speech-to-text sidecar used for voice input
 build/             # app icon, entitlements, Python/STT packaging scripts
 docs/              # internal design + planning notes (git-ignored, not published)
 

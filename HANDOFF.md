@@ -40,7 +40,29 @@ Notes:
 - Voice is **Parakeet-only** — it never falls back to the browser engine. If the sidecar is down, voice shows a visible STT error.
 - **QA shortcut:** `npm run qa:new -- trading` (or `recipes` / `iot`) seeds a fully-formed project from prefilled name/objective/features and kicks off — skips the capture UI. Prefilled copy-paste text for the capture screens + a flow walkthrough live in **`QA-GUIDE.md`**.
 
-## What's new (latest session — Council, agent performance, gate fixes, polish)
+## What's new (this session — run cancellation, voice cleanup, skills)
+
+Full suite **205/205** (`node --test "app/server/*.test.js"`).
+
+### Run cancellation — cancel tokens now reach the work
+Navigating away or hitting cancel must actually stop in-flight model work, not just abort the HTTP request. Cancel **operation tokens** are threaded end-to-end:
+- **Server.** `/projects/:pid/agents/:aid/interpret` (the normal turn **and** the delegate hop via `resolveDelegateSpec`) and `/projects/:pid/team/interpret` now pass `cancelToken` down. `team.js` `runTeamVoice` + `resolveDelegateSpec` take a `cancelToken` and call `throwIfCanceled()` at every checkpoint — before routing, after parse/repair, around each assignee `interpretIntent`, before/after the delegation fan-out, before synthesis. A `CANCELED` error from an assignee now **rethrows** instead of being swallowed as an assignee failure.
+- **Renderer token ownership (the race fix).** Rapid cancel/resubmit could let a *finishing old* request null out the *newer* request's token. Each submit now keeps a local `opToken`; `currentCancelToken` is cleared only when it still `=== opToken` (`submitIntent`, `submitTeamIntent`, `maybeCancelCurrentOperation(token)`). New `cancelActiveRequest()` centralizes "abort inflight + cancel its token + show 'Canceled'"; every nav guard (`exitToGrid`, `cycleProject`/`cycleAgent`, `openAgentById`, `pickerMove`) and `submitIntent`'s pre-abort call it.
+- **`X` = cancel run** at L2 — both a global bare-key handler and an L2 footer shortcut ("Cancel run").
+- **Tests.** `cancel.test.js` — token lifecycle (create→cancel→throws→complete) and a regression proving **team voice observes a canceled token before doing work** (`runTeamVoice` rejects with `code:'CANCELED'`). New `health.test.js`, `schema.test.js`, `smoke-flow.test.js` also landed.
+
+### Voice = Parakeet-only (wording cleanup, no behavior change)
+Removed the last stale references to the browser `webkitSpeechRecognition` fallback in `app/electron/main.js` and `app/renderer/main.js` comments; README STT line reworded. Voice already never fell back — the code now says so. Settings tab order: **Git** now precedes **Health**.
+
+### GitHub token persist hardened
+The `/github` POST persist (`writeSecret`/`deleteSecret` + `writeEnvFile`) is now fire-and-forget async with a `.catch`, so a slow/failed secret write can't hang the request.
+
+### Skills — two additions (`app/server/skills.js` + `skill-playbooks/`)
+- **`skillspector`** (security): wraps the NVIDIA SkillSpector CLI to vet an agent skill before install (prompt injection, data exfiltration, excessive agency, supply chain). Tool installed at `~/.claude/tools/SkillSpector` via `uv tool install`; update with `git -C ~/.claude/tools/SkillSpector pull && uv tool install --reinstall ~/.claude/tools/SkillSpector`.
+- **`ui-ux-pro`** gained a vendored playbook (was description-only) distilling the upstream priority-ordered design framework; the upstream repo also ships a Python `search.py` design-system generator referenced in the playbook.
+- Full catalog + mechanics documented in **`docs/skills.md`** (gitignored): **45 skills, 15 with playbooks**.
+
+## What's new (previous session — Council, agent performance, gate fixes, polish)
 
 Full suite **195/195** (`node --test "app/server/*.test.js"`). New modules this session: `council.js`, `learnings.js`, `metrics.js`. (Heads-up: outside this arc the OpenRouter key moved to a **secrets store** — `app/server/secrets.js`, `readSecret`/`writeSecret`; `/settings` is now `async`. New `cancel.js`, `health.js`, `schema.js`, `server-files.js`, `server-metrics.js` also appeared. The "key in `.env`" setup notes above may be stale — verify against `secrets.js`.)
 

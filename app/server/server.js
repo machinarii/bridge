@@ -396,9 +396,11 @@ app.patch('/skills/:id', (req, res) => {
 // GitHub pairing (OAuth device flow). Keep token in keychain when available;
 // login remains in .env for display and reconnect UX.
 setGithubPersist(async ({ token, login }) => {
-  if (token) await writeSecret('GITHUB_TOKEN', token);
-  else await deleteSecret('GITHUB_TOKEN');
-  writeEnvFile({ GITHUB_LOGIN: login || '' });
+  (async () => {
+    if (token) await writeSecret('GITHUB_TOKEN', token);
+    else await deleteSecret('GITHUB_TOKEN');
+    writeEnvFile({ GITHUB_LOGIN: login || '' });
+  })().catch((err) => console.warn('[github] persist failed:', err?.message || err));
 });
 
 app.get('/github', (_req, res) => res.json(githubStatus()));
@@ -686,6 +688,7 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
   const { pid, aid } = req.params;
   const text = String(req.body?.text || '').trim();
   if (!text) return res.status(400).json({ error: 'empty intent' });
+  const cancelToken = req.body?.cancelToken ? String(req.body.cancelToken) : null;
   // A user message to an agent whose executor task is blocked on them resumes
   // the work in chat — close the executor's claim on it.
   resolveBlockedForAgent(aid);
@@ -701,7 +704,7 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
     if (project0 && (aid === project0.leadAgentId || onBuildAgent)) {
       const ko = await handleLeadMessageDuringKickoff(pid, text, {
         agentId: aid,
-        cancelToken: req.body?.cancelToken ? String(req.body.cancelToken) : null,
+        cancelToken,
       });
       // The Q&A flow (one question at a time) and approval both hand back a
       // spec to surface directly as the PM's reply.
@@ -719,11 +722,11 @@ app.post('/projects/:pid/agents/:aid/interpret', async (req, res) => {
       }
       // revise/unsure fall through to the normal PM reply below.
     }
-    let spec = await interpretIntent({ projectId: pid, agentId: aid, text, regenerate, effort });
+    let spec = await interpretIntent({ projectId: pid, agentId: aid, text, regenerate, effort, cancelToken });
     // If the agent chose to delegate, actually route it to the teammate and
     // return their answer (otherwise the delegate intent dead-ends here).
     if (spec?.intent === 'delegate') {
-      spec = await resolveDelegateSpec({ projectId: pid, fromAgentId: aid, spec, effort });
+      spec = await resolveDelegateSpec({ projectId: pid, fromAgentId: aid, spec, effort, cancelToken });
     }
     setLastSpec(aid, spec);
     res.json(spec);
@@ -783,7 +786,12 @@ app.post('/projects/:pid/team/interpret', async (req, res) => {
   if (!text) return res.status(400).json({ error: 'empty intent' });
   const effort = String(req.body?.effort || 'high');
   try {
-    const result = await runTeamVoice({ projectId: req.params.pid, text, effort });
+    const result = await runTeamVoice({
+      projectId: req.params.pid,
+      text,
+      effort,
+      cancelToken: req.body?.cancelToken ? String(req.body.cancelToken) : null,
+    });
     res.json(result);
   } catch (err) {
     console.error(`[team:${req.params.pid}]`, err);
