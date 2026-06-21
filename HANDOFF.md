@@ -57,10 +57,11 @@ Removed the last stale references to the browser `webkitSpeechRecognition` fallb
 ### GitHub token persist hardened
 The `/github` POST persist (`writeSecret`/`deleteSecret` + `writeEnvFile`) is now fire-and-forget async with a `.catch`, so a slow/failed secret write can't hang the request.
 
-### Skills — two additions (`app/server/skills.js` + `skill-playbooks/`)
+### Skills — additions (`app/server/skills.js` + `skill-playbooks/`)
 - **`skillspector`** (security): wraps the NVIDIA SkillSpector CLI to vet an agent skill before install (prompt injection, data exfiltration, excessive agency, supply chain). Tool installed at `~/.claude/tools/SkillSpector` via `uv tool install`; update with `git -C ~/.claude/tools/SkillSpector pull && uv tool install --reinstall ~/.claude/tools/SkillSpector`.
 - **`ui-ux-pro`** gained a vendored playbook (was description-only) distilling the upstream priority-ordered design framework; the upstream repo also ships a Python `search.py` design-system generator referenced in the playbook.
-- Full catalog + mechanics documented in **`docs/skills.md`** (gitignored): **45 skills, 15 with playbooks**.
+- **From `affaan-m/ECC`** (cherry-picked into existing roles, condensed to Bridge playbooks): `engineering-patterns` got a real playbook (was description-only); new **`database-migrations`**, **`deployment-patterns`**, **`architecture-decision-records`** (sw_engineer) and **`accessibility`** (designer, qa). Only prose/methodology was vendored — none of ECC's executable harness machinery.
+- Full catalog + mechanics documented in **`docs/skills.md`** (gitignored): **49 skills, 20 with playbooks**.
 
 ## What's new (previous session — Council, agent performance, gate fixes, polish)
 
