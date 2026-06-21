@@ -5,7 +5,7 @@
  *      requiring it. The server listens on PORT (default 4317).
  *   2. Optionally spawns the local Parakeet STT service if the user
  *      has installed it at app/stt/.venv/. Failure is non-fatal —
- *      Bridge still works with the browser's webkitSpeechRecognition.
+ *      voice remains disabled until Parakeet is available.
  *   3. Opens a BrowserWindow pointing at http://127.0.0.1:<PORT>/.
  *
  * Quitting the app cleans up the spawned child processes.
@@ -281,10 +281,9 @@ app.whenReady().then(async () => {
 
   await startServer();
   // Default LOCAL_STT_URL to the bundled Parakeet endpoint *before*
-  // the window loads, so the renderer routes voice through it instead
-  // of the browser's webkitSpeechRecognition (which is a no-op inside
-  // Electron — no Google speech API key is shipped). Only set it when
-  // STT is actually available and the user hasn't overridden it.
+  // the window loads, so the renderer routes voice through local STT.
+  // Only set it when STT is actually available and the user hasn't
+  // overridden it.
   if (sttIsAvailable() && !process.env.LOCAL_STT_URL) {
     process.env.LOCAL_STT_URL = `http://127.0.0.1:${STT_PORT}/transcribe`;
     console.log('[bridge] defaulting LOCAL_STT_URL to', process.env.LOCAL_STT_URL);

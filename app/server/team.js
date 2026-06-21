@@ -14,6 +14,7 @@ import { getModelForRole, getDefaultModel, getRouterModel } from './models.js';
 import { emitStatus, emitActivity, emitDelegate, emitNotification } from './events.js';
 import { validateRouting, validateTileSpec, repairPrompt } from './schema.js';
 import { callOpenRouterJSON as callJson } from './llm.js';
+import { throwIfCanceled } from './cancel.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const FANOUT_CAP = 5;
@@ -78,9 +79,10 @@ async function callOpenRouterJSON({ apiKey, model, prompt, timeoutMs }) {
   } finally { clearTimeout(t); }
 }
 
-export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
+export async function runTeamVoice({ projectId, text, effort = 'medium', cancelToken = null }) {
   const project = getProject(projectId);
   if (!project) throw new Error(`unknown project: ${projectId}`);
+  throwIfCanceled(cancelToken);
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey || apiKey.includes('replace-me')) {
     return {
@@ -123,6 +125,7 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
   emitStatus(projectId, lead.id, 'analyzing');
   emitActivity(projectId, `${lead.name}: routing "${text.slice(0, 60)}"`, lead.id);
   const routingRaw = await callOpenRouterJSON({ apiKey, model: getRouterModel(), prompt: routingPrompt, timeoutMs: ROUTING_TIMEOUT_MS });
+  throwIfCanceled(cancelToken);
   let routing;
   try { routing = parseRoutingOutput(routingRaw); }
   catch {
@@ -132,6 +135,7 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
       prompt: repairPrompt({ kind: 'routing', raw: routingRaw }),
       meta: { role: 'pm', kind: 'routing_repair' },
     });
+    throwIfCanceled(cancelToken);
     routing = parseRoutingOutput(repaired);
   }
   const { kept, dropped } = applyCostCap(routing.assignments, FANOUT_CAP);
@@ -146,6 +150,7 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
    * depth limit. Returns the terminal spec (intent != 'delegate'). */
   async function runWithDelegation(asg, depth) {
     try {
+      throwIfCanceled(cancelToken);
       const spec = await Promise.race([
         interpretIntent({
           projectId,
@@ -153,9 +158,11 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
           text: asg.task,
           sharedFrom: asg.sharedFrom,
           effort,
+          cancelToken,
         }),
         new Promise((_, rej) => setTimeout(() => rej(new Error('assignee timeout')), ASSIGNEE_TIMEOUT_MS)),
       ]);
+      throwIfCanceled(cancelToken);
       perAgent[asg.agentId] = spec;
 
       if (spec?.intent !== 'delegate') return spec;
@@ -211,13 +218,16 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
       }
       return childSpec;
     } catch (err) {
+      if (err?.code === 'CANCELED') throw err;
       console.warn(`[team] assignee ${asg.agentId} failed:`, err.message);
       perAgent[asg.agentId] = null;
       return null;
     }
   }
 
+  throwIfCanceled(cancelToken);
   await Promise.all(kept.map(asg => runWithDelegation(asg, 0)));
+  throwIfCanceled(cancelToken);
 
   const perAgentText = Object.entries(perAgent).map(([aid, spec]) => {
     const a = project.agents.find(x => x.id === aid);
@@ -234,6 +244,7 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
     RESPONSE_STYLE;
   emitStatus(projectId, lead.id, 'drafting');
   const synthRaw = await callOpenRouterJSON({ apiKey, model: leadModel, prompt: synthPrompt, timeoutMs: SYNTHESIS_TIMEOUT_MS });
+  throwIfCanceled(cancelToken);
   let summary = validateTileSpec(synthRaw);
   if (!summary) {
     summary = {
@@ -266,7 +277,8 @@ export async function runTeamVoice({ projectId, text, effort = 'medium' }) {
  * reply as a foreign-author bubble in the delegating agent's chat. Returns the
  * terminal (non-delegate) spec — the teammate's answer — or the original spec
  * when it can't resolve (e.g. no enabled agent of the requested role). */
-export async function resolveDelegateSpec({ projectId, fromAgentId, spec, effort = 'high', depth = 0 }) {
+export async function resolveDelegateSpec({ projectId, fromAgentId, spec, effort = 'high', depth = 0, cancelToken = null }) {
+  throwIfCanceled(cancelToken);
   if (!spec || spec.intent !== 'delegate') return spec;
   if (depth >= MAX_DELEGATION_DEPTH) return spec;
   const project = getProject(projectId);
@@ -298,9 +310,9 @@ export async function resolveDelegateSpec({ projectId, fromAgentId, spec, effort
     fromRole: getRole(fromAgent?.role)?.label || '',
     snippet: (spec.body || '').slice(0, SHARED_SNIPPET_MAX_CHARS),
   }];
-  let childSpec = await interpretIntent({ projectId, agentId: target.id, text: task, sharedFrom, effort });
+  let childSpec = await interpretIntent({ projectId, agentId: target.id, text: task, sharedFrom, effort, cancelToken });
   // follow any further delegate hops the teammate makes
-  childSpec = await resolveDelegateSpec({ projectId, fromAgentId: target.id, spec: childSpec, effort, depth: depth + 1 });
+  childSpec = await resolveDelegateSpec({ projectId, fromAgentId: target.id, spec: childSpec, effort, depth: depth + 1, cancelToken });
 
   // Group-chat view: surface the teammate's answer in the delegating agent's
   // L2 chat, tagged with the teammate's identity.

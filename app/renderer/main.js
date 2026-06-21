@@ -3710,6 +3710,7 @@ function _setL2Shortcuts() {
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
     {                     gamepad: 'triangle', keyboard: 'A', label: 'Activity',     action: () => toggleActivityDrawer() },
     { gamepad: 'square', keyboard: 'E', label: 'Explorer',     action: () => toggleFileExplorer() },
+    { keyboard: 'X', label: 'Cancel run', action: () => cancelActiveRequest() },
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back',       action: () => pressCircle() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
@@ -3717,7 +3718,7 @@ function _setL2Shortcuts() {
 }
 
 async function exitZoom() {
-  if (inflightController) { inflightController.abort(); inflightController = null; maybeCancelCurrentOperation(); }
+  if (inflightController || currentCancelToken) cancelActiveRequest();
   stopSpeaking();
   playSfx('zoomout');   // L2 → L1
   const fromAgentId = currentAgent()?.id;
@@ -3994,7 +3995,7 @@ function cycleProject(delta) {
   const nextIdx = curIdx + delta;
   // No wrap-around — rubberband at the first / last project.
   if (nextIdx < 0 || nextIdx >= projects.length) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
-  if (inflightController) { inflightController.abort(); inflightController = null; maybeCancelCurrentOperation(); }
+  if (inflightController || currentCancelToken) cancelActiveRequest();
   stopSpeaking();
   playSfx(delta > 0 ? 'swooshNext' : 'swooshPrev');   // project → project slide
   slideAgent(delta, () => {
@@ -4010,7 +4011,7 @@ function openAgentById(agentId) {
   if (!activeProject) return;
   const i = activeProject.agents.findIndex(a => a.id === agentId);
   if (i < 0 || i === zoomedIndex) return;
-  if (inflightController) { inflightController.abort(); inflightController = null; maybeCancelCurrentOperation(); }
+  if (inflightController || currentCancelToken) cancelActiveRequest();
   stopSpeaking();
   _focusLastOnNextChatRender = true;   // land on the target agent's last bubble
   slideAgent(i > zoomedIndex ? 1 : -1, () => { zoomedIndex = i; renderZoom(); });
@@ -4024,7 +4025,7 @@ function cycleAgent(delta) {
   while (i >= 0 && i < n && !activeProject.agents[i].enabled) i += delta;
   // Ran off the end (no further agent that way) — rubberband instead of cycling.
   if (i < 0 || i >= n) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
-  if (inflightController) { inflightController.abort(); inflightController = null; maybeCancelCurrentOperation(); }
+  if (inflightController || currentCancelToken) cancelActiveRequest();
   stopSpeaking();
   playSfx(delta > 0 ? 'swooshNext' : 'swooshPrev');   // agent → agent slide
   _focusLastOnNextChatRender = true;   // switched to another agent → focus its last bubble
@@ -4159,10 +4160,9 @@ async function executeAction(action, sourceSpec) {
 /* ---------- PTT + intent submission ---------- */
 const PTT_MODES = new Set([MODE_PROJECTS, MODE_ZOOM, MODE_GRID, MODE_COUNCIL, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL, MODE_NEW_PROJ_FEATURES]);
 
-/* If LOCAL_STT_URL is configured on the server, mic capture goes
- * through MediaRecorder and POSTs to /transcribe. Otherwise we fall
- * back to the browser's SpeechRecognition (Google Cloud STT in
- * Chrome, Apple in Safari). */
+/* Voice capture always uses local STT via MediaRecorder -> /transcribe.
+ * When the sidecar is unavailable we surface an error instead of
+ * switching engines. */
 let localSttUrl = '';
 let localRecorder = null;
 let localRecChunks = [];
@@ -4173,9 +4173,8 @@ let _partialBusy = false;   // one in-flight live-partial transcription at a tim
     const r = await fetch('/settings');
     if (r.ok) { const s = await r.json(); localSttUrl = s.LOCAL_STT_URL || ''; }
   } catch {}
-  // Local Parakeet is the default engine, but only use it if the sidecar is
-  // actually reachable — poll briefly (it may still be loading its model on
-  // first launch), and fall back to the browser engine if it never comes up.
+  // Local Parakeet is the only engine. Probe sidecar reachability so the user
+  // gets a clear hint when it is still loading or not running yet.
   // Voice ALWAYS uses the local Parakeet sidecar — never the browser speech
   // engine. localSttUrl stays set (the server defaults LOCAL_STT_URL on); if
   // Parakeet is unavailable we surface an error rather than switching engines.
@@ -5370,7 +5369,7 @@ function pickerMove(dir) {
   updatePickerShortcuts();
 }
 async function exitToProjects() {
-  if (inflightController) { inflightController.abort(); inflightController = null; maybeCancelCurrentOperation(); }
+  if (inflightController || currentCancelToken) cancelActiveRequest();
   stopSpeaking();
   playSfx('zoomout');   // L1 → L0
   closeFileViewer();
@@ -6711,12 +6710,23 @@ function closeSettings() {
   if (settingsHealthTimer) { clearInterval(settingsHealthTimer); settingsHealthTimer = null; }
 }
 
-async function maybeCancelCurrentOperation() {
-  if (!currentCancelToken) return false;
-  try { await cancelOperation(currentCancelToken); }
+async function maybeCancelCurrentOperation(token = currentCancelToken) {
+  if (!token) return false;
+  if (currentCancelToken === token) currentCancelToken = null;
+  try { await cancelOperation(token); }
   catch {}
-  currentCancelToken = null;
   return true;
+}
+
+function cancelActiveRequest() {
+  if (!inflightController && !currentCancelToken) return;
+  const token = currentCancelToken;
+  if (inflightController) {
+    inflightController.abort();
+    inflightController = null;
+  }
+  maybeCancelCurrentOperation(token);
+  setIndicator('idle', 'Canceled');
 }
 
 async function refreshHealthPane() {
@@ -7098,6 +7108,11 @@ window.addEventListener('keydown', (e) => {
       return;
     }
   }
+  if (bareKey && (e.key === 'x' || e.key === 'X')) {
+    e.preventDefault();
+    cancelActiveRequest();
+    return;
+  }
   if (bareKey && e.key === '/')  { e.preventDefault(); typedWrap.hidden = false; typedInput.focus(); return; }
 
   // Universal Tab: jumps focus into the footer rail from anywhere. Once
@@ -7389,6 +7404,7 @@ function submitTypedText(text) {
 async function submitIntent(text, regenerate = 0) {
   const agent = currentAgent();
   if (!agent || mode !== MODE_ZOOM) return;
+  const targetId = agent.id;
   clearUnseen(agent.id);   // the user is responding → no longer awaiting them
   if (regenerate === 0) _redoStreak = { text: null, n: 0 };  // a fresh prompt resets the redo streak
   // Lock the optimistic bubble to the final transcript while the agent thinks
@@ -7397,13 +7413,14 @@ async function submitIntent(text, regenerate = 0) {
   // Immediately show an agent "…" bubble so the reply feels instant; the
   // streaming bubble reuses it (or the history re-render replaces it).
   showPendingAgentBubble();
-  if (inflightController) inflightController.abort();
+  if (inflightController) cancelActiveRequest();
   inflightController = new AbortController();
   const myCtl = inflightController;
+  let opToken = null;
   try {
-    currentCancelToken = await createOperationToken({ kind: 'agent_interpret', projectId: activeProject.id, ownerAgentId: targetId });
-  } catch { currentCancelToken = null; }
-  const targetId = agent.id;
+    opToken = await createOperationToken({ kind: 'agent_interpret', projectId: activeProject.id, ownerAgentId: targetId });
+    currentCancelToken = opToken;
+  } catch { opToken = null; currentCancelToken = null; }
 
   agentBusy[targetId] = true;
   setIndicator('thinking', `${agent.name} is thinking…`);
@@ -7417,7 +7434,7 @@ async function submitIntent(text, regenerate = 0) {
         text,
         regenerate,
         effort: effortForAgent(activeProject.id, targetId),
-        cancelToken: currentCancelToken,
+        cancelToken: opToken,
       }),
       signal: myCtl.signal,
     });
@@ -7437,20 +7454,21 @@ async function submitIntent(text, regenerate = 0) {
   } finally {
     agentBusy[targetId] = false;
     if (myCtl === inflightController) inflightController = null;
-    currentCancelToken = null;
+    if (currentCancelToken === opToken) currentCancelToken = null;
     resetStreaming();
   }
 }
 async function submitTeamIntent(text) {
   if (mode !== MODE_GRID || !activeProject) return;
-  if (inflightController) inflightController.abort();
+  const leadId = activeProject.leadAgentId;
+  if (inflightController) cancelActiveRequest();
   inflightController = new AbortController();
   const myCtl = inflightController;
+  let opToken = null;
   try {
-    currentCancelToken = await createOperationToken({ kind: 'team_interpret', projectId: activeProject.id, ownerAgentId: leadId });
-  } catch { currentCancelToken = null; }
-
-  const leadId = activeProject.leadAgentId;
+    opToken = await createOperationToken({ kind: 'team_interpret', projectId: activeProject.id, ownerAgentId: leadId });
+    currentCancelToken = opToken;
+  } catch { opToken = null; currentCancelToken = null; }
   agentBusy[leadId] = true;
   setIndicator('thinking', 'Lead is delegating…');
   renderGrid();
@@ -7459,7 +7477,7 @@ async function submitTeamIntent(text) {
     const r = await fetch(`/projects/${activeProject.id}/team/interpret`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, effort: effortForProject(activeProject.id) }),
+      body: JSON.stringify({ text, effort: effortForProject(activeProject.id), cancelToken: opToken }),
       signal: myCtl.signal,
     });
     if (!r.ok) throw new Error(`server ${r.status}`);
@@ -7494,7 +7512,7 @@ async function submitTeamIntent(text) {
   } finally {
     for (const a of activeProject.agents) agentBusy[a.id] = false;
     if (myCtl === inflightController) inflightController = null;
-    currentCancelToken = null;
+    if (currentCancelToken === opToken) currentCancelToken = null;
   }
 }
 
