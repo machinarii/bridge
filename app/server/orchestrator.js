@@ -188,10 +188,18 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
   // A delegated task records as a From→To handoff turn (so it doesn't render as
   // the user's own "you" bubble). `text` is still the prompt for the model.
   if (handoff) {
-    appendTurn(agentId, 'system', JSON.stringify({
+    const handoffTurn = JSON.stringify({
       kind: 'handoff', from: handoff.from, fromRole: handoff.fromRole,
       to: handoff.to, toRole: handoff.toRole, task: text,
-    }));
+    });
+    // Idempotent: a retried/re-drained task re-enters here before producing a
+    // reply, which would otherwise append a second identical handoff bubble.
+    // Skip if the most recent turn is already this exact handoff.
+    const msgs = getContext(agentId).messages;
+    const last = msgs[msgs.length - 1];
+    if (!(last && last.role === 'system' && last.content === handoffTurn)) {
+      appendTurn(agentId, 'system', handoffTurn);
+    }
   } else {
     appendTurn(agentId, 'user', text);
   }
