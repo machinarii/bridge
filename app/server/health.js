@@ -21,11 +21,33 @@ async function checkOpenRouter() {
       headers: { Authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(5000),
     });
-    if (r.ok) return { ok: true, status: 'ok', detail: 'reachable and key valid' };
-    return { ok: false, status: 'error', detail: `HTTP ${r.status}` };
+    if (!r.ok) return { ok: false, status: 'error', detail: `HTTP ${r.status}` };
+    // Surface the remaining credit balance so a low balance (which 402s model
+    // calls) is visible at a glance. Best-effort: the key is already valid.
+    const credits = await fetchCredits(key);
+    const detail = credits
+      ? `$${credits.remaining.toFixed(2)} left` + (credits.total ? ` of $${credits.total.toFixed(2)}` : '')
+      : 'reachable and key valid';
+    return { ok: true, status: 'ok', detail, ...(credits ? { credits } : {}) };
   } catch (err) {
     return { ok: false, status: 'error', detail: String(err?.message || err) };
   }
+}
+
+/* OpenRouter credit balance (USD). Returns null on any failure — the OpenRouter
+ * row stays OK; only the credit detail is omitted. */
+async function fetchCredits(key) {
+  try {
+    const r = await fetch('https://openrouter.ai/api/v1/credits', {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!r.ok) return null;
+    const d = (await r.json())?.data || {};
+    const total = Number(d.total_credits) || 0;
+    const usage = Number(d.total_usage) || 0;
+    return { remaining: total - usage, total, usage };
+  } catch { return null; }
 }
 
 async function checkStt() {

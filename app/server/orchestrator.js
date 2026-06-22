@@ -174,7 +174,13 @@ function samplingFor({ effort, regenerate }) {
   if (n > 0) {
     lvl = Math.min(EFFORT_LEVELS.length - 1, lvl + n); // each redo → one tier up
   }
-  out.reasoning = { max_tokens: EFFORT_BUDGET[EFFORT_LEVELS[lvl]] };
+  const reasoningBudget = EFFORT_BUDGET[EFFORT_LEVELS[lvl]];
+  out.reasoning = { max_tokens: reasoningBudget };
+  // Cap total output so OpenRouter reserves only what we need, not the model's
+  // full ceiling (~65536). The full ceiling pre-authorizes against the account
+  // balance and 402s when credits are low. Reasoning budget + a completion
+  // headroom for the short reply / JSON tile is plenty.
+  out.max_tokens = reasoningBudget + 8192;
   return out;
 }
 
