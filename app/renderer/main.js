@@ -3385,6 +3385,25 @@ function clearPendingAgentBubble() {
   }
   pendingAgentBubbleEl = null;
 }
+/* Replace the "…" bubble with a visible error bubble in chat, so a failed turn
+ * doesn't just vanish. Ephemeral — wiped by the next successful history render. */
+function friendlyError(message) {
+  const m = String(message || '');
+  if (/402|credit|max_tokens|afford/i.test(m)) {
+    return 'Out of OpenRouter credits for this request — top up your balance (Settings → Health shows what’s left).';
+  }
+  return m || 'Request failed';
+}
+function showErrorBubble(message) {
+  clearPendingAgentBubble();
+  const chat = chatScrollEl();
+  if (!chat) return;
+  const b = document.createElement('div');
+  b.className = 'bubble system error';
+  b.textContent = friendlyError(message);
+  chat.appendChild(b);
+  chat.scrollTop = chat.scrollHeight;
+}
 
 function paintBubbleFocus() {
   // The bubble shows its selected ring only when the bubble itself holds focus.
@@ -7451,7 +7470,11 @@ async function submitIntent(text, regenerate = 0) {
       }),
       signal: myCtl.signal,
     });
-    if (!r.ok) throw new Error(`server ${r.status}`);
+    if (!r.ok) {
+      let detail = `server ${r.status}`;
+      try { const e = await r.json(); if (e?.error) detail = String(e.error); } catch {}
+      throw new Error(detail);
+    }
     const spec = await r.json();
     const a = activeProject.agents.find(x => x.id === targetId);
     if (a) a.lastSpec = spec;
@@ -7462,7 +7485,7 @@ async function submitIntent(text, regenerate = 0) {
   } catch (err) {
     if (err.name === 'AbortError') return;
     console.error(err);
-    clearPendingAgentBubble();
+    showErrorBubble(err?.message || 'Request failed');
     setIndicator('error', 'Request failed');
   } finally {
     agentBusy[targetId] = false;
