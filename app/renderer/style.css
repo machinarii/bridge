@@ -1798,7 +1798,14 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   outline: 2px solid var(--focus, #ffffff);
   outline-offset: 2px;
 }
-/* Stop run — destructive action on the "…" pending agent bubble. */
+/* "…" pending agent bubble carries an inline Stop button on its right —
+ * always visible while the agent is thinking. Dots left, Stop right. */
+.agent-view .bubble.agent.pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+/* Stop run — destructive action; sits inline in the pending bubble. */
 .agent-view .bubble .bubble-action.stop {
   border-color: rgba(220,90,90,0.5);
   color: rgba(240,150,150,0.95);

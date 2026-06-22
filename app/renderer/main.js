@@ -3319,15 +3319,13 @@ async function renderChatHistory(container, agent) {
  * after the agent responds. */
 function chatScrollEl() { return surfaceEl?.querySelector?.('.chat-scroll') || null; }
 const TYPING_DOTS = '<span class="typing-dots" aria-label="listening"><span></span><span></span><span></span></span>';
-/* Stop affordance that hangs off the "…" pending agent bubble's right edge —
- * same panel pattern as the user-bubble retry/edit icons. Select the bubble,
- * press Right (cycleBubbleAction) to reach it, Enter/Cross to cancel the run. */
-const STOP_ACTION_PANEL =
-  '<div class="bubble-actions"><div class="bubble-action-row">' +
-    '<button type="button" class="bubble-action stop" aria-label="Stop run" title="Stop run">' +
-      '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>' +
-    '</button>' +
-  '</div></div>';
+/* Stop affordance shown inline inside the "…" pending agent bubble, on its
+ * right. Always visible while the agent is thinking; also focusable so Right
+ * (cycleBubbleAction) + Enter/Cross cancels the run. */
+const STOP_ACTION_BTN =
+  '<button type="button" class="bubble-action stop" aria-label="Stop run" title="Stop run">' +
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>' +
+  '</button>';
 function showPendingBubble() {
   if (mode !== MODE_ZOOM || editBubbleOpen) return;   // not while dictating into the edit-prompt modal
   const chat = chatScrollEl();
@@ -3367,7 +3365,7 @@ function showPendingAgentBubble() {
     b.tabIndex = 0;   // selectable so Right/cycleBubbleAction can reach Stop
     // No name/role header: the "…" is always the viewed agent's own bubble.
     // (Foreign/delegate bubbles get their header only once the real reply lands.)
-    b.innerHTML = `<div class="bubble-content">${TYPING_DOTS}</div>` + STOP_ACTION_PANEL;
+    b.innerHTML = `<div class="bubble-content">${TYPING_DOTS}</div>` + STOP_ACTION_BTN;
     b.querySelector('.bubble-action.stop')?.addEventListener('click', () => cancelActiveRequest());
     chat.appendChild(b);
     pendingAgentBubbleEl = b;
@@ -4614,6 +4612,7 @@ function appendStreamToken(agentId, delta) {
       pendingAgentBubbleEl = null;
       b.classList.remove('pending');
       b.classList.add('streaming');
+      b.querySelector('.bubble-action.stop')?.remove();   // Stop is for the "…" wait only
       c = b.querySelector('.bubble-content');
       c.textContent = '';
     } else {
