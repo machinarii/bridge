@@ -1798,6 +1798,17 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   outline: 2px solid var(--focus, #ffffff);
   outline-offset: 2px;
 }
+/* Stop run — destructive action on the "…" pending agent bubble. */
+.agent-view .bubble .bubble-action.stop {
+  border-color: rgba(220,90,90,0.5);
+  color: rgba(240,150,150,0.95);
+}
+.agent-view .bubble .bubble-action.stop:hover,
+.agent-view .bubble .bubble-action.stop:focus,
+.agent-view .bubble .bubble-action.stop:focus-visible {
+  background: rgba(220,90,90,0.18);
+  border-color: rgba(220,90,90,0.85);
+}
 /* v2 §4 — Handoff (delegation) bubble: a normal left-side bubble whose
  * heading shows the routing (From Role → To Role). Read-only (not focusable,
  * no actions), but visually consistent with agent bubbles. */
