@@ -3319,6 +3319,15 @@ async function renderChatHistory(container, agent) {
  * after the agent responds. */
 function chatScrollEl() { return surfaceEl?.querySelector?.('.chat-scroll') || null; }
 const TYPING_DOTS = '<span class="typing-dots" aria-label="listening"><span></span><span></span><span></span></span>';
+/* Stop affordance that hangs off the "…" pending agent bubble's right edge —
+ * same panel pattern as the user-bubble retry/edit icons. Select the bubble,
+ * press Right (cycleBubbleAction) to reach it, Enter/Cross to cancel the run. */
+const STOP_ACTION_PANEL =
+  '<div class="bubble-actions"><div class="bubble-action-row">' +
+    '<button type="button" class="bubble-action stop" aria-label="Stop run" title="Stop run">' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>' +
+    '</button>' +
+  '</div></div>';
 function showPendingBubble() {
   if (mode !== MODE_ZOOM || editBubbleOpen) return;   // not while dictating into the edit-prompt modal
   const chat = chatScrollEl();
@@ -3355,16 +3364,27 @@ function showPendingAgentBubble() {
   if (!pendingAgentBubbleEl || !chat.contains(pendingAgentBubbleEl)) {
     const b = document.createElement('div');
     b.className = 'bubble agent pending';
+    b.tabIndex = 0;   // selectable so Right/cycleBubbleAction can reach Stop
     // No name/role header: the "…" is always the viewed agent's own bubble.
     // (Foreign/delegate bubbles get their header only once the real reply lands.)
-    b.innerHTML = `<div class="bubble-content">${TYPING_DOTS}</div>`;
+    b.innerHTML = `<div class="bubble-content">${TYPING_DOTS}</div>` + STOP_ACTION_PANEL;
+    b.querySelector('.bubble-action.stop')?.addEventListener('click', () => cancelActiveRequest());
     chat.appendChild(b);
     pendingAgentBubbleEl = b;
+    chatBubbles.push(b);   // join the keyboard/gamepad nav ring (always the last bubble)
   }
   chat.scrollTop = chat.scrollHeight;
 }
 function clearPendingAgentBubble() {
-  if (pendingAgentBubbleEl) { try { pendingAgentBubbleEl.remove(); } catch {} }
+  if (pendingAgentBubbleEl) {
+    const i = chatBubbles.indexOf(pendingAgentBubbleEl);
+    if (i !== -1) {
+      chatBubbles.splice(i, 1);
+      if (chatBubbleIdx === i) leaveBubbleFocus();   // focus was on the bubble being removed
+      else if (chatBubbleIdx > i) chatBubbleIdx -= 1;
+    }
+    try { pendingAgentBubbleEl.remove(); } catch {}
+  }
   pendingAgentBubbleEl = null;
 }
 
@@ -3710,7 +3730,6 @@ function _setL2Shortcuts() {
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
     {                     gamepad: 'triangle', keyboard: 'A', label: 'Activity',     action: () => toggleActivityDrawer() },
     { gamepad: 'square', keyboard: 'E', label: 'Explorer',     action: () => toggleFileExplorer() },
-    { keyboard: 'X', label: 'Cancel run', action: () => cancelActiveRequest() },
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back',       action: () => pressCircle() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
@@ -7107,11 +7126,6 @@ window.addEventListener('keydown', (e) => {
       toggleActivityDrawer();
       return;
     }
-  }
-  if (bareKey && (e.key === 'x' || e.key === 'X')) {
-    e.preventDefault();
-    cancelActiveRequest();
-    return;
   }
   if (bareKey && e.key === '/')  { e.preventDefault(); typedWrap.hidden = false; typedInput.focus(); return; }
 
