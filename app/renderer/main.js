@@ -2710,7 +2710,7 @@ async function kickoffDecide(which, agent) {
  * bubble. The user toggles one or more (Space / Enter / ✕), then a Submit
  * button below-right sends the chosen set as the next message. Reachable via
  * the bubble's keyboard/gamepad model (cycleBubbleAction). */
-function buildChoiceList(choices, agent, picked, skippable = false) {
+function buildChoiceList(choices, agent, picked, skippable = false, opts = {}) {
   // `picked` (an array) → memorialized/read-only: a past question whose answer
   // we replay as the displayed selection. Otherwise the list is interactive.
   const memorial = Array.isArray(picked);
@@ -2799,7 +2799,7 @@ function buildChoiceList(choices, agent, picked, skippable = false) {
     skip.type = 'button';
     skip.className = 'choice-skip';
     skip.textContent = 'Skip for now';
-    skip.addEventListener('click', (e) => { e.stopPropagation(); skipChoices(wrap, agent); });
+    skip.addEventListener('click', (e) => { e.stopPropagation(); if (opts.onSkip) opts.onSkip(); else skipChoices(wrap, agent); });
     actions.appendChild(skip);
   }
   if (hasChoices) {
@@ -2808,7 +2808,14 @@ function buildChoiceList(choices, agent, picked, skippable = false) {
     submit.className = 'choice-submit role-confirm is-disabled';   // disabled until a pick
     submit.setAttribute('aria-disabled', 'true');
     submit.textContent = 'Submit';
-    submit.addEventListener('click', (e) => { e.stopPropagation(); submitChoices(wrap, agent); });
+    submit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (opts.onSubmit) {
+        const arr = [...wrap.querySelectorAll('.choice-btn[aria-pressed="true"]')]
+          .map(b => (b.dataset.choice || b.textContent).trim()).filter(Boolean);
+        if (arr.length) opts.onSubmit(arr);
+      } else submitChoices(wrap, agent);
+    });
     actions.appendChild(submit);
   }
   submitRow.append(hint, actions);
@@ -3467,6 +3474,78 @@ function scrollBubbleIntoView(el) {
 function focusFirstBubble()    { return focusBubble(0); }
 function focusLastBubble()     { return focusBubble(chatBubbles.length - 1); }
 function moveBubbleFocus(d)    { return focusBubble(chatBubbleIdx + d); }
+/* Register every .bubble in `container` into the nav ring + make it focusable,
+ * so a non-agent L2 view (the council) gets the same selectable-bubble model as
+ * agent chat (which populates chatBubbles during renderZoom). */
+function registerNavBubbles(container) {
+  chatBubbles = [...(container?.querySelectorAll('.bubble') || [])];
+  chatBubbles.forEach(b => { if (!b.hasAttribute('tabindex')) b.tabIndex = 0; });
+  chatBubbleIdx = -1;
+}
+
+/* Keyboard navigation for a focused chat bubble — shared by agent L2 (MODE_ZOOM)
+ * and the council (MODE_COUNCIL). Returns true if it consumed the key. */
+function bubbleNavKeydown(e) {
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (chatBubbleIdx <= 0) { leaveBubbleFocus(); if (!focusSurfaceClose()) bumpEdge(chatScrollEl(), 'up', 6); }
+    else moveBubbleFocus(-1);
+    return true;
+  }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (chatBubbleIdx >= chatBubbles.length - 1) {
+      leaveBubbleFocus();
+      if (ring.elements.length === 0) enterShortcuts(); else ring.paint();
+      return true;
+    }
+    moveBubbleFocus(+1); return true;
+  }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault(); cycleBubbleAction(e.key === 'ArrowRight' ? +1 : -1); return true;
+  }
+  if ((e.code === 'Space' || e.key === 'Enter') && document.activeElement?.classList?.contains('choice-other')) {
+    e.preventDefault(); if (!e.repeat) startOtherDictate(document.activeElement); return true;
+  }
+  if (e.key === 'Enter' && (document.activeElement?.classList?.contains('bubble-action')
+      || document.activeElement?.closest?.('.bubble-kickoff-actions, .bubble-choices'))) {
+    e.preventDefault(); document.activeElement.click(); return true;
+  }
+  if (e.key === 'Enter') {
+    const approve = chatBubbles[chatBubbleIdx]?.querySelector('.bubble-kickoff-actions .role-confirm');
+    if (approve) { e.preventDefault(); approve.click(); return true; }
+  }
+  if (e.key === 'Escape') { e.preventDefault(); leaveBubbleFocus(); ring.paint(); return true; }
+  return false;
+}
+
+/* Gamepad equivalent of bubbleNavKeydown — shared by agent L2 and council.
+ * Returns true if it consumed the button. (Agent-only l1/r1 agent-cycling is
+ * handled by the caller.) */
+function bubbleNavButton(b) {
+  if (b === 'up') {
+    if (chatBubbleIdx <= 0) { leaveBubbleFocus(); if (!focusSurfaceClose()) bumpEdge(chatScrollEl(), 'up', 6); }
+    else moveBubbleFocus(-1);
+    return true;
+  }
+  if (b === 'down') {
+    if (chatBubbleIdx >= chatBubbles.length - 1) { leaveBubbleFocus(); if (ring.elements.length === 0) enterShortcuts(); else ring.paint(); }
+    else moveBubbleFocus(+1);
+    return true;
+  }
+  if (b === 'left')  { cycleBubbleAction(-1); return true; }
+  if (b === 'right') { cycleBubbleAction(+1); return true; }
+  if (b === 'cross') {
+    const a = document.activeElement;
+    if (a?.classList?.contains('choice-other')) { startOtherDictate(a); return true; }
+    if (a?.classList?.contains('bubble-action') || a?.closest?.('.bubble-kickoff-actions, .bubble-choices')) { a.click(); return true; }
+    const approve = chatBubbles[chatBubbleIdx]?.querySelector('.bubble-kickoff-actions .role-confirm');
+    if (approve) approve.click();
+    return true;
+  }
+  if (b === 'circle') { leaveBubbleFocus(); ring.paint(); return true; }
+  return false;
+}
 function isBubbleFocused() {
   // True while either the bubble itself OR one of its action icons
   // (.bubble-action) holds focus — both states should keep the bubble
@@ -3868,6 +3947,7 @@ async function openCouncil() {
   const body = councilShell('');
   body.innerHTML = councilBubble({ kind: 'agent', author: 'Council', role: 'Advisory Team',
     html: 'Ask a question and I’ll convene three models on it. The PM gathers a little context first, then each model answers independently — none sees the others — and a chair synthesizes one clear recommendation.' });
+  registerNavBubbles(body);
   councilFooterShortcuts();
   // Restore a prior council conversation for this project (prompt + decisions +
   // answers), so leaving and re-entering doesn't lose the work.
@@ -3919,6 +3999,7 @@ function renderCouncilDone(st) {
     : '';
   body.innerHTML = councilQuestionBubble(st.question) + members + synth;
   try { attachCodeCopyHandlers(body); } catch {}
+  registerNavBubbles(body);
   councilFooterShortcuts();
 }
 
@@ -3929,6 +4010,7 @@ function renderCouncilThinking(question, label) {
     councilBubble({ kind: 'agent', author: 'Project Manager', role: 'reviewing',
       html: `<div class="typing-dots"><span></span><span></span><span></span></div>` +
             `<p class="council-think-label">${escapeHtml(label)}</p>` });
+  registerNavBubbles(body);
   councilFooterShortcuts();
 }
 
@@ -3955,42 +4037,26 @@ async function startCouncilIntake(question) {
   else runCouncilDeliberation();
 }
 
-/* One clarifying question at a time, as a PM bubble with clickable options. */
+/* One clarifying question at a time, rendered with the EXACT agent question
+ * component (buildChoiceList): lettered .choice-btn options, multi-select +
+ * Submit, "Other — hold to talk", and Skip — wired to council handlers. The
+ * bubble joins the nav ring, so it's selectable and arrow-navigable like any
+ * agent bubble. */
 function renderCouncilIntake() {
   const st = councilState;
   const cur = st.questions[st.idx];
   const body = councilShell('Gathering context');
-  // Reuse the agent question/selection pattern (.bubble-choices) so council
-  // intake looks identical to a kickoff question: lettered .choice-btn options,
-  // a hint, and a Skip in the actions row. Single-select — clicking answers.
-  const opts = cur.options.map((o, i) => {
-    const letter = String.fromCharCode(65 + i);
-    const desc = String(o).replace(/^[A-Za-z]\s*[—\-.):]\s*/, '').trim() || String(o);
-    return `<div class="choice-btn" role="button" tabindex="0" data-idx="${i}" aria-pressed="false">` +
-             `<span class="choice-letter">${escapeHtml(letter)}</span>` +
-             `<span class="choice-desc">${escapeHtml(desc)}</span>` +
-           `</div>`;
-  }).join('');
   body.innerHTML = councilQuestionBubble(st.question) +
     councilBubble({ kind: 'agent', author: 'Project Manager', role: `question ${st.idx + 1} of ${st.questions.length}`,
-      html: `<p class="council-intake-q">${escapeHtml(cur.q)}</p>` +
-            `<div class="bubble-choices">` +
-              `<div class="bubble-choices-options">${opts}</div>` +
-              `<input type="text" id="council-other" class="council-other-input" placeholder="Other — type your own answer…" spellcheck="false" />` +
-              `<div class="bubble-choices-submit">` +
-                `<span class="bubble-choices-hint">Pick one, or type your own</span>` +
-                `<div class="bubble-choices-actions"><button type="button" class="choice-skip" id="council-skip">Skip</button></div>` +
-              `</div>` +
-            `</div>` });
-  body.querySelectorAll('.choice-btn').forEach((b) =>
-    b.addEventListener('click', () => answerCouncilIntake(cur.options[Number(b.dataset.idx)])));
-  const other = body.querySelector('#council-other');
-  other.addEventListener('keydown', (e) => {
-    e.stopPropagation();
-    if (e.key === 'Enter') { e.preventDefault(); const v = other.value.trim(); if (v) answerCouncilIntake(v); }
-    else if (e.key === 'Escape') { e.preventDefault(); exitCouncilToGrid(); }
-  });
-  body.querySelector('#council-skip').addEventListener('click', () => answerCouncilIntake(null));
+      html: `<p class="council-intake-q">${escapeHtml(cur.q)}</p>` });
+  const contentEl = body.querySelector('.bubble:last-child .bubble-content');
+  if (contentEl) {
+    contentEl.appendChild(buildChoiceList(cur.options, null, undefined, true, {
+      onSubmit: (picked) => answerCouncilIntake(picked.join('; ')),
+      onSkip:   () => answerCouncilIntake(null),
+    }));
+  }
+  registerNavBubbles(body);
   councilFooterShortcuts();
 }
 
@@ -4018,6 +4084,7 @@ function renderCouncilDeliberation() {
   const body = councilShell('Deliberating…');
   body.innerHTML = councilQuestionBubble(st.question) +
     [0, 1, 2].map((i) => councilMemberSlot(i, st.models[i] ? councilModelLabel(st.models[i]) : `Member ${i + 1}`)).join('');
+  registerNavBubbles(body);
   councilFooterShortcuts();
 }
 
@@ -4040,7 +4107,7 @@ function setCouncilSynth(data, busy) {
   const bodyEl = surfaceEl.querySelector('.council-body');
   if (!bodyEl) return;
   let el = document.getElementById('council-synth');
-  if (!el) { el = document.createElement('div'); el.id = 'council-synth'; el.className = 'bubble agent foreign'; bodyEl.appendChild(el); }
+  if (!el) { el = document.createElement('div'); el.id = 'council-synth'; el.className = 'bubble agent foreign'; bodyEl.appendChild(el); registerNavBubbles(bodyEl); }
   if (busy) {
     el.innerHTML = `<div class="bubble-author"><span class="bubble-author-name">Chairman</span><span class="bubble-author-role">synthesizing…</span></div>` +
       `<div class="bubble-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
@@ -4569,7 +4636,7 @@ function dispatchTranscript(text) {
   if (mode === MODE_NEW_PROJ_NAME) { newProjName = titleCaseName(stripNamePunct(text)); renderNewProjectName(); return; }
   if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = text; renderNewProjectGoal(); return; }
   if (mode === MODE_NEW_PROJ_FEATURES) { newProjFeatures = text; renderNewProjectFeatures(); return; }
-  if (mode === MODE_COUNCIL) { startCouncilIntake(text); return; }
+  if (mode === MODE_COUNCIL) { routeCouncilInput(text); return; }
   if (mode === MODE_ZOOM) { submitIntent(text); return; }
   if (mode === MODE_GRID) { submitTeamIntent(text); return; }
   if (mode === MODE_PROJECTS) { dispatchHomeUtterance(text); return; }
@@ -6235,33 +6302,7 @@ gp.addEventListener('press', (e) => {
     // focused, Up/Down walk bubbles, Left/Right cycle a bubble's action icons,
     // Cross activates, Down past the last bubble (or Circle) drops back out.
     if (isBubbleFocused()) {
-      if (b === 'up')     {
-        if (chatBubbleIdx <= 0) { leaveBubbleFocus(); if (!focusSurfaceClose()) bumpEdge(chatScrollEl(), 'up', 6); }
-        else moveBubbleFocus(-1);
-        return;
-      }
-      if (b === 'down')   {
-        if (chatBubbleIdx >= chatBubbles.length - 1) {
-          leaveBubbleFocus();
-          if (ring.elements.length === 0) enterShortcuts(); else ring.paint();
-        } else moveBubbleFocus(+1);
-        return;
-      }
-      if (b === 'left')   { cycleBubbleAction(-1); return; }
-      if (b === 'right')  { cycleBubbleAction(+1); return; }
-      if (b === 'cross')  {
-        const a = document.activeElement;
-        // Hold ✕ on the "Other" option → dictate; the gp 'release' listener
-        // stops it. (Don't treat it as a click-toggle.)
-        if (a?.classList?.contains('choice-other')) { startOtherDictate(a); return; }
-        if (a?.classList?.contains('bubble-action') || a?.closest?.('.bubble-kickoff-actions, .bubble-choices')) { a.click(); return; }
-        // On the bubble itself (no action focused yet) → activate the primary
-        // kickoff action so Approve takes a single press, not two.
-        const approve = chatBubbles[chatBubbleIdx]?.querySelector('.bubble-kickoff-actions .role-confirm');
-        if (approve) approve.click();
-        return;
-      }
-      if (b === 'circle') { leaveBubbleFocus(); ring.paint(); return; }
+      if (bubbleNavButton(b)) return;
       if (b === 'l1')     { cycleAgent(-1); return; }
       if (b === 'r1')     { cycleAgent(+1); return; }
       return;
@@ -6290,6 +6331,16 @@ gp.addEventListener('press', (e) => {
     else if (b === 'r1')                 cycleAgent(+1);
     else if (b === 'square')             toggleFileExplorer();
     else if (b === 'triangle')           toggleActivityDrawer();
+    return;
+  }
+
+  if (mode === MODE_COUNCIL) {
+    // Same selectable-bubble model as agent L2 (mirrors the council footer).
+    if (isBubbleFocused()) { if (bubbleNavButton(b)) return; return; }
+    if (b === 'up')       { if (chatBubbles.length) focusLastBubble(); return; }
+    if (b === 'square')   { toggleFileExplorer(); return; }
+    if (b === 'triangle') { toggleActivityDrawer(); return; }
+    if (b === 'circle')   { exitCouncilToGrid(); return; }
     return;
   }
 
@@ -7349,18 +7400,15 @@ window.addEventListener('keydown', (e) => {
     }
     if (e.key === 'Escape') { e.preventDefault(); goBackInCreateFlow(); return; }
   } else if (mode === MODE_COUNCIL) {
-    // Inputs (prompt textarea, intake "Other") stopPropagation while focused, so
-    // this branch only fires when no field is focused. Behavior is phase-aware.
-    if (councilState?.phase === 'intake') {
-      if (e.key === 'Escape') { e.preventDefault(); exitCouncilToGrid(); return; }
+    // Number keys quick-pick an intake option when not navigating bubbles.
+    // Everything else (arrow nav, Submit, Skip, Other, Escape) is the shared
+    // selectable-bubble model in the entryMode === MODE_COUNCIL branch below.
+    if (councilState?.phase === 'intake' && !isBubbleFocused()) {
       const cur = councilState.questions[councilState.idx];
       const n = Number(e.key);
       if (cur && Number.isInteger(n) && n >= 1 && cur.options[n - 1] !== undefined) {
         e.preventDefault(); answerCouncilIntake(cur.options[n - 1]); return;
       }
-      if (e.key === 's' || e.key === 'S') { e.preventDefault(); answerCouncilIntake(null); return; }
-    } else if (e.key === 'Escape') {
-      e.preventDefault(); exitCouncilToGrid(); return;   // ask again by talking / typing, like any agent
     }
   }
 
@@ -7426,50 +7474,7 @@ window.addEventListener('keydown', (e) => {
     // Chat bubble selection. ArrowUp from the surface enters the chat
     // history at the last bubble; once inside, ArrowUp/Down walks
     // bubbles, Left/Right cycles their action icons, Enter activates.
-    if (isBubbleFocused()) {
-      if (e.key === 'ArrowUp')   {
-        e.preventDefault();
-        if (chatBubbleIdx <= 0) { leaveBubbleFocus(); if (!focusSurfaceClose()) bumpEdge(chatScrollEl(), 'up', 6); }
-        else moveBubbleFocus(-1);
-        return;
-      }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (chatBubbleIdx >= chatBubbles.length - 1) {
-          leaveBubbleFocus();
-          // No tile-surface ring → drop straight to the footer rail rather
-          // than an empty middle row.
-          if (ring.elements.length === 0) enterShortcuts(); else ring.paint();
-          return;
-        }
-        moveBubbleFocus(+1); return;
-      }
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        e.preventDefault();
-        cycleBubbleAction(e.key === 'ArrowRight' ? +1 : -1);
-        return;
-      }
-      // Hold Space / Enter on the "Other" option → dictate (start on press,
-      // stop on the matching keyup, handled by the global keyup listener).
-      if ((e.code === 'Space' || e.key === 'Enter') &&
-          document.activeElement?.classList?.contains('choice-other')) {
-        e.preventDefault();
-        if (!e.repeat) startOtherDictate(document.activeElement);
-        return;
-      }
-      if (e.key === 'Enter' && (document.activeElement?.classList?.contains('bubble-action')
-          || document.activeElement?.closest?.('.bubble-kickoff-actions, .bubble-choices'))) {
-        // Activate the focused action icon, choice toggle, or Approve/Reject/Submit.
-        e.preventDefault(); document.activeElement.click(); return;
-      }
-      if (e.key === 'Enter') {
-        // On the bubble itself (no action focused) → Enter approves the kickoff
-        // plan in one press instead of two.
-        const approve = chatBubbles[chatBubbleIdx]?.querySelector('.bubble-kickoff-actions .role-confirm');
-        if (approve) { e.preventDefault(); approve.click(); return; }
-      }
-      if (e.key === 'Escape') { e.preventDefault(); leaveBubbleFocus(); ring.paint(); return; }
-    }
+    if (isBubbleFocused() && bubbleNavKeydown(e)) return;
     // Up / Right hops to the × close button, unless we're entering the
     // chat history (handled above) or already on a tile-surface focusable.
     if ((e.key === 'ArrowUp' || e.key === 'ArrowRight') && document.activeElement !== surfaceEl.querySelector('.surface-close')) {
@@ -7494,6 +7499,12 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'Escape')     { e.preventDefault(); pressCircle(); }
     else if (e.key === '[')          { e.preventDefault(); cycleAgent(-1); }
     else if (e.key === ']')          { e.preventDefault(); cycleAgent(+1); }
+  } else if (entryMode === MODE_COUNCIL) {
+    // Council uses the same selectable-bubble model as agent L2.
+    if (isBubbleFocused() && bubbleNavKeydown(e)) return;
+    // ArrowUp from the surface enters the chat at the last bubble.
+    if (e.key === 'ArrowUp' && chatBubbles.length) { e.preventDefault(); focusLastBubble(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); exitCouncilToGrid(); return; }
   }
 });
 
@@ -7505,9 +7516,18 @@ function submitTypedText(text) {
   if (mode === MODE_NEW_PROJ_NAME) { newProjName = titleCaseName(text.trim()); renderNewProjectName(); return; }
   if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = text.trim(); renderNewProjectGoal(); return; }
   if (mode === MODE_NEW_PROJ_FEATURES) { newProjFeatures = text.trim(); renderNewProjectFeatures(); return; }
-  if (mode === MODE_COUNCIL) { startCouncilIntake(text.trim()); return; }
+  if (mode === MODE_COUNCIL) { routeCouncilInput(text); return; }
   if (mode === MODE_ZOOM) { submitIntent(text); return; }
   if (mode === MODE_GRID) { submitTeamIntent(text); return; }
+}
+
+/* Council input (typed or dictated): during intake it answers the current
+ * question (incl. a held "Other"); otherwise it starts a new council question. */
+function routeCouncilInput(text) {
+  const t = String(text || '').trim();
+  if (!t) return;
+  if (councilState?.phase === 'intake') answerCouncilIntake(t);
+  else startCouncilIntake(t);
 }
 
 async function submitIntent(text, regenerate = 0) {
