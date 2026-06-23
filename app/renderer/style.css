@@ -1805,10 +1805,18 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   align-items: center;
   gap: 0.6rem;
 }
-/* Stop run — destructive action; sits inline in the pending bubble. */
+/* Stop run — destructive action; sits inline in the pending bubble. Pill with
+ * an icon + "Stop" label so the affordance is unmistakable. */
 .agent-view .bubble .bubble-action.stop {
+  width: auto;
+  gap: 0.3rem;
+  padding: 0 0.55rem;
   border-color: rgba(220,90,90,0.5);
   color: rgba(240,150,150,0.95);
+}
+.agent-view .bubble .bubble-action.stop .stop-label {
+  font-size: 0.78rem;
+  line-height: 1;
 }
 .agent-view .bubble .bubble-action.stop:hover,
 .agent-view .bubble .bubble-action.stop:focus,
