@@ -2710,7 +2710,7 @@ async function kickoffDecide(which, agent) {
  * bubble. The user toggles one or more (Space / Enter / ✕), then a Submit
  * button below-right sends the chosen set as the next message. Reachable via
  * the bubble's keyboard/gamepad model (cycleBubbleAction). */
-function buildChoiceList(choices, agent, picked, skippable = false, opts = {}) {
+function buildChoiceList(choices, agent, picked, skippable = false, handlers = {}) {
   // `picked` (an array) → memorialized/read-only: a past question whose answer
   // we replay as the displayed selection. Otherwise the list is interactive.
   const memorial = Array.isArray(picked);
@@ -2799,7 +2799,7 @@ function buildChoiceList(choices, agent, picked, skippable = false, opts = {}) {
     skip.type = 'button';
     skip.className = 'choice-skip';
     skip.textContent = 'Skip for now';
-    skip.addEventListener('click', (e) => { e.stopPropagation(); if (opts.onSkip) opts.onSkip(); else skipChoices(wrap, agent); });
+    skip.addEventListener('click', (e) => { e.stopPropagation(); if (handlers.onSkip) handlers.onSkip(); else skipChoices(wrap, agent); });
     actions.appendChild(skip);
   }
   if (hasChoices) {
@@ -2810,10 +2810,10 @@ function buildChoiceList(choices, agent, picked, skippable = false, opts = {}) {
     submit.textContent = 'Submit';
     submit.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (opts.onSubmit) {
+      if (handlers.onSubmit) {
         const arr = [...wrap.querySelectorAll('.choice-btn[aria-pressed="true"]')]
           .map(b => (b.dataset.choice || b.textContent).trim()).filter(Boolean);
-        if (arr.length) opts.onSubmit(arr);
+        if (arr.length) handlers.onSubmit(arr);
       } else submitChoices(wrap, agent);
     });
     actions.appendChild(submit);
