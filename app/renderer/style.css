@@ -1212,6 +1212,12 @@ body[data-mode="zoom"] #surface {
   flex: 1;
   min-height: 0;
 }
+/* >12 tiles: keep tiles a usable height and scroll instead of crushing rows. */
+.agent-grid.scroll {
+  grid-template-rows: none;
+  grid-auto-rows: minmax(150px, 1fr);
+  overflow-y: auto;
+}
 .agent-tile {
   position: relative;
   border-radius: 12px;
@@ -1576,11 +1582,19 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .agent-view .bubble.agent .bubble-content h1,
 .agent-view .bubble.agent .bubble-content h2,
 .agent-view .bubble.agent .bubble-content h3,
-.agent-view .bubble.agent .bubble-content h4 {
-  margin: 0.8em 0 0.35em; font-weight: 500; line-height: 1.25;
+.agent-view .bubble.agent .bubble-content h4,
+.agent-view .bubble.agent .bubble-content h5,
+.agent-view .bubble.agent .bubble-content h6 {
+  margin: 0.8em 0 0.35em; font-weight: 600; line-height: 1.25;
 }
+/* Gentle, consistent scale — a chat bubble shouldn't sprout a 2em browser-
+ * default H1 (which made run-on "# …" lines render gigantic). */
+.agent-view .bubble.agent .bubble-content h1 { font-size: 1.25em; }
 .agent-view .bubble.agent .bubble-content h2 { font-size: 1.15em; }
 .agent-view .bubble.agent .bubble-content h3 { font-size: 1.05em; }
+.agent-view .bubble.agent .bubble-content h4,
+.agent-view .bubble.agent .bubble-content h5,
+.agent-view .bubble.agent .bubble-content h6 { font-size: 1em; }
 .agent-view .bubble.agent .bubble-content ul,
 .agent-view .bubble.agent .bubble-content ol {
   margin: 0.3em 0 1.4em;
