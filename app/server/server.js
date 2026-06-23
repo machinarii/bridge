@@ -14,6 +14,7 @@ import { listNotes, readNote, appendNote } from './backends/notes.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, getContext, lastActivityAt, truncateFrom } from './scratchpad.js';
 import { runTeamVoice, resolveDelegateSpec } from './team.js';
+import { getCouncil, saveCouncil } from './council-store.js';
 import { startKickoff, handleLeadMessageDuringKickoff, declineKickoff, callOpenRouterText } from './kickoff.js';
 import { getCouncilModels, buildIntake, councilContext, askMember, synthesize } from './council.js';
 import { addLearning, getLearnings } from './learnings.js';
@@ -227,6 +228,16 @@ app.post('/council/synthesis', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err?.message || err) });
   }
+});
+
+// Council transcript persistence — restore the prompt + decisions + answers
+// when the user re-enters the council view for a project.
+app.get('/projects/:pid/council', (req, res) => {
+  res.json({ council: getCouncil(req.params.pid) });
+});
+app.put('/projects/:pid/council', (req, res) => {
+  saveCouncil(req.params.pid, req.body?.state ?? null);
+  res.json({ ok: true });
 });
 
 /* Proxy mic audio to the local Parakeet (or whichever) STT server

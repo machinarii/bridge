@@ -17,6 +17,7 @@ import { writeBaselineCharters, deepenCharters, charterFileNameFor, legacyCharte
 import { resolveRepoPath, ensureRepo, commitIfChanged } from './workspace.js';
 import { clearContext } from './scratchpad.js';
 import { clearLearnings } from './learnings.js';
+import { clearCouncil } from './council-store.js';
 import { stateDir, ensureStateDir } from './state-dir.js';
 
 function projectsFile() { return join(stateDir(), 'projects.json'); }
@@ -203,6 +204,7 @@ export async function createProject({ name, goal, features, roleIds, topology })
   // project starts with empty chats (no inherited kickoff turns).
   for (const a of agents) clearContext(a.id);
   clearLearnings(id);   // a reused project id must not inherit a prior project's learnings
+  clearCouncil(id);     // …nor a prior council conversation
 
   const leadAgentId = agents.find(a => a.role === 'pm').id;
 
@@ -344,6 +346,7 @@ export function deleteProject(id) {
   try { rmSync(resolve(stateDir(), id), { recursive: true, force: true }); } catch {}
   for (const a of (removed.agents || [])) { try { clearContext(a.id); } catch {} }
   try { clearLearnings(id); } catch {}
+  try { clearCouncil(id); } catch {}
   return { ok: true, id, name: removed.name };
 }
 
