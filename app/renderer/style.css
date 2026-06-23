@@ -1579,22 +1579,17 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   animation: streamCaret 1s steps(1) infinite;
 }
 @keyframes streamCaret { 50% { opacity: 0; } }
+/* Headings in a chat bubble stay at body size — only weight sets them apart.
+ * Markdown often produces run-on "# …" lines; enlarging them made bubbles look
+ * wildly inconsistent, so size is standardized and emphasis is by weight only. */
 .agent-view .bubble.agent .bubble-content h1,
 .agent-view .bubble.agent .bubble-content h2,
 .agent-view .bubble.agent .bubble-content h3,
 .agent-view .bubble.agent .bubble-content h4,
 .agent-view .bubble.agent .bubble-content h5,
 .agent-view .bubble.agent .bubble-content h6 {
-  margin: 0.8em 0 0.35em; font-weight: 600; line-height: 1.25;
+  margin: 0.8em 0 0.35em; font-size: 1em; font-weight: 600; line-height: 1.25;
 }
-/* Gentle, consistent scale — a chat bubble shouldn't sprout a 2em browser-
- * default H1 (which made run-on "# …" lines render gigantic). */
-.agent-view .bubble.agent .bubble-content h1 { font-size: 1.25em; }
-.agent-view .bubble.agent .bubble-content h2 { font-size: 1.15em; }
-.agent-view .bubble.agent .bubble-content h3 { font-size: 1.05em; }
-.agent-view .bubble.agent .bubble-content h4,
-.agent-view .bubble.agent .bubble-content h5,
-.agent-view .bubble.agent .bubble-content h6 { font-size: 1em; }
 .agent-view .bubble.agent .bubble-content ul,
 .agent-view .bubble.agent .bubble-content ol {
   margin: 0.3em 0 1.4em;
