@@ -630,16 +630,16 @@ export async function executeKickoff(projectId, opts = {}) {
 
   if (getProject(projectId)) {
     appendTurn(project.leadAgentId, 'assistant', reportSpec(Object.keys(DOC_TITLES).length, assigned, project));
-    // Follow-up questions, asked ONE AT A TIME. Clarify questions (whose answers
-    // become that role's task) come first, then the PM's general questions.
-    const clarifyQuestions = clarify.map(c => ({ q: c.question, options: c.options, role: c.role }));
-    // Ask in order of importance (high → low): a role-clarify is ranked by its
-    // role (foundational/regulatory first, QA/marketing last); the PM's general
-    // questions are broadly important, so they rank high too. Stable sort keeps
-    // same-priority questions in their generated order.
-    const importance = (q) => (q.role ? kickoffPriority(q.role) : 85);
-    const questions = [...clarifyQuestions, ...(await generateQuestions(project, opts))]
-      .sort((a, b) => importance(b) - importance(a));
+    // Follow-up questions, asked ONE AT A TIME. The PM's foundational product
+    // questions LEAD — generateQuestions returns them most-important-first
+    // (problem, scope, core experience). Role clarifications (whose answers
+    // become that role's task) follow, ordered by role priority (legal/security
+    // first, QA/marketing last). Product framing before role-specifics: a
+    // security-scope clarification shouldn't outrank "what are we building?".
+    const clarifyQuestions = clarify
+      .map(c => ({ q: c.question, options: c.options, role: c.role }))
+      .sort((a, b) => kickoffPriority(b.role) - kickoffPriority(a.role));
+    const questions = [...(await generateQuestions(project, opts)), ...clarifyQuestions];
     if (questions.length && getProject(projectId)) {
       appendTurn(project.leadAgentId, 'assistant', questionSpec(questions[0], 1, questions.length));
       // Stash the assignments so the team starts building once Q&A wraps up.
