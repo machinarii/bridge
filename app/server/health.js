@@ -56,12 +56,25 @@ async function checkStt() {
   const healthUrl = target.replace(/\/transcribe\/?$/, '/health');
   try {
     const r = await fetch(healthUrl, { signal: AbortSignal.timeout(1500) });
-    return r.ok
-      ? { ok: true, status: 'ok', detail: healthUrl }
-      : { ok: false, status: 'error', detail: `HTTP ${r.status}` };
+    if (!r.ok) return { ok: false, status: 'error', detail: `HTTP ${r.status}` };
+    let model = '';
+    try {
+      const d = await r.json();
+      // Prefer the sidecar-reported model id; fall back to the family + backend
+      // (older sidecars only report `backend`) so a name always shows.
+      model = sttModelName(d?.model) || (d?.backend ? `Parakeet (${d.backend})` : 'Parakeet');
+    } catch { model = 'Parakeet'; }
+    return { ok: true, status: 'ok', detail: `${model} · ${healthUrl}`, ...(model ? { model } : {}) };
   } catch (err) {
     return { ok: false, status: 'error', detail: String(err?.message || err) };
   }
+}
+
+/* Friendly short name from an HF repo id, e.g.
+ * "mlx-community/parakeet-tdt-0.6b-v3" → "parakeet-tdt-0.6b-v3". */
+function sttModelName(id) {
+  if (!id || typeof id !== 'string') return '';
+  return id.split('/').pop().trim();
 }
 
 async function checkDocker() {

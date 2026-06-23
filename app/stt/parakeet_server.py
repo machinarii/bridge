@@ -36,10 +36,11 @@ from fastapi.responses import JSONResponse
 # available (e.g. on a Linux CUDA box).
 _BACKEND = None
 _MODEL = None
+_MODEL_ID = None   # HF repo id of the loaded model, surfaced on /health
 
 
 def _load_model():
-    global _BACKEND, _MODEL
+    global _BACKEND, _MODEL, _MODEL_ID
     if _MODEL is not None:
         return
     repo = os.environ.get("PARAKEET_MODEL", "mlx-community/parakeet-tdt-0.6b-v3")
@@ -49,6 +50,7 @@ def _load_model():
         t0 = time.time()
         _MODEL = from_pretrained(repo)
         _BACKEND = "mlx"
+        _MODEL_ID = repo
         print(f"[parakeet] ready (mlx) in {time.time()-t0:.1f}s", flush=True)
         return
     except Exception as e:
@@ -60,6 +62,7 @@ def _load_model():
         t0 = time.time()
         _MODEL = ASRModel.from_pretrained(nemo_repo)
         _BACKEND = "nemo"
+        _MODEL_ID = nemo_repo
         print(f"[parakeet] ready (nemo) in {time.time()-t0:.1f}s", flush=True)
         return
     except Exception as e:
@@ -98,7 +101,7 @@ def build_app():
 
     @app.get("/health")
     def health():
-        return {"ok": True, "backend": _BACKEND}
+        return {"ok": True, "backend": _BACKEND, "model": _MODEL_ID}
 
     @app.post("/transcribe")
     # Explicit File(...) — newer FastAPI/Starlette don't auto-classify a bare
