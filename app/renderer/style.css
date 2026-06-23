@@ -1811,6 +1811,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .agent-view .bubble .bubble-action.stop {
   width: auto;
   gap: 0.3rem;
+  margin-left: 0.4rem;   /* a bit more breathing room from the "…" dots */
   padding: 0 0.55rem;
   font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   color: var(--fg);
