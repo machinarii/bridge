@@ -3905,15 +3905,29 @@ function renderCouncilIntake() {
   const st = councilState;
   const cur = st.questions[st.idx];
   const body = councilShell('Gathering context');
-  const opts = cur.options.map((o, i) =>
-    `<button type="button" class="council-option" data-idx="${i}"><span class="council-opt-key">${i + 1}</span><span>${escapeHtml(o)}</span></button>`).join('');
+  // Reuse the agent question/selection pattern (.bubble-choices) so council
+  // intake looks identical to a kickoff question: lettered .choice-btn options,
+  // a hint, and a Skip in the actions row. Single-select — clicking answers.
+  const opts = cur.options.map((o, i) => {
+    const letter = String.fromCharCode(65 + i);
+    const desc = String(o).replace(/^[A-Za-z]\s*[—\-.):]\s*/, '').trim() || String(o);
+    return `<div class="choice-btn" role="button" tabindex="0" data-idx="${i}" aria-pressed="false">` +
+             `<span class="choice-letter">${escapeHtml(letter)}</span>` +
+             `<span class="choice-desc">${escapeHtml(desc)}</span>` +
+           `</div>`;
+  }).join('');
   body.innerHTML = councilQuestionBubble(st.question) +
     councilBubble({ kind: 'agent', author: 'Project Manager', role: `question ${st.idx + 1} of ${st.questions.length}`,
       html: `<p class="council-intake-q">${escapeHtml(cur.q)}</p>` +
-            `<div class="council-options">${opts}</div>` +
-            `<input type="text" id="council-other" class="council-other-input" placeholder="Other — type your own answer…" spellcheck="false" />` +
-            `<div class="council-actions"><button type="button" class="role-cancel" id="council-skip">Skip</button></div>` });
-  body.querySelectorAll('.council-option').forEach((b) =>
+            `<div class="bubble-choices">` +
+              `<div class="bubble-choices-options">${opts}</div>` +
+              `<input type="text" id="council-other" class="council-other-input" placeholder="Other — type your own answer…" spellcheck="false" />` +
+              `<div class="bubble-choices-submit">` +
+                `<span class="bubble-choices-hint">Pick one, or type your own</span>` +
+                `<div class="bubble-choices-actions"><button type="button" class="choice-skip" id="council-skip">Skip</button></div>` +
+              `</div>` +
+            `</div>` });
+  body.querySelectorAll('.choice-btn').forEach((b) =>
     b.addEventListener('click', () => answerCouncilIntake(cur.options[Number(b.dataset.idx)])));
   const other = body.querySelector('#council-other');
   other.addEventListener('keydown', (e) => {
