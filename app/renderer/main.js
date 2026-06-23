@@ -544,6 +544,21 @@ function flashChip(el) {
   el.classList.add('pressed');
   setTimeout(() => el.classList.remove('pressed'), 320);
 }
+/* True when a text field / textbox holds focus (the type-prompt box, the council
+ * "Other" input, settings fields, capture screens, any contenteditable). Used to
+ * suppress footer-shortcut flashing + bare-key shortcuts while typing. */
+function isTextInputFocused() {
+  const a = document.activeElement;
+  if (!a) return false;
+  if (a.isContentEditable) return true;
+  if (a.tagName === 'TEXTAREA') return true;
+  if (a.tagName === 'INPUT') {
+    const t = (a.type || 'text').toLowerCase();
+    return !['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file'].includes(t);
+  }
+  return false;
+}
+
 function flashShortcutByKey(key) {
   const map = { ' ': 'Space', 'Escape': 'Esc', 'Enter': 'Enter', 'Tab': 'Tab', 'Backspace': 'Delete', 'Delete': 'Delete' };
   let label = map[key];
@@ -566,7 +581,8 @@ function setInputMode(m) {
 setInputMode('gamepad');
 window.addEventListener('keydown', (e) => {
   setInputMode('keyboard');
-  if (!e.repeat) flashShortcutByKey(e.key);
+  // Don't flash footer-shortcut chips for keystrokes typed into a text field.
+  if (!e.repeat && !isTextInputFocused()) flashShortcutByKey(e.key);
 }, true);
 window.addEventListener('mousemove', () => setInputMode('keyboard'), true);
 
@@ -7238,6 +7254,9 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
+  // Any other text field / textbox focused → it owns the keystroke; never fire
+  // bare-key shortcuts or footer-rail nav while the user is typing.
+  if (isTextInputFocused()) return;
   // Bare-letter shortcuts (v=talk, e=explorer, m=memory, a=activity, /=type)
   // must NOT hijack OS/browser combos — otherwise ⌘V triggers push-to-talk and
   // preventDefault() eats the paste, ⌘A blocks select-all, etc.
