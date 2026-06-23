@@ -3855,8 +3855,9 @@ function councilBubble({ kind, author = '', role = '', html = '', id = '', cls =
 function councilQuestionBubble(q) { return councilBubble({ kind: 'user', html: escapeHtml(q) }); }
 
 
-function openCouncil() {
+async function openCouncil() {
   if (!activeProject) return;
+  const pid = activeProject.id;
   councilState = { phase: 'prompt' };
   // Open like any agent on L2 (talk or "/" to ask), with a default bubble that
   // explains how the council works — no status/mode notification for it. The
@@ -3864,6 +3865,57 @@ function openCouncil() {
   const body = councilShell('');
   body.innerHTML = councilBubble({ kind: 'agent', author: 'Council', role: 'Advisory Team',
     html: 'Ask a question and I’ll convene three models on it. The PM gathers a little context first, then each model answers independently — none sees the others — and a chair synthesizes one clear recommendation.' });
+  councilFooterShortcuts();
+  // Restore a prior council conversation for this project (prompt + decisions +
+  // answers), so leaving and re-entering doesn't lose the work.
+  try {
+    const r = await fetch(`/projects/${pid}/council`);
+    const { council } = await r.json();
+    // Bail if the user navigated away (or switched project) during the fetch.
+    if (council && council.question && mode === MODE_COUNCIL && activeProject?.id === pid) {
+      councilState = council;
+      renderCouncilRestore(council);
+    }
+  } catch { /* best-effort restore */ }
+}
+
+/* Persist the live council state so it survives leaving the view. Fire-and-
+ * forget — a failed save never blocks the conversation. */
+function persistCouncil() {
+  if (!activeProject || !councilState || councilState.phase === 'prompt') return;
+  fetch(`/projects/${activeProject.id}/council`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state: councilState }),
+  }).catch(() => {});
+}
+
+/* Re-render a restored council conversation at whatever phase it left off. */
+function renderCouncilRestore(st) {
+  if (st.synthesis || st.phase === 'done') { renderCouncilDone(st); return; }
+  if (st.phase === 'intake' && Array.isArray(st.questions) && st.idx < st.questions.length) { renderCouncilIntake(); return; }
+  // Mid-deliberation (no synthesis yet) → resume from the saved question+answers.
+  runCouncilDeliberation();
+}
+
+/* Rebuild the finished council view (prompt → members → synthesis) statically
+ * from saved state — no re-fetching. */
+function renderCouncilDone(st) {
+  const body = councilShell('');
+  const members = [0, 1, 2].map((i) => {
+    const m = (st.members || [])[i];
+    const label = m?.model ? councilModelLabel(m.model) : `Member ${i + 1}`;
+    const content = m?.content ? renderMarkdown(m.content)
+      : `<p class="council-err">${escapeHtml(m?.error || 'No response')}</p>`;
+    return councilBubble({ kind: 'agent', author: label, role: 'council member', html: content });
+  }).join('');
+  const synth = st.synthesis
+    ? councilBubble({ kind: 'agent', author: 'Chairman',
+        role: `synthesis · ${escapeHtml(councilModelLabel(st.synthesis.model))}`,
+        html: st.synthesis.content ? renderMarkdown(st.synthesis.content)
+          : `<p class="council-err">${escapeHtml(st.synthesis.error || 'No synthesis.')}</p>` })
+    : '';
+  body.innerHTML = councilQuestionBubble(st.question) + members + synth;
+  try { attachCodeCopyHandlers(body); } catch {}
   councilFooterShortcuts();
 }
 
@@ -3896,7 +3948,7 @@ async function startCouncilIntake(question) {
     console.warn('[council] intake failed:', err?.message || err);
     councilState.questions = [];
   }
-  if (councilState.questions.length) { councilState.phase = 'intake'; renderCouncilIntake(); }
+  if (councilState.questions.length) { councilState.phase = 'intake'; persistCouncil(); renderCouncilIntake(); }
   else runCouncilDeliberation();
 }
 
@@ -3945,6 +3997,7 @@ function answerCouncilIntake(value) {
   const cur = st.questions[st.idx];
   if (value != null && String(value).trim()) st.answers.push({ q: cur.q, a: String(value).trim() });
   st.idx += 1;
+  persistCouncil();   // retain the decision across leaving the view
   if (st.idx < st.questions.length) renderCouncilIntake();
   else runCouncilDeliberation();
 }
@@ -4002,6 +4055,8 @@ function setCouncilSynth(data, busy) {
 async function runCouncilDeliberation() {
   const st = councilState;
   st.members = [];
+  st.phase = 'deliberation';
+  persistCouncil();
   renderCouncilDeliberation();
   // Sequential: each member's bubble fills in turn — never all at once. Each
   // call is blind (server sends only the question + PM context, no peer answers).
@@ -4020,6 +4075,7 @@ async function runCouncilDeliberation() {
     }
     st.members[i] = member;
     updateCouncilMember(i, member);
+    persistCouncil();
   }
   setCouncilSynth(null, true);
   try {
@@ -4029,11 +4085,14 @@ async function runCouncilDeliberation() {
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    st.synthesis = data;
     setCouncilSynth(data, false);
   } catch (err) {
-    setCouncilSynth({ content: '', error: String(err.message || err) }, false);
+    st.synthesis = { content: '', error: String(err.message || err) };
+    setCouncilSynth(st.synthesis, false);
   }
   st.phase = 'done';
+  persistCouncil();
   councilFooterShortcuts();   // ask again just by talking / typing, like any agent
 }
 
