@@ -3325,6 +3325,7 @@ const TYPING_DOTS = '<span class="typing-dots" aria-label="listening"><span></sp
 const STOP_ACTION_BTN =
   '<button type="button" class="bubble-action stop" aria-label="Stop run" title="Stop run">' +
     '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>' +
+    '<span class="stop-label">Stop</span>' +
   '</button>';
 function showPendingBubble() {
   if (mode !== MODE_ZOOM || editBubbleOpen) return;   // not while dictating into the edit-prompt modal
