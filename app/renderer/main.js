@@ -2214,6 +2214,9 @@ function renderGrid() {
   const rows = Math.max(2, Math.ceil(tileEls.length / cols));
   grid.style.setProperty('--grid-rows', rows);
   grid._rows = rows;
+  // Past MAX_ROWS (>12 tiles) the 1fr rows would crush the tiles — switch to a
+  // fixed tile height and let the grid scroll instead.
+  grid.classList.toggle('scroll', rows > MAX_ROWS);
 
   surfaceEl.appendChild(grid);
   ring.set(tileEls);
