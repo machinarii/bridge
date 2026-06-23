@@ -32,7 +32,21 @@ function renderInline(raw) {
   // **bold**, then *italic* (avoid eating bold's asterisks).
   s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
-  return s;
+  return addColorSwatches(s);
+}
+
+/* CSS color literals: hex (#rgb/#rgba/#rrggbb/#rrggbbaa) and rgb()/rgba().
+ * The character class is deliberately tight so a matched value is always safe
+ * to drop into a CSS custom property (no quotes, semicolons, or angle brackets). */
+const COLOR_RE = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b|rgba?\(\s*[\d.\s,/%]+\)/g;
+
+/* Append a small color swatch after every color literal so the actual color is
+ * visible next to its value. Operates only on text segments — HTML tags (and
+ * their attributes, e.g. link hrefs) are left untouched. */
+function addColorSwatches(html) {
+  return html.replace(/(<[^>]+>)|([^<]+)/g, (m, tag, text) =>
+    tag ? tag : text.replace(COLOR_RE, (c) => `${c}<span class="md-swatch" style="--swatch:${c}"></span>`)
+  );
 }
 
 function isTableRow(line) { return /^\s*\|.*\|\s*$/.test(line); }

@@ -1611,6 +1611,20 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   padding: 1px 6px;
   border-radius: 4px;
 }
+/* Inline color swatch shown next to a hex/rgb(a) value. The (possibly
+ * translucent) color is layered over a checkerboard so alpha reads correctly. */
+.agent-view .bubble.agent .bubble-content .md-swatch {
+  --swatch: transparent;
+  display: inline-block;
+  width: 0.85em; height: 0.85em;
+  margin-left: 0.4em;
+  vertical-align: -0.12em;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background:
+    linear-gradient(var(--swatch), var(--swatch)),
+    repeating-conic-gradient(#8a8a8a 0 25%, #cfcfcf 0 50%) 0 0 / 8px 8px;
+}
 .agent-view .bubble.agent .bubble-content .md-code {
   position: relative;
   margin: 0.6em 0;
