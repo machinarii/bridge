@@ -1805,24 +1805,19 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   align-items: center;
   gap: 0.6rem;
 }
-/* Stop run — destructive action; sits inline in the pending bubble. Pill with
- * an icon + "Stop" label so the affordance is unmistakable. */
+/* Stop run — inline in the pending bubble. Pill (icon + "Stop" label) styled
+ * like a standard button: the sans UI font (not the bubble's mono) and neutral
+ * white colors. Hover/focus inherits the base .bubble-action white treatment. */
 .agent-view .bubble .bubble-action.stop {
   width: auto;
   gap: 0.3rem;
   padding: 0 0.55rem;
-  border-color: rgba(220,90,90,0.5);
-  color: rgba(240,150,150,0.95);
+  font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  color: var(--fg);
 }
 .agent-view .bubble .bubble-action.stop .stop-label {
   font-size: 0.78rem;
   line-height: 1;
-}
-.agent-view .bubble .bubble-action.stop:hover,
-.agent-view .bubble .bubble-action.stop:focus,
-.agent-view .bubble .bubble-action.stop:focus-visible {
-  background: rgba(220,90,90,0.18);
-  border-color: rgba(220,90,90,0.85);
 }
 /* v2 §4 — Handoff (delegation) bubble: a normal left-side bubble whose
  * heading shows the routing (From Role → To Role). Read-only (not focusable,
