@@ -997,7 +997,8 @@ kbd {
 .settings-meta code,
 .settings-field code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.9em;
+  font-size: 0.8em;
+  letter-spacing: -0.03em;
   background: rgba(255,255,255,0.08);
   padding: 1px 6px;
   border-radius: 4px;
