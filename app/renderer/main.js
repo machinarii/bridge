@@ -1680,6 +1680,7 @@ function advanceFromRolePicker() {
     setTimeout(() => setIndicator('idle', 'Connected'), 1500);
     return;
   }
+  playSfx('zoomin');   // Continue → advance a step
   renderNewProjectTopology();
 }
 
@@ -1729,7 +1730,7 @@ function renderNewProjectTopology() {
   cancelBtn.addEventListener('click', () => maybeConfirmCancel(true, () => renderProjects()));
   const backBtn = document.createElement('button');
   backBtn.type = 'button'; backBtn.className = 'role-cancel'; backBtn.textContent = 'Back';
-  backBtn.addEventListener('click', () => renderNewProjectRoles());
+  backBtn.addEventListener('click', () => goBackInCreateFlow());
   row.append(cancelBtn, backBtn);
   wrap.appendChild(row);
 
@@ -1741,7 +1742,7 @@ function renderNewProjectTopology() {
 
   renderActionBar([]); // Back lives in setShortcuts (Esc) below — avoid duplicate chip
   setShortcuts([
-    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => renderNewProjectRoles() },
+    { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => goBackInCreateFlow() },
   ]);
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
                        action: () => { const c = ring.current(); if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId); else c?.click?.(); } });
@@ -1753,7 +1754,7 @@ function selectTopology(id) {
   newProjTopology = id;
   document.querySelectorAll('.topology-card').forEach(c => { c.dataset.selected = String(c.dataset.topoId === id); });
 }
-function chooseTopology(id) { selectTopology(id); renderNewProjectName(); }
+function chooseTopology(id) { playSfx('zoomin'); selectTopology(id); renderNewProjectName(); }
 
 /* Topology nav: the row of cards occupies ring indices 0..N-1, the Back
  * button is the last index. Left/right move between cards; down jumps to
@@ -1776,6 +1777,7 @@ function topoFocusBack() { if (ring.index !== TOPOLOGIES.length) playSfx('naviga
 function topoFocusCards() { if (ring.index >= TOPOLOGIES.length) { playSfx('navigate'); ring.index = 0; ring.paint(); } }
 
 function goBackInCreateFlow() {
+  playSfx('zoomout');   // Esc / Back / circle → step back (or leave the flow)
   if (mode === MODE_NEW_PROJ_FEATURES) { stopMicVisualizer(); renderNewProjectGoal(); }
   else if (mode === MODE_NEW_PROJ_GOAL) renderNewProjectName();
   else if (mode === MODE_NEW_PROJ_NAME) { stopMicVisualizer(); renderNewProjectTopology(); }
@@ -1813,12 +1815,15 @@ async function confirmCapture() {
       newProjName = raw;
     }
     newProjName = titleCaseName(newProjName);   // normalize (covers the shorten/truncate paths)
+    playSfx('zoomin');   // Continue → advance a step
     renderNewProjectGoal();
   } else if (mode === MODE_NEW_PROJ_GOAL) {
     if (!newProjGoal.trim()) { setIndicator('error', 'Speak or type a goal'); return; }
+    playSfx('zoomin');
     renderNewProjectFeatures();
   } else if (mode === MODE_NEW_PROJ_FEATURES) {
     if (!newProjFeatures.trim()) { setIndicator('error', 'Speak or type the top features'); return; }
+    playSfx('zoomin');
     finalizeNewProject();
   }
 }
@@ -6372,7 +6377,7 @@ gp.addEventListener('press', (e) => {
     else if (b === 'down')   { if (ring.index >= TOPOLOGIES.length) enterShortcuts(); else topoFocusBack(); }
     else if (b === 'up')   { if (ring.index >= TOPOLOGIES.length) topoFocusCards(); else focusSurfaceClose(); }
     else if (b === 'cross') { const c = ring.current(); if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId); else c?.click?.(); }
-    else if (b === 'circle') renderNewProjectRoles();
+    else if (b === 'circle') goBackInCreateFlow();
     return;
   }
   if (mode === MODE_NEW_PROJ_ROLES) {
@@ -6392,7 +6397,7 @@ gp.addEventListener('press', (e) => {
       else toggleFocusedRole();
     }
     else if (b === 'triangle')   advanceFromRolePicker();
-    else if (b === 'circle')     renderProjects();
+    else if (b === 'circle')     goBackInCreateFlow();
     return;
   }
   if (mode === MODE_ADD_AGENT) {
@@ -7365,7 +7370,7 @@ window.addEventListener('keydown', (e) => {
       if (c?.dataset?.topoId) chooseTopology(c.dataset.topoId);
       else c?.click?.();
     }
-    else if (e.key === 'Escape')    { e.preventDefault(); renderNewProjectRoles(); }
+    else if (e.key === 'Escape')    { e.preventDefault(); goBackInCreateFlow(); }
   } else if (mode === MODE_NEW_PROJ_ROLES) {
     if (e.key === 'ArrowUp') {
       const grid = surfaceEl.querySelector('.role-grid');
@@ -7388,7 +7393,7 @@ window.addEventListener('keydown', (e) => {
         toggleFocusedRole();
       }
     }
-    else if (e.key === 'Escape')  { e.preventDefault(); renderProjects(); }
+    else if (e.key === 'Escape')  { e.preventDefault(); goBackInCreateFlow(); }
   } else if (mode === MODE_ADD_AGENT) {
     // roleGridMove owns edge behavior (Up → × close, reading-order Left/Right
     // incl. Cancel ⟷ Continue, Down → nearer bottom button). No inline
