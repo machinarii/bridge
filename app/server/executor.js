@@ -177,10 +177,24 @@ async function tryPmAnswer(project, agent, spec, opts = {}) {
   return t.slice(0, 400);
 }
 
+/* Preview of a deliverable for the report bubble. Preserves the markdown
+ * structure (lists, headings, line breaks) so it renders readably instead of a
+ * flattened run-on line, and truncates at a line/sentence boundary — never
+ * mid-word — noting that the full deliverable is saved as a project doc. */
+function reportSnippet(body) {
+  const text = String(body || '').trim();
+  const LIMIT = 1200;
+  if (text.length <= LIMIT) return text;
+  let cut = text.slice(0, LIMIT);
+  const boundary = Math.max(cut.lastIndexOf('\n'), cut.lastIndexOf('. '));
+  if (boundary > LIMIT * 0.5) cut = cut.slice(0, boundary);
+  return cut.trimEnd() + '\n\n*…full deliverable saved to the project docs.*';
+}
+
 /** Surface a finished deliverable: foreign-author bubble in the PM chat, a
  * "Deliverable — <agent>" project doc, and an activity entry. */
 function reportToLead(project, agent, task, body) {
-  const snippet = body.replace(/\s+/g, ' ').trim().slice(0, 240);
+  const snippet = reportSnippet(body);
   if (project.leadAgentId && project.leadAgentId !== agent.id) {
     appendTurn(project.leadAgentId, 'assistant',
       JSON.stringify({ body: `Finished: ${task.description}\n\n${snippet}` }),
