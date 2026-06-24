@@ -32,7 +32,37 @@ function renderInline(raw) {
   // **bold**, then *italic* (avoid eating bold's asterisks).
   s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+  s = linkifyUrls(s);
   return addColorSwatches(s);
+}
+
+/* Run `fn` over the plain-text segments of an HTML string, leaving tags — and
+ * the contents of <a>/<code> — untouched. Lets later passes (URL linking, color
+ * swatches) operate without double-linking existing links or touching code. */
+function processTextSegments(html, fn) {
+  let skip = 0;
+  return html.replace(/(<[^>]+>)|([^<]+)/g, (m, tag, text) => {
+    if (tag) {
+      if (/^<(a|code)\b/i.test(tag)) skip++;
+      else if (/^<\/(a|code)>/i.test(tag)) skip = Math.max(0, skip - 1);
+      return tag;
+    }
+    return skip > 0 ? text : fn(text);
+  });
+}
+
+/* Auto-link bare http(s) URLs so they're clickable, without disturbing markdown
+ * links (already <a>) or code. Trailing sentence punctuation is left outside the
+ * link. The text is already HTML-escaped, so the URL is safe in the attribute. */
+const URL_RE = /https?:\/\/[^\s<]+/g;
+function linkifyUrls(html) {
+  return processTextSegments(html, (text) => text.replace(URL_RE, (u) => {
+    const trail = u.match(/[.,;:!?)\]]+$/);
+    const url = trail ? u.slice(0, -trail[0].length) : u;
+    const tail = trail ? trail[0] : '';
+    if (!url) return u;
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${tail}`;
+  }));
 }
 
 /* CSS color literals: hex (#rgb/#rgba/#rrggbb/#rrggbbaa) and rgb()/rgba().
@@ -44,9 +74,8 @@ const COLOR_RE = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3
  * visible next to its value. Operates only on text segments — HTML tags (and
  * their attributes, e.g. link hrefs) are left untouched. */
 function addColorSwatches(html) {
-  return html.replace(/(<[^>]+>)|([^<]+)/g, (m, tag, text) =>
-    tag ? tag : text.replace(COLOR_RE, (c) => `${c}<span class="md-swatch" style="--swatch:${c}"></span>`)
-  );
+  return processTextSegments(html, (text) =>
+    text.replace(COLOR_RE, (c) => `${c}<span class="md-swatch" style="--swatch:${c}"></span>`));
 }
 
 function isTableRow(line) { return /^\s*\|.*\|\s*$/.test(line); }
