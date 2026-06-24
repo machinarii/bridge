@@ -3866,7 +3866,7 @@ function _setL2Shortcuts() {
 }
 
 async function exitZoom() {
-  if (inflightController || currentCancelToken) cancelActiveRequest();
+  releaseActiveRequest();   // navigate away without canceling the agent's run
   stopSpeaking();
   playSfx('zoomout');   // L2 → L1
   const fromAgentId = currentAgent()?.id;
@@ -4204,7 +4204,7 @@ function cycleProject(delta) {
   const nextIdx = curIdx + delta;
   // No wrap-around — rubberband at the first / last project.
   if (nextIdx < 0 || nextIdx >= projects.length) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
-  if (inflightController || currentCancelToken) cancelActiveRequest();
+  releaseActiveRequest();   // navigate away without canceling the agent's run
   stopSpeaking();
   playSfx(delta > 0 ? 'swooshNext' : 'swooshPrev');   // project → project slide
   slideAgent(delta, () => {
@@ -4220,7 +4220,7 @@ function openAgentById(agentId) {
   if (!activeProject) return;
   const i = activeProject.agents.findIndex(a => a.id === agentId);
   if (i < 0 || i === zoomedIndex) return;
-  if (inflightController || currentCancelToken) cancelActiveRequest();
+  releaseActiveRequest();   // navigate away without canceling the agent's run
   stopSpeaking();
   _focusLastOnNextChatRender = true;   // land on the target agent's last bubble
   slideAgent(i > zoomedIndex ? 1 : -1, () => { zoomedIndex = i; renderZoom(); });
@@ -4234,7 +4234,7 @@ function cycleAgent(delta) {
   while (i >= 0 && i < n && !activeProject.agents[i].enabled) i += delta;
   // Ran off the end (no further agent that way) — rubberband instead of cycling.
   if (i < 0 || i >= n) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
-  if (inflightController || currentCancelToken) cancelActiveRequest();
+  releaseActiveRequest();   // navigate away without canceling the agent's run
   stopSpeaking();
   playSfx(delta > 0 ? 'swooshNext' : 'swooshPrev');   // agent → agent slide
   _focusLastOnNextChatRender = true;   // switched to another agent → focus its last bubble
@@ -5583,7 +5583,7 @@ function pickerMove(dir) {
   updatePickerShortcuts();
 }
 async function exitToProjects() {
-  if (inflightController || currentCancelToken) cancelActiveRequest();
+  releaseActiveRequest();   // navigate away without canceling the agent's run
   stopSpeaking();
   playSfx('zoomout');   // L1 → L0
   closeFileViewer();
@@ -6925,6 +6925,15 @@ function cancelActiveRequest() {
   }
   maybeCancelCurrentOperation(token);
   setIndicator('idle', 'Canceled');
+}
+
+/* Detach from the in-flight run WITHOUT canceling it — the agent keeps working
+ * server-side and its result lands in history / over SSE (visible when you
+ * return). Used by navigation (Back, switch agent, leave project); only the
+ * Stop button or a superseding submit actually cancels a run. */
+function releaseActiveRequest() {
+  if (inflightController) { try { inflightController.abort(); } catch {} inflightController = null; }
+  currentCancelToken = null;   // forget the token; do NOT cancel it server-side
 }
 
 async function refreshHealthPane() {
