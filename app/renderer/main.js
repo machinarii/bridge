@@ -5544,6 +5544,10 @@ function stepGrid(grid, i, n, dir) {
   if (dir === 'down') {
     const below = (r + 1) * cols + c;
     if (r < rows - 1 && below < n) return below;   // a tile sits below → move
+    // Cell directly below is empty but the next row still has tiles (last
+    // column dropping into a short final row, e.g. → "Add / remove agent") →
+    // land on that row's last tile rather than skipping to the footer.
+    if (r < rows - 1 && (r + 1) * cols < n) return Math.min(n - 1, (r + 2) * cols - 1);
     if (enterShortcuts()) return null;             // nothing below → footer rail
     bumpEdge(grid, 'down'); return null;
   }
