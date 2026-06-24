@@ -3594,13 +3594,15 @@ function cycleBubbleAction(dir) {
   if (arr.length === 0) return;
   const idx = arr.indexOf(document.activeElement);
   if (idx === -1) {                       // on the bubble itself → step into the actions
+    playSfx('navigate');                  // cursor moved into the bubble's actions
     (dir > 0 ? arr[0] : arr[arr.length - 1]).focus();
     paintBubbleFocus();                   // drop the bubble's selected ring
     return;
   }
   const next = idx + dir;
-  if (next < 0) { bubble.focus(); return; }      // Left off the first action → back to the prompt
-  if (next >= arr.length) return;                // Right off the last → stay put
+  if (next < 0) { playSfx('navigate'); bubble.focus(); return; }  // Left off the first → back to the prompt
+  if (next >= arr.length) return;                // Right off the last → stay put (no move)
+  playSfx('navigate');                    // cursor moved to the next/prev action
   arr[next].focus();
   paintBubbleFocus();
 }
