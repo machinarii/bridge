@@ -3450,7 +3450,10 @@ function focusBubble(i) {
   if (chatBubbles.length === 0) return false;
   const n = chatBubbles.length;
   const next = Math.max(0, Math.min(n - 1, i));
-  if (next !== chatBubbleIdx) playSfx('navigate');   // L2 chat: cursor moved to a new bubble
+  // 'navigate' is a cursor-MOVED cue — only when already on a bubble. The first
+  // focus (chatBubbleIdx < 0: entering L2, which already plays 'zoomin') is
+  // silent, so entry doesn't fire zoomin + navigate back-to-back.
+  if (chatBubbleIdx >= 0 && next !== chatBubbleIdx) playSfx('navigate');
   chatBubbleIdx = next;
   // Paint directly rather than waiting on the focus event: re-focusing a
   // bubble that already holds DOM focus (common after a footer round-trip)
