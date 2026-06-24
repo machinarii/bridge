@@ -10,6 +10,7 @@
 import { createTask, getTask, updateTask, nextQueued, tasksForAgent } from './tasks.js';
 import { getProject, addAgent } from './projects.js';
 import { getRole } from './roles.js';
+import { charterFileNameFor } from './charters.js';
 import { interpretIntent } from './orchestrator.js';
 import { setLastSpec, appendTurn } from './scratchpad.js';
 import { emitActivity, emitDelegate, emitNotification, emitStatus, publish as publishEvent } from './events.js';
@@ -201,7 +202,11 @@ function reportToLead(project, agent, task, body) {
       { author: { id: agent.id, name: agent.name, role: getRole(agent.role)?.label || '' } });
   }
   if (body) {
-    try { writeNote(project.id, `Deliverable — ${agent.name}`, body); }
+    // Land deliverables in a deliverables/ folder, named by ROLE slug (the same
+    // short slug as the charters) — e.g. deliverables/deliverables-designer.md,
+    // deliverables/deliverables-sw-eng.md.
+    const roleSlug = charterFileNameFor(agent.role).replace(/^role-/, '').replace(/\.md$/i, '');
+    try { writeNote(project.id, `deliverables/deliverables-${roleSlug}`, body); }
     catch (err) { console.warn(`[executor] deliverable doc:`, err?.message); }
   }
   emitActivity(project.id, `${agent.name}: task complete — ${task.description.slice(0, 60)}`, agent.id, { awaitKind: 'view' });

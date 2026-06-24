@@ -9,7 +9,7 @@ const { createProject, deleteProject, getProject } = await import('./projects.js
 const { enqueueTask, drain } = await import('./executor.js');
 const { listTasks } = await import('./tasks.js');
 const { getContext } = await import('./scratchpad.js');
-const { listNotes } = await import('./backends/notes.js');
+const { listNotes, readNote } = await import('./backends/notes.js');
 
 const deliverableSpec = (body) => ({ intent: 'answer', template: 'reader', title: 'Done', body });
 
@@ -35,7 +35,7 @@ test('a deliverable reply marks the task done and reports to the PM', async () =
     assert.equal(last.author?.id, designer.id);
     assert.match(last.content, /write design principles/);
     // the deliverable landed as a project doc
-    assert.ok(listNotes(p.id).some(n => /deliverable/i.test(n.id)), 'deliverable doc written');
+    assert.ok(readNote(p.id, 'deliverables/deliverables-designer'), 'deliverable doc written to deliverables/');
   } finally { deleteProject(p.id); }
 });
 
