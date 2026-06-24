@@ -1603,6 +1603,7 @@ function advanceDownFromRolePicker() {
     const wantLeft = c < cols / 2;
     let targetIdx = wantLeft ? cancelIdx : confirmIdx;
     if (targetIdx < 0) targetIdx = (confirmIdx >= 0 ? confirmIdx : firstNonTileIdx);
+    if (targetIdx !== ring.index) ring.onMove?.();   // tile → button is a cursor move
     ring.index = targetIdx;
     ring.paint();
     return true;
@@ -1630,7 +1631,9 @@ function roleGridMove(dir) {
   const onTile = i < tileCount;
   const c = i % cols;
   const lastRowStart = Math.floor((tileCount - 1) / cols) * cols;
-  const go = (x) => { ring.index = x; ring.paint(); };
+  // Play the nav sound on a real cursor move — roleGridMove sets ring.index
+  // directly (not ring.move), so it must fire onMove itself.
+  const go = (x) => { if (x !== ring.index) ring.onMove?.(); ring.index = x; ring.paint(); };
 
   if (dir === 'right') {
     if (onTile) {
