@@ -40,7 +40,89 @@ Notes:
 - Voice is **Parakeet-only** — it never falls back to the browser engine. If the sidecar is down, voice shows a visible STT error.
 - **QA shortcut:** `npm run qa:new -- trading` (or `recipes` / `iot`) seeds a fully-formed project from prefilled name/objective/features and kicks off — skips the capture UI. Prefilled copy-paste text for the capture screens + a flow walkthrough live in **`QA-GUIDE.md`**.
 
-## What's new (this session — run cancellation, voice cleanup, skills)
+## What's new (this session — background runs, council parity, bubble/sound polish)
+
+All renderer + a few server changes. New server module: `council-store.js`. New
+tests: `cancel.test.js`, `health.test.js`, `schema.test.js`, `smoke-flow.test.js`
+(from the prior arc) plus `handoff-dedup.test.js` and `council-store.test.js` —
+full server suite green (`node --test "app/server/*.test.js"`).
+
+### Runs keep going when you navigate away (the big behavior change)
+Back (`exitZoom`), leaving the project (`exitToProjects`), and switching agents
+(`cycleAgent`/`cycleProject`/`openAgentById`) used to call `cancelActiveRequest`,
+which canceled the operation token server-side — so answering a question then
+pressing Back killed the build ("Canceled by user"). New `releaseActiveRequest()`
+detaches the client (aborts the fetch, forgets the token) **without** canceling
+it; the run finishes server-side and lands in history / over SSE. Only the **Stop
+button** or a superseding submit cancels a run now.
+
+### Stop button replaces the footer "X Cancel run"
+While an agent is thinking, the "…" pending bubble carries an inline **Stop** pill
+(icon + label, standard button font/colors) on its right; select the bubble and
+press Right to reach it, Enter/Cross to cancel (`cancelActiveRequest`). The L2
+footer `X Cancel run` shortcut + bare-key handler were removed.
+
+### Council ↔ agent L2 parity
+- Intake questions render through the **real `buildChoiceList`** (lettered
+  `.choice-btn` grid, Submit, Skip, "Other — hold to talk") via new `onSubmit`/
+  `onSkip` callbacks.
+- Council bubbles join the `chatBubbles` nav ring (`registerNavBubbles`), and the
+  keyboard/gamepad bubble-nav was extracted into shared `bubbleNavKeydown`/
+  `bubbleNavButton` that now run for `MODE_COUNCIL` too — so council bubbles are
+  selectable and arrow-navigable exactly like agent L2.
+- **Persistence:** new `council-store.js` (`<stateDir>/council.json`,
+  GET/PUT `/projects/:pid/council`, cleared on project create/delete). The
+  renderer saves `councilState` after each step and restores on `openCouncil`.
+
+### Bubble + markdown polish (`md.js`, `style.css`)
+- Markdown headings render at **body size** (weight-only emphasis) — a run-on
+  `# …` line no longer renders gigantic.
+- Bare **http(s) URLs auto-link** (`linkifyUrls`), without touching existing
+  markdown links or code (`processTextSegments` skips `<a>`/`<code>`).
+- **Color swatches** render next to hex / `rgb(a)` values (`addColorSwatches`).
+
+### Deliverables — role-named, in a folder
+`reportToLead` now writes `deliverables/deliverables-<role-slug>.md` (reusing
+`charterFileNameFor`, so `sw_engineer → sw-eng`), e.g.
+`deliverables/deliverables-designer.md`. The report-bubble preview keeps markdown
+structure and truncates at a clean boundary (`reportSnippet`).
+
+### Kickoff question ordering
+`executeKickoff` now leads with the PM's foundational product questions (model-
+ranked) and appends role clarifications by priority — a security-scope clarify no
+longer outranks "what are we building?".
+
+### Health tab
+- OpenRouter row shows the **remaining credit balance** (`/api/v1/credits`).
+- Local STT row shows the **model name** (sidecar `/health` now reports `model`;
+  falls back to `Parakeet (<backend>)`).
+- Out-of-credits resilience: completion `max_tokens` is capped (`samplingFor`
+  reasoning+8192; `llm.js` 32768) so a low balance doesn't 402 the full ceiling,
+  and a failed `/interpret` now renders a visible **error bubble** in chat.
+
+### Handoff bubbles are idempotent
+`interpretIntent` skips the From→To handoff turn if the agent's last turn is
+already that exact handoff — a retried task no longer duplicates the bubble.
+
+### Sound design
+- New **`navStrip`** clip (`ui-sound-navigate-strip.m4a`, vol 0.3) when entering /
+  moving across the **footer shortcut rail** (`enterShortcuts`/`moveShortcutFocus`).
+- `navigate` now plays on within-bubble action moves (`cycleBubbleAction`), role-
+  picker tile moves (`roleGridMove`), and reaching the **× close** button.
+- New-project flow: **zoomin** on Continue (advance), **zoomout** on Esc/Back/⊙
+  (all routed through `goBackInCreateFlow`).
+- L2 entry no longer fires `zoomin`+`navigate` back-to-back (`focusBubble` only
+  plays `navigate` when already on a bubble).
+
+### L2 / grid interaction
+- Single-press **Back** from a selected bubble (`backFromBubbleView`) instead of
+  un-select-then-exit.
+- L1 grid **scrolls past 12 tiles**; Down from a last-column tile lands on the
+  short final row (e.g. "Add / remove agent"), not the footer.
+- Typing in any text field no longer flashes footer chips or fires bare-key
+  shortcuts (`isTextInputFocused`).
+
+## What's new (previous session — run cancellation, voice cleanup, skills)
 
 Full suite **205/205** (`node --test "app/server/*.test.js"`).
 
@@ -135,7 +217,9 @@ Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 - `app/server/orchestrator.js` — exports `RESPONSE_STYLE`; `parseSpec` resilience; topology in prompts.
 - `app/server/team.js` — `resolveDelegateSpec` (1:1 delegation), topology in routing.
 - `app/server/projects.js` — `kickoff` field + `getKickoff`/`setKickoff`; `TOPOLOGIES` exported.
-- `app/server/backends/notes.js` — `writeNote(projectId, name, body)` for human-named docs.
+- `app/server/backends/notes.js` — `writeNote(projectId, name, body)` for human-named docs (a `/` in `name` nests a folder, e.g. `deliverables/deliverables-designer`).
+- `app/server/council-store.js` — per-project council transcript persistence (`<stateDir>/council.json`, GET/PUT `/projects/:pid/council`, cleared on project create/delete).
+- `app/server/cancel.js` + client `operations.js` — operation tokens; client `releaseActiveRequest()` detaches without canceling so runs survive navigation.
 - `app/server/kickoff.js` — `startTeamWork` (fan-out + auto-add), role-based `assignKickoffTasks` returning `{ assignments, clarify }`, kickoff Q&A advances `assignments`.
 - `app/server/orchestrator.js` — `RESPONSE_STYLE` grounding, `ROLE_GUIDANCE` + `roleGuidance()`, `interpretIntent({ handoff })`, `awaitKind` on activity events.
 - `app/server/events.js` — `emitActivity`/`emitDelegate` take an `extra` arg (carries `awaitKind`).
@@ -143,7 +227,7 @@ Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 
 ## Tests
 
-`node --test "app/server/*.test.js"` (from the repo root) → currently **160/160 pass**. Hermeticity rule: tests MUST set `BRIDGE_STATE_DIR` + `BRIDGE_PROJECTS_BASE` to throwaway temp dirs before importing server modules — never touch the real `~/bridge-projects/.bridge/` registry or `~/bridge-projects/` repos (a past test wiped real data). All state modules (`projects.js`, `tasks.js`, `scratchpad.js`) resolve paths lazily through `state-dir.js`, so the env vars work as long as they're set before first use.
+`node --test "app/server/*.test.js"` (from the repo root) → currently **207/207 pass**. Hermeticity rule: tests MUST set `BRIDGE_STATE_DIR` + `BRIDGE_PROJECTS_BASE` to throwaway temp dirs before importing server modules — never touch the real `~/bridge-projects/.bridge/` registry or `~/bridge-projects/` repos (a past test wiped real data). All state modules (`projects.js`, `tasks.js`, `scratchpad.js`) resolve paths lazily through `state-dir.js`, so the env vars work as long as they're set before first use.
 
 ## Known gaps / follow-ups
 
