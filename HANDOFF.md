@@ -104,6 +104,18 @@ L1 (project grid) is navigation-only now. The **V hold-to-talk**, **R reasoning*
 - **A chip keeps focus when activated from the rail.** Re-added `keepFocus` to the A chips; `openActivityDrawer` only auto-enters the feed (newest entry) when **not** from the rail (`_pendingFooterKey == null`) — same rule as the Explorer chip. So the **A key/▲** enters the panel, but **Enter/X on the highlighted A chip** opens it and keeps focus on the chip.
 - **Header is fixed, not sticky.** The drawer is now a flex column where only `.activity-list` scrolls (`overscroll-behavior: contain`). This keeps the heading always visible, out of the overscroll bounce, and stops `scrollIntoView` from parking the first entry under it (the header is 66px — taller than a sticky scroll-offset would reliably clear).
 
+### New-project capture screens overhaul
+- **Name ≤ 30 chars.** `NAME_LIMIT` 40 → 30 in the renderer AND `app/server/server.js` (the LLM-backed `/projects/shorten-name`). Over-limit names still shorten on Continue; a heads-up under the field warns it'll be condensed. **Server change → needs a `npm run server` restart.**
+- **Name field is a fixed single line** (`.capture-name`): same 4rem height empty / capturing / filled, 30% narrower; the wave bars are dropped here (don't fit one line) but the "Hold V" prompt + live transcript still show. (Verified empty == filled == 88px.)
+- **Objective / Features fields are taller** (`.capture-tall`, 15.5rem) and **accumulate blocks**: each voice dictation OR `/`-typed entry **appends** a new block instead of replacing (`captureValueInner(text,{keepMic})` + `appendCaptureBlock`, wired into both `dispatchTranscript` and `submitTypedText`). Blocks stack top-down with a 1.1rem gap; the mic prompt stays below so you can keep adding. Newest block reveals with the typewriter animation.
+- **STT text reveals like agent bubbles** — `revealCaptureText()` runs `typewriterReveal` on the new text (whole name, or the newest objective/features block).
+- **Cancel always confirms.** During name/objective/features, Cancel now always pops the "do you really want to cancel?" modal (was: only when something was entered). The modal plays `notification`; the Cancel button no longer plays zoomout. (`hasCaptureProgress` removed.)
+
+### Misc
+- **Checkbox activation → `select`**: a delegated `change` listener covers native click/Space toggles; the programmatic gamepad-cross / Enter toggles (which don't fire `change`) add `select` inline.
+- **File explorer:** removed the agent name (e.g. "Rowan") shown next to role/charter `.md` filenames — just the filename now.
+- **MD viewer × button:** plays only the close swoosh now (the `select` press sound was removed).
+
 ## What's new (previous session — background runs, council parity, bubble/sound polish)
 
 All renderer + a few server changes. New server module: `council-store.js`. New

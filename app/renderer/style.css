@@ -2641,6 +2641,39 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 }
 .capture-tile .placeholder { opacity: 0.4; }
 
+/* Name screen: the project name is short (≤30 chars) — 30% narrower field that
+   is ALWAYS a single line: same height whether empty ("Hold V to talk"),
+   capturing (live transcript), or showing the recognized name. The wave bars
+   are dropped here since they don't fit a one-line field. */
+.capture-name .capture-value {
+  width: min(672px, 45vw);
+  height: 4rem;
+  padding: 0 1.25rem;
+}
+.capture-name .capture-value.has-value {
+  display: flex; align-items: center; justify-content: flex-start;
+  white-space: nowrap; overflow: hidden;
+}
+.capture-name .mic-stack.talking .mic-bars { display: none; }
+/* "We'll shorten it" heads-up under the name field. */
+.capture-toolong {
+  margin: 0; text-align: center;
+  font-size: 0.95rem; color: var(--fg-dim);
+}
+/* Objective / features screens: a bit taller than the default field. */
+.capture-tall .capture-value { height: 15.5rem; }
+/* Objective / features: each dictation / typed entry is its own block, stacked
+   top-down with a clear gap, and the mic prompt sits below so the user can add
+   another. The field scrolls as blocks accumulate. */
+.capture-tall .capture-value.has-value {
+  display: block;
+  align-self: stretch;
+  text-align: left;
+}
+.capture-blocks { display: flex; flex-direction: column; gap: 1.1rem; }
+.capture-block { white-space: pre-wrap; line-height: 1.4; }
+.capture-tall .capture-value .mic-stack { margin-top: 1.25rem; }
+
 /* Pin the action row to the bottom of the surface and stretch it
  * across the full width. All insets match .topology-picker's 0.5rem
  * padding so the row sits at the exact same spot on every create-flow

@@ -475,7 +475,7 @@ app.get('/projects/:pid', (req, res) => {
 /* Shortens a project name to <= 40 characters via OpenRouter. Falls
  * back to a hard truncate if the API key is missing or the request
  * fails for any reason. */
-const NAME_LIMIT = 40;
+const NAME_LIMIT = 30;
 async function shortenViaLLM(name) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey || apiKey.includes('replace-me')) {
