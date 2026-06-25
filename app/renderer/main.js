@@ -45,8 +45,8 @@ surfaceEl?.addEventListener('click', (e) => {
   const b = e.target.closest?.('#capture-cancel, #capture-back, #capture-redo');
   if (!b) return;
   if (b.id === 'capture-redo') { playSfx('select'); return; }
-  if (b.id === 'capture-cancel' && hasCaptureProgress()) return;   // confirm dialog will show
-  playSfx('zoomout');
+  if (b.id === 'capture-cancel') return;   // always opens the confirm modal (which plays 'notification')
+  playSfx('zoomout');   // Back
 }, true);
 const indicatorEl     = document.getElementById('listening-indicator');     // removed from DOM
 const indicatorTextEl = indicatorEl?.querySelector('.state-text') || null;
@@ -116,6 +116,13 @@ function playSfx(name) {
     src.start();
   } catch { /* sound is best-effort */ }
 }
+
+// Any checkbox the user toggles natively (mouse click or the Space default)
+// plays the select sound. Programmatic toggles (gamepad cross / Enter, which set
+// .checked directly and don't fire 'change') add their own playSfx at the site.
+document.addEventListener('change', (e) => {
+  if (e.target?.matches?.('input[type="checkbox"]')) playSfx('select');
+});
 
 /** Set the persistent shortcuts rail at bottom-right. Pass an array of
  *  { gamepad, keyboard, label, action } — both glyphs render and CSS
@@ -955,12 +962,6 @@ let newProjTopology = null;   // chosen during step 2 (no default selection)
 let newProjName     = '';                // captured during step 3
 let newProjGoal     = '';                // captured during step 4
 let newProjFeatures = '';                // captured during step 5
-/* Any work entered into the in-progress new project. Canceling from a later
- * capture step discards ALL of it (name is always set by then), so the cancel
- * confirmation keys off this — not just the current step's field. */
-function hasCaptureProgress() {
-  return !!(newProjName.trim() || newProjGoal.trim() || newProjFeatures.trim());
-}
 
 // Work topologies offered after role selection. Display copy lives here; the
 // operating rule written into project.md lives server-side (projects.js).
@@ -1929,7 +1930,7 @@ function goBackInCreateFlow() {
   else { stopMicVisualizer(); renderProjects(); }
 }
 
-const NAME_LIMIT = 40;
+const NAME_LIMIT = 30;
 async function confirmCapture() {
   if (mode === MODE_NEW_PROJ_NAME) {
     const raw = newProjName.trim();
@@ -1979,12 +1980,10 @@ let micViz = null;
 let micVizFrame = null;
 const MIC_BAR_COUNT = 7;
 
-function captureValueInner(text) {
-  if (text) return escapeHtml(text);
-  // Mic visualizer markup. Bars are static here; heights are updated
-  // by animateMicBars() each rAF tick. The .mic-live-text slot above
-  // the bars is filled by the speech 'partial' listener while the
-  // user is dictating.
+/* Mic visualizer markup. Bars are static here; heights are updated by
+ * animateMicBars() each rAF tick. The .mic-live-text slot above the bars is
+ * filled by the partial-transcript handler while the user is dictating. */
+function micStackHtml() {
   const bars = Array.from({ length: MIC_BAR_COUNT }, () => '<div class="bar"></div>').join('');
   return `
     <div class="mic-stack">
@@ -1995,6 +1994,24 @@ function captureValueInner(text) {
         <span class="for-gamepad">Hold <kbd>R2</kbd> to talk</span>
       </div>
     </div>`;
+}
+/* Inner markup of a capture field. Name (default) is a single value. The
+ * objective / features fields pass {keepMic:true}: each dictation / typed entry
+ * is a separate block (blocks are joined by a blank line in state), and the mic
+ * prompt stays below so the user can hold V / type "/" again to add another. */
+function captureValueInner(text, { keepMic = false } = {}) {
+  if (!text) return micStackHtml();
+  if (!keepMic) return escapeHtml(text);
+  const blocks = String(text).split(/\n{2,}/).map(b => b.trim()).filter(Boolean)
+    .map(b => `<div class="capture-block">${escapeHtml(b)}</div>`).join('');
+  return `<div class="capture-blocks">${blocks}</div>${micStackHtml()}`;
+}
+/* Append a dictated / typed entry as a new block (blank-line separated), or set
+ * it as the first block. Used by the objective / features fields. */
+function appendCaptureBlock(existing, text) {
+  const t = String(text || '').trim();
+  if (!t) return existing;
+  return existing ? `${existing}\n\n${t}` : t;
 }
 
 /* ── Shared mic stream ────────────────────────────────────────────────────
@@ -2103,10 +2120,13 @@ function renderNewProjectName() {
   setBreadcrumbs([{ label: 'Projects' }, { label: 'New project' }, { label: 'Name' }]);
   surfaceEl.innerHTML = '';
   const t = document.createElement('section');
-  t.className = 'capture-tile' + (entering ? ' capture-enter' : '');
+  t.className = 'capture-tile capture-name' + (entering ? ' capture-enter' : '');
   t.innerHTML = `
     <h2>Name this project</h2>
     <div class="capture-value ${newProjName ? 'has-value' : ''}">${captureValueInner(newProjName)}</div>
+    ${newProjName.trim().length > NAME_LIMIT
+      ? `<div class="capture-toolong">Long name — we'll automatically shorten it to ${NAME_LIMIT} characters.</div>`
+      : ''}
     ${newProjRoleIds.includes('pm')
       ? ''
       : '<div class="lead-badge">Cassidy will lead this team.</div>'}
@@ -2118,7 +2138,7 @@ function renderNewProjectName() {
     </div>`;
   surfaceEl.appendChild(t);
   const tryCancelNameCapture = () => {
-    maybeConfirmCancel(hasCaptureProgress(), () => { stopMicVisualizer(); renderProjects(); });
+    maybeConfirmCancel(true, () => { stopMicVisualizer(); renderProjects(); });
   };
   const nameBackEl   = t.querySelector('#capture-back');
   const nameCancelEl = t.querySelector('#capture-cancel');
@@ -2167,10 +2187,10 @@ function renderNewProjectGoal() {
   setBreadcrumbs([{ label: 'Projects' }, { label: 'New project' }, { label: 'Goal' }]);
   surfaceEl.innerHTML = '';
   const t = document.createElement('section');
-  t.className = 'capture-tile' + (entering ? ' capture-enter' : '');
+  t.className = 'capture-tile capture-tall' + (entering ? ' capture-enter' : '');
   t.innerHTML = `
     <h2>What's the objective?</h2>
-    <div class="capture-value ${newProjGoal ? 'has-value' : ''}">${captureValueInner(newProjGoal)}</div>
+    <div class="capture-value ${newProjGoal ? 'has-value' : ''}">${captureValueInner(newProjGoal, { keepMic: true })}</div>
     <div class="role-confirm-row">
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
       <button type="button" class="role-cancel role-back" id="capture-back">Back</button>
@@ -2179,7 +2199,7 @@ function renderNewProjectGoal() {
     </div>`;
   surfaceEl.appendChild(t);
   const tryCancelGoalCapture = () => {
-    maybeConfirmCancel(hasCaptureProgress(), () => { stopMicVisualizer(); renderProjects(); });
+    maybeConfirmCancel(true, () => { stopMicVisualizer(); renderProjects(); });
   };
   const goalBackEl   = t.querySelector('#capture-back');
   const goalCancelEl = t.querySelector('#capture-cancel');
@@ -2223,10 +2243,10 @@ function renderNewProjectFeatures() {
   setBreadcrumbs([{ label: 'Projects' }, { label: 'New project' }, { label: 'Features' }]);
   surfaceEl.innerHTML = '';
   const t = document.createElement('section');
-  t.className = 'capture-tile' + (entering ? ' capture-enter' : '');
+  t.className = 'capture-tile capture-tall' + (entering ? ' capture-enter' : '');
   t.innerHTML = `
     <h2>What are the top features?</h2>
-    <div class="capture-value ${newProjFeatures ? 'has-value' : ''}">${captureValueInner(newProjFeatures)}</div>
+    <div class="capture-value ${newProjFeatures ? 'has-value' : ''}">${captureValueInner(newProjFeatures, { keepMic: true })}</div>
     <div class="role-confirm-row">
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
       <button type="button" class="role-cancel role-back" id="capture-back">Back</button>
@@ -2235,7 +2255,7 @@ function renderNewProjectFeatures() {
     </div>`;
   surfaceEl.appendChild(t);
   const tryCancelFeaturesCapture = () => {
-    maybeConfirmCancel(hasCaptureProgress(), () => { stopMicVisualizer(); renderProjects(); });
+    maybeConfirmCancel(true, () => { stopMicVisualizer(); renderProjects(); });
   };
   const featBackEl   = t.querySelector('#capture-back');
   const featCancelEl = t.querySelector('#capture-cancel');
@@ -4858,11 +4878,20 @@ function titleCaseName(s) {
   return String(s).replace(/\b\p{L}/gu, c => c.toUpperCase());
 }
 
+/* After a capture screen re-renders with freshly-recognized text, reveal it with
+ * the same gradual typewriter build-up the agent bubbles use. */
+function revealCaptureText() {
+  const cv = surfaceEl.querySelector('.capture-tile .capture-value.has-value');
+  if (!cv) return;
+  // Multi-block fields (objective/features) reveal just the newest block; the
+  // single-value name field reveals the whole thing.
+  typewriterReveal(cv.querySelector('.capture-block:last-of-type') || cv);
+}
 function dispatchTranscript(text) {
   if (editBubbleOpen) { editBubbleTextEl.value = text; return; }
-  if (mode === MODE_NEW_PROJ_NAME) { newProjName = titleCaseName(stripNamePunct(text)); renderNewProjectName(); return; }
-  if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = text; renderNewProjectGoal(); return; }
-  if (mode === MODE_NEW_PROJ_FEATURES) { newProjFeatures = text; renderNewProjectFeatures(); return; }
+  if (mode === MODE_NEW_PROJ_NAME) { newProjName = titleCaseName(stripNamePunct(text)); renderNewProjectName(); revealCaptureText(); return; }
+  if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = appendCaptureBlock(newProjGoal, text); renderNewProjectGoal(); revealCaptureText(); return; }
+  if (mode === MODE_NEW_PROJ_FEATURES) { newProjFeatures = appendCaptureBlock(newProjFeatures, text); renderNewProjectFeatures(); revealCaptureText(); return; }
   if (mode === MODE_COUNCIL) { routeCouncilInput(text); return; }
   if (mode === MODE_ZOOM) { submitIntent(text); return; }
   if (mode === MODE_GRID) { submitTeamIntent(text); return; }
@@ -6131,16 +6160,14 @@ const fileViewerCloseEl = fileViewerEl.querySelector('.file-viewer-close');
 let fileViewerOpen      = false;
 fileViewerCloseEl?.addEventListener('click', (e) => {
   e.stopPropagation();
-  playSfx('select');   // close-button press feedback (the close itself plays swooshPrev)
-  closeFileViewer();
+  closeFileViewer();   // plays swooshPrev (no select sound on the × button)
 });
 // Right-arrow off the × button: move focus to the surface itself so
 // Enter closes the viewer. Left-arrow returns focus to the ×.
 fileViewerCloseEl?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault(); e.stopPropagation();
-    playSfx('select');   // close-button press feedback
-    closeFileViewerToExplorer();
+    closeFileViewerToExplorer();   // plays swooshPrev (no select sound)
     return;
   }
   if (e.key === 'Escape') {
@@ -6192,7 +6219,7 @@ function rebuildFileEntries() {
   // Entry labels are the bare filename (with .md) — never the directory path.
   const base = (p) => String(p).split('/').pop();
   addFolder('charters', 'Roles', fileTree.charters, (li, c) => {
-    li.innerHTML = `<span>${escapeHtml(base(c.path))}</span><span class="who">${escapeHtml(c.agentName)}</span>`;
+    li.innerHTML = `<span>${escapeHtml(base(c.path))}</span>`;
     li.dataset.path = c.path;
   });
   // User-created folders (client-side, no contents yet).
@@ -7272,7 +7299,7 @@ function handleSettingsGamepad(button) {
     if (active === settingsCancelEl) { playSfx('select'); closeSettings(); return; }
     if (active === settingsSaveEl)   { saveSettings(); return; }
     if (active && active.tagName === 'BUTTON') { active.click(); return; }
-    if (active && active.type === 'checkbox')  { active.checked = !active.checked; return; }
+    if (active && active.type === 'checkbox')  { playSfx('select'); active.checked = !active.checked; return; }
     // Default: treat as Save.
     saveSettings();
     return;
@@ -7424,7 +7451,7 @@ settingsModalEl?.addEventListener('keydown', (e) => {
     if (active && (active.tagName === 'INPUT' && active.type !== 'checkbox')) {
       e.preventDefault(); e.stopPropagation(); saveSettings(); return;
     }
-    if (active && active.type === 'checkbox') { e.preventDefault(); e.stopPropagation(); active.checked = !active.checked; return; }
+    if (active && active.type === 'checkbox') { e.preventDefault(); e.stopPropagation(); playSfx('select'); active.checked = !active.checked; return; }
   }
 
   // Space toggles checkboxes (HTML default already does this, but make
@@ -7919,8 +7946,8 @@ function submitTypedText(text) {
   // transcript) and re-renders the SAME screen so the user can review it and
   // press Continue / Done — it must NOT silently auto-advance or auto-create.
   if (mode === MODE_NEW_PROJ_NAME) { newProjName = titleCaseName(text.trim()); renderNewProjectName(); return; }
-  if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = text.trim(); renderNewProjectGoal(); return; }
-  if (mode === MODE_NEW_PROJ_FEATURES) { newProjFeatures = text.trim(); renderNewProjectFeatures(); return; }
+  if (mode === MODE_NEW_PROJ_GOAL) { newProjGoal = appendCaptureBlock(newProjGoal, text); renderNewProjectGoal(); revealCaptureText(); return; }
+  if (mode === MODE_NEW_PROJ_FEATURES) { newProjFeatures = appendCaptureBlock(newProjFeatures, text); renderNewProjectFeatures(); revealCaptureText(); return; }
   if (mode === MODE_COUNCIL) { routeCouncilInput(text); return; }
   if (mode === MODE_ZOOM) { submitIntent(text); return; }
   if (mode === MODE_GRID) { submitTeamIntent(text); return; }
