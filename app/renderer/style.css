@@ -2619,7 +2619,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .capture-tile h2 { margin: 0; font-size: 1.6rem; font-weight: 400; text-align: center; }
 .capture-tile .hint { opacity: 0.6; margin: 0; text-align: center; }
 .capture-tile .capture-value {
-  font-size: 1.4rem;
+  font-size: 1.1rem;
   /* Fixed height so the box doesn't resize as the content changes
      (hold hint → live wave → recognized text). Long text scrolls. */
   height: 12.75rem;
@@ -2647,14 +2647,19 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
    are dropped here since they don't fit a one-line field. */
 .capture-name .capture-value {
   width: min(672px, 45vw);
-  height: 4rem;
-  padding: 0 1.25rem;
+  height: 4rem;   /* single line — the mic prompt + wave now sit below the box */
+  padding: 0 1.25rem 0.2em;
 }
 .capture-name .capture-value.has-value {
-  display: flex; align-items: center; justify-content: flex-start;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center;
   white-space: nowrap; overflow: hidden;
+  /* Entered text uses the agent-bubble font (JetBrains Mono ExtraLight). */
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 200;
 }
-.capture-name .mic-stack.talking .mic-bars { display: none; }
+/* "Hold V to talk" + the wave live BELOW the capture box on every step. */
+.capture-mic { display: flex; justify-content: center; }
 /* "We'll shorten it" heads-up under the name field. */
 .capture-toolong {
   margin: 0; text-align: center;
@@ -2667,12 +2672,17 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
    another. The field scrolls as blocks accumulate. */
 .capture-tall .capture-value.has-value {
   display: block;
-  align-self: stretch;
   text-align: left;
 }
-.capture-blocks { display: flex; flex-direction: column; gap: 1.1rem; }
-.capture-block { white-space: pre-wrap; line-height: 1.4; }
-.capture-tall .capture-value .mic-stack { margin-top: 1.25rem; }
+.capture-blocks { display: flex; flex-direction: column; gap: 1.1rem; width: 100%; }
+.capture-block {
+  white-space: pre-wrap; line-height: 1.4;
+  /* Smaller than the heading, in the agent-bubble font (JetBrains Mono). */
+  font-size: 0.9rem;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 200;
+}
+.capture-tall .capture-value .mic-stack { margin-top: 0; }
 
 /* Pin the action row to the bottom of the surface and stretch it
  * across the full width. All insets match .topology-picker's 0.5rem
@@ -2694,8 +2704,10 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   min-height: 1.5em;
   max-width: 80vw;
   text-align: center;
-  font-size: 1.25rem;
-  font-weight: 300;
+  /* Agent-bubble font (JetBrains Mono ExtraLight), sized down from 1.25rem. */
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem;
+  font-weight: 200;
   color: var(--fg);
   letter-spacing: 0.01em;
   line-height: 1.35;
@@ -2734,6 +2746,11 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   font-weight: 300;
   opacity: 0.7;
   letter-spacing: 0.04em;
+  /* Occupy the SAME fixed height as .mic-bars (60px) so swapping the hold
+     hint for the wave (and back) never changes the mic-stack's height — the
+     textbox and heading above stay put instead of jumping. */
+  height: 60px;
+  display: flex; align-items: center; justify-content: center;
 }
 /* Speech-to-text failure surfaced in the capture screen's mic area. */
 .mic-label.mic-error,
