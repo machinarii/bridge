@@ -1792,9 +1792,13 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 }
 .agent-view .bubble.user.focused,
 .agent-view .bubble.user.actions-open {
-  /* Slide left just enough to clear the action row hanging off the
-   * bubble's right edge (timestamp + two 38px icons + gaps). */
-  transform: translateX(calc(-6.5rem + 32px));
+  /* Slide left by the FULL footprint of the action row hanging off the
+   * bubble's right edge (margin-left 1.25rem + the ~72px icon row), so the
+   * row always lands inside the chat column regardless of bubble width.
+   * A smaller shift only cleared narrow bubbles by leaning on the scroll
+   * box's right padding — wide bubbles then overflowed into a horizontal
+   * scrollbar. Sizing the shift to the footprint removes that dependency. */
+  transform: translateX(-6rem);
 }
 .agent-view .bubble .bubble-time {
   flex: 1 1 auto;
@@ -2032,6 +2036,20 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
     0 0 0 2px var(--focus, #ffffff),
     0 0 16px 2px rgba(255,255,255,0.25);
 }
+/* A focused chip that can't act from the rail (Agent on/off needs a selected
+ * agent): keep a faint ring so the cursor is still visible, but dim it so it
+ * clearly reads as disabled and drop the bright fill. */
+#shortcuts-rail .sc.focused.disabled,
+#primary-shortcut .sc.focused.disabled,
+#back-shortcut .sc.focused.disabled {
+  background: rgba(255,255,255,0.05);
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,0.18);
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+#shortcuts-rail .sc.focused.disabled .label,
+#primary-shortcut .sc.focused.disabled .label,
+#back-shortcut .sc.focused.disabled .label { opacity: 0.5; }
 /* When the chip is focused, lift the keycap with a slightly lighter fill
  * (like the hold state) rather than a brighter border — keeps the border
  * thickness unchanged and the keycap readable against the lit chip. */
@@ -2790,6 +2808,11 @@ body[data-file-drawer="open"] #surface { margin-left: calc(320px + 1rem); }
 body[data-file-viewer="open"] #surface {
   transform: translateX(calc(44vw + 1rem));
 }
+/* Project/agent switching is disabled while the md viewer is open — hide the
+   [ / ] shortcut chips so they don't imply an available action. (They're keyed
+   by scKey; display:none also drops them from footer keyboard nav.) */
+body[data-file-viewer="open"] #shortcuts-rail .sc[data-sc-key="["],
+body[data-file-viewer="open"] #shortcuts-rail .sc[data-sc-key="]"] { display: none; }
 
 /* ===== File viewer panel (left of the prompt container) ===== */
 /* Without this, display:flex on the rule below wins over the `hidden`
@@ -2897,7 +2920,7 @@ body[data-memory-drawer="open"] #surface { margin-left: calc(320px + 1rem); }
 .activity-entry .activity-project-head {
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--accent, #6ea8ff);
+  color: var(--fg);
   letter-spacing: 0.01em;
 }
 .activity-entry .activity-author {
@@ -2914,7 +2937,12 @@ body[data-memory-drawer="open"] #surface { margin-left: calc(320px + 1rem); }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-/* View-only feed — entries are not focusable/clickable, so no focus/hover state. */
+/* Keyboard/gamepad-navigable feed: the focused entry gets the same inset bar +
+ * tint as a focused file entry. View-only — no click/open. */
+.activity-entry.focused {
+  background: rgba(110,168,255,0.22);
+  box-shadow: inset 4px 0 0 var(--focus, #ffffff);
+}
 .activity-empty {
   padding: 1rem; font-size: 0.9rem; font-weight: 300;
   color: var(--fg-dim); font-style: italic; text-align: left;

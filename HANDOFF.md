@@ -40,7 +40,51 @@ Notes:
 - Voice is **Parakeet-only** — it never falls back to the browser engine. If the sidecar is down, voice shows a visible STT error.
 - **QA shortcut:** `npm run qa:new -- trading` (or `recipes` / `iot`) seeds a fully-formed project from prefilled name/objective/features and kicks off — skips the capture UI. Prefilled copy-paste text for the capture screens + a flow walkthrough live in **`QA-GUIDE.md`**.
 
-## What's new (this session — background runs, council parity, bubble/sound polish)
+## What's new (this session — footer focus retention, hold-to-talk, voice + sound polish)
+
+Renderer-only (`app/renderer/main.js`, `style.css`). No server changes; server suite untouched. **Verify renderer edits with `node --check --input-type=module < app/renderer/main.js`** — plain `node --check` parses as a *script* and misses **duplicate top-level declarations**, which are a fatal SyntaxError in module mode and **blank the whole screen**. main.js is ~8k lines, so a helper you reach for often already exists — **grep the name before adding any top-level `function`/`let`/`const`.** For a true boot check, load the app headlessly in Electron and read `console.error` + `#surface` child count. Still **re-test in the app after a hard refresh.**
+
+### Footer rail focus retention (identity-based)
+Activating a rail chip used to drop the cursor on the re-render. Chips now carry a stable `dataset.scKey` (`buildChip`/`setPrimaryShortcut`); activating a **keepFocus** chip records that key in `_pendingFooterKey`, and the next `setShortcuts` re-asserts focus on the same chip by identity via `restorePendingFooterFocus()`/`footerKeyIndex()`. One-shot (not sticky) — checked that L2 chat updates re-call `_setL2Shortcuts`, so sticky retention would yank focus back mid-stream. Cleared by any deliberate rail nav (`moveShortcutFocus`/`leaveShortcuts`).
+- **Applies to:** `[` `]` `A` `E` (`keepFocus:true` on the items), **Back** (marked in `setShortcuts`), plus the **V/R holds** (via `endChipHold`).
+- **Back→Select fallback:** `footerKeyIndex` maps a missing `Esc` (Back) to `Enter` (Select), so backing out to a screen with no Back (e.g. L0) keeps the cursor on Select instead of vanishing.
+- **`E` Explorer opens without stealing focus:** `openFileExplorer` detects rail activation (`_pendingFooterKey != null`) and skips `explorerFocused`/`paintFileFocus`, so the panel opens but the chip stays focused. The global `E` key still focuses the explorer.
+- **Retention suppresses L2 last-bubble auto-focus:** a keepFocus chip that enters/changes L2 (e.g. switching agents via `[`/`]` on L2) would otherwise lose focus to the auto-focused last bubble (`_focusLastOnNextChatRender`, set by `enterZoom`/`cycleAgent`). `restorePendingFooterFocus` clears that flag when it restores, so the rail keeps focus. Grid-tile entry (no pending key) is unaffected and still lands on the last bubble.
+- **Inert-in-rail chips** (`disabledInRail`): **Agent on/off** (needs a selected grid tile) and **Select** (acts on the focused tile/bubble, not from the rail). When focused in the rail they render disabled (`.sc.focused.disabled`, now also styled under `#primary-shortcut`/`#back-shortcut`) and `activateFocusedShortcut` no-ops them.
+
+### Hold-to-talk / reasoning from a focused chip
+The "Hold to talk" (V) and "Reasoning" (R) chips are now `hold:{start,end}` chips (`beginChipHold`/`endChipHold`), so when focused they **press-and-hold** via Enter, gamepad-X, or click-hold (pointer capture) — mirroring the global V/R key holds (talk → `startPTT`/`endPTT`; reasoning → `openEffortPicker`/`commitEffortPicker`, nudge ↑/↓ while held).
+- **Continuous-hold fix:** `startPTT` calls `leaveShortcuts`, which cleared rail focus the instant the hold began — so auto-repeat Enters fell through to the screen's default Enter action ("multiple keypresses"). Now a guard at the top of the main keydown handler swallows Enter while `_footerHoldEl` is set; keyup ends the hold. After release, focus is restored to the chip (one-shot, see retention above).
+
+### Settings modal nav
+- **Up from a tab → × close button** (keyboard + gamepad); **Down from × → active tab**. Other arrows on × rubberband. (`settingsCloseEl` + branches in the settings keydown/`handleSettingsGamepad`.)
+
+### Capture-flow cancel now confirms
+Cancel/X during name/objective/features used to bail to L0 without a prompt when the *current* field was empty — even though the name (always set by later steps) would be lost. Now gated on `hasCaptureProgress()` (any of name/goal/features filled), so it shows the confirm dialog whenever there's work to lose.
+
+### Voice — silent holds no longer submit phantom text
+Parakeet hallucinates a short filler ("Yeah.", "you", "Thank you") on a silent hold; those are non-empty so they passed the empty-check and got submitted. `postLocalTranscript` now runs `isProbablySilent(blob)` — decodes the clip and drops it if **peak amplitude < ~0.02** (peak, so even a quiet real word survives; fails OPEN if the clip can't be decoded).
+
+### Chat bubble — wide user bubbles keep their action buttons on screen
+The focus "slide-left" was a fixed `−72px` that only cleared narrow bubbles by leaning on the scroll container's right padding; wide bubbles then pushed the retry/edit row off-screen into a horizontal scrollbar. The slide is now sized to the full action-row footprint (`translateX(-6rem)`, `style.css`), width-independent.
+
+### Sound feedback
+- **Per-sound gains** (`SFX_VOLUMES`, applied per-play via a Web Audio GainNode): `navStrip` lowered **0.3 → 0.05**, added `select: 0.05` (default `SFX_VOLUME` is 0.084). Volume is set dynamically in code — the `.m4a` files are unmodified.
+- **Settings** Cancel / Save / × → `select` (all activation paths; Save via `saveSettings`).
+- **New-project** Cancel / Back → `zoomout`, Clear → `select` (one delegated capture-phase listener on `surfaceEl` covering all three capture steps, since the buttons reuse IDs `capture-cancel`/`capture-back`/`capture-redo`).
+- **Settings** × close → `select` (its click handler; covers Enter/cross-on-focused-× which synthesize a click).
+- **New SFX clip `bump`** (`sounds/ui-sound-bump.m4a`) plays on every edge rubberband — added inside `bumpEdge()`, so all call sites get it. ⚠️ The renderer serves sounds from **`app/renderer/sounds/`**, NOT the repo-root `sounds/` the user references — new clips must be copied there (this one was).
+- **MD/file viewer** (`showFileViewer`/`closeFileViewer`): `swooshNext` on open, `swooshPrev` on close, `select` layered on the × button press. Focus moves around the viewer play `navigate`: ×↔body, body↔surface-container, body↔explorer — via a guard flag `_viewerNavSilent` (set during open so the swoosh isn't doubled) in `setViewerBodyFocus`/`setSurfaceContainerFocus`, plus inline `playSfx('navigate')` on the body→× / body→explorer moves (which only turn body focus *off*).
+
+### Activity drawer — now keyboard/gamepad navigable (view-only)
+The feed was display-only; it now mirrors the file explorer's focus model but **without open**. New state `activityFocused`/`activityFocusIdx`/`activityEntries` + `paintActivityFocus`/`stepActivityFocus`/`enterActivityFromSurface`/`exitActivityRight`. **Left** from the grid's left edge (or **A/▲**, which now also opens it) enters the feed and lands on the **newest (top)** entry; **Up/Down** move the highlight (scroll into view, nav sound); **Right/Esc** leave. `A`'s footer `keepFocus` was removed since it now enters the drawer. Entry-collection + clamp happen in `repaintActivityList` (survives live SSE re-renders). Style: `.activity-entry.focused` reuses the file-entry inset bar.
+- **Text cleanup:** each line is `sentenceCase`'d (first letter up, rest preserved); a redundant leading role tag is stripped from the summary (full role label or a short `^[A-Z]{2,4}:` acronym like "PM:"); the project-name heading is now **white** (`--fg`), not blue.
+
+### MD viewer interaction guards
+- **Project/agent switching disabled while the viewer is open:** `cycleProject`/`cycleAgent` early-return on `fileViewerOpen` (covers `[`/`]` keys, L1/R1 buttons, two-finger swipe, and the footer chip). The `[`/`]` chips are also **hidden** via CSS (`body[data-file-viewer="open"] #shortcuts-rail .sc[data-sc-key="["/"]"]`) — `display:none` also drops them from footer nav.
+- **Explorer follows the project:** switching projects with the explorer open reloads its tree via `refreshFileExplorer()` (re-fetch + `rebuildFileEntries`, closes a stale viewer, preserves open/focus state).
+
+## What's new (previous session — background runs, council parity, bubble/sound polish)
 
 All renderer + a few server changes. New server module: `council-store.js`. New
 tests: `cancel.test.js`, `health.test.js`, `schema.test.js`, `smoke-flow.test.js`

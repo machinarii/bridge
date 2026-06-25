@@ -35,6 +35,15 @@ function paintGamepadGlyph(g, key) {
 }
 
 const surfaceEl       = document.getElementById('surface');
+// New-project capture flow: Cancel / Back play the step-back sound, Clear plays
+// the select sound. Delegated + capture-phase so it fires even though each
+// button's own click handler re-renders (and removes) the node. The IDs are
+// reused across all three capture steps (name / goal / features).
+surfaceEl?.addEventListener('click', (e) => {
+  const b = e.target.closest?.('#capture-cancel, #capture-back, #capture-redo');
+  if (!b) return;
+  playSfx(b.id === 'capture-redo' ? 'select' : 'zoomout');
+}, true);
 const indicatorEl     = document.getElementById('listening-indicator');     // removed from DOM
 const indicatorTextEl = indicatorEl?.querySelector('.state-text') || null;
 const breadcrumbsEl   = document.getElementById('breadcrumbs');             // removed from DOM
@@ -62,13 +71,15 @@ const SFX_FILES = {
   zoomout:    'sounds/ui-sound-zoomout.m4a',
   swooshNext: 'sounds/ui-sound-swoosh-next.m4a',   // ] — slide right
   swooshPrev: 'sounds/ui-sound-swoosh-prev.m4a',   // [ — slide left (reversed)
+  bump:       'sounds/ui-sound-bump.m4a',          // rubberband at a navigation edge
 };
 // Perceived loudness is logarithmic: linear gain 0.12 ≈ -12dB from the
 // original 0.5 ≈ roughly half as loud to the ear. Small linear cuts
 // (e.g. ×0.7 = -3dB) are barely audible — adjust in big steps.
 const SFX_VOLUME = 0.084;                   // default per-play gain
 const SFX_VOLUMES = {                       // per-sound overrides
-  navStrip:   0.3,
+  navStrip:   0.05,
+  select:     0.05,
   swooshNext: 0.02,
   swooshPrev: 0.02,
 };
@@ -108,6 +119,34 @@ function playSfx(name) {
  *  the chip is focused-and-Entered via keyboard navigation. */
 let shortcutItems = [];
 let shortcutFocusIdx = -1; // -1 means focus is not in the rail
+let _pendingFooterKey = null; // keepFocus chip → re-assert the chip with this scKey after a rebuild
+
+/* Find a rail chip by its stable scKey. Falls back Back→Select: when a Back
+ * action lands on a screen that no longer offers Back (e.g. L0), focus the
+ * Select chip instead so the cursor doesn't vanish from the rail. */
+function footerKeyIndex(key) {
+  if (!key) return -1;
+  const items = footerFocusables();
+  let i = items.findIndex(el => el.dataset.scKey === key);
+  if (i < 0 && key === 'Esc') i = items.findIndex(el => el.dataset.scKey === 'Enter');
+  return i;
+}
+/* Re-assert rail focus on the chip identified by _pendingFooterKey (one-shot).
+ * Called after a rebuild so a keepFocus chip's action keeps the cursor on it. */
+function restorePendingFooterFocus() {
+  if (_pendingFooterKey == null) return;
+  const i = footerKeyIndex(_pendingFooterKey);
+  _pendingFooterKey = null;
+  if (i >= 0) {
+    shortcutFocusIdx = i;
+    paintShortcutFocus();
+    // The user acted from the rail and wants to stay there. Entering an agent
+    // via Select kicks off an async chat render that would otherwise steal focus
+    // to the last bubble (it runs after this) — suppress that so the rail keeps
+    // focus. Grid-tile entry doesn't set _pendingFooterKey, so it's unaffected.
+    _focusLastOnNextChatRender = false;
+  }
+}
 
 /* Builds the full footer focus order at the moment the user enters the
  * rail: every clickable chip in #shortcuts-rail, then #primary-shortcut,
@@ -124,10 +163,65 @@ function footerFocusables() {
 
 const GAMEPAD_GLYPHS = { cross: '✕', circle: '○', square: '□', triangle: '△' };
 
+let _footerHoldEl = null;
+let _footerHoldKey = null;   // scKey of the held chip (set only when held from rail focus)
+/* Start/stop a hold-type footer chip (push-to-talk, reasoning). Mirrors the
+ * global V / R key holds: start() on press, end() on release. Idempotent so a
+ * key auto-repeat or a second input source can't double-fire. */
+function beginChipHold(el) {
+  if (_footerHoldEl || !el?._hold) return;
+  _footerHoldEl = el;
+  // Remember the chip so we can put rail focus back on it after release — only
+  // when the hold was started from the rail (Enter / cross). Pointer holds and
+  // the global V/R keys leave shortcutFocusIdx at -1 and don't retain.
+  _footerHoldKey = shortcutFocusIdx >= 0 ? (el.dataset.scKey || null) : null;
+  el.classList.add('holding');
+  el._hold.start();
+}
+function endChipHold(el) {
+  if (!_footerHoldEl || (el && el !== _footerHoldEl)) return;
+  const h = _footerHoldEl;
+  const key = _footerHoldKey;
+  _footerHoldEl = null;
+  _footerHoldKey = null;
+  h.classList.remove('holding');
+  // Keep rail focus on the chip after the hold. Arm a one-shot restore for the
+  // action's terminal re-render — reasoning's commit rebuilds the rail
+  // synchronously inside end(); talk's transcript rebuilds it asynchronously —
+  // then re-assert directly for the gap (talk clears focus in startPTT, and some
+  // paths don't re-render at all). One-shot (not sticky) so later streaming
+  // re-renders don't keep yanking focus back to the rail.
+  if (key) _pendingFooterKey = key;
+  h._hold.end();
+  if (key) {
+    _pendingFooterKey = key;
+    const i = footerKeyIndex(key);
+    if (i >= 0 && shortcutFocusIdx < 0) { shortcutFocusIdx = i; paintShortcutFocus(); }
+  }
+}
+
 function buildChip(it) {
   const wrap = document.createElement('span');
   wrap.className = 'sc';
-  if (it.action) {
+  wrap.dataset.scKey = it.keyboard || it.gamepad || it.label || '';   // stable id for focus retention
+  if (it.disabledInRail) wrap._disabledInRail = true;
+  if (it.keepFocus) wrap._keepFocus = true;
+  if (it.hold) {
+    // Hold-type chip: press-and-hold semantics (pointer), mirroring the global
+    // V / R holds. Pointer capture keeps the hold alive through the layout
+    // shifts that starting dictation / the effort picker can cause.
+    wrap.style.cursor = 'pointer';
+    wrap._hold = it.hold;
+    wrap.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { wrap.setPointerCapture(e.pointerId); } catch {}
+      beginChipHold(wrap);
+    });
+    const release = () => endChipHold(wrap);
+    wrap.addEventListener('pointerup', release);
+    wrap.addEventListener('pointercancel', release);
+    wrap.addEventListener('lostpointercapture', release);
+  } else if (it.action) {
     wrap.style.cursor = 'pointer';
     wrap.addEventListener('click', () => it.action());
   }
@@ -181,12 +275,24 @@ function setShortcuts(items) {
     }
     shortcutsRailEl.appendChild(buildChip(it));
   }
-  if (backItem) backShortcutEl.appendChild(buildChip(backItem));
+  if (backItem) {
+    const backChip = buildChip(backItem);
+    backChip._keepFocus = true;   // Back retains rail focus across the screen it lands on
+    backShortcutEl.appendChild(backChip);
+  }
+  // Re-assert rail focus after a keepFocus chip's action rebuilt the rail.
+  restorePendingFooterFocus();
 }
 
 function paintShortcutFocus() {
   const items = footerFocusables();
-  items.forEach((el, i) => el.classList.toggle('focused', i === shortcutFocusIdx));
+  items.forEach((el, i) => {
+    const on = i === shortcutFocusIdx;
+    el.classList.toggle('focused', on);
+    // A chip that needs a grid selection (Agent on/off) reads as disabled while
+    // it's the focused rail chip — it can't act without an agent selected.
+    el.classList.toggle('disabled', on && !!el._disabledInRail);
+  });
 }
 function enterShortcuts() {
   const items = footerFocusables();
@@ -197,6 +303,7 @@ function enterShortcuts() {
   return true;
 }
 function leaveShortcuts() {
+  _pendingFooterKey = null;
   shortcutFocusIdx = -1;
   paintShortcutFocus();
 }
@@ -213,6 +320,7 @@ function leaveFooterUpward() {
   ring.paint();
 }
 function moveShortcutFocus(delta) {
+  _pendingFooterKey = null;   // a deliberate rail move cancels any pending re-assert
   const items = footerFocusables();
   const n = items.length;
   if (n === 0) return;
@@ -221,10 +329,18 @@ function moveShortcutFocus(delta) {
   if (shortcutFocusIdx !== prev) playSfx('navStrip');   // moved across the footer rail
   paintShortcutFocus();
 }
+// When a keepFocus chip ([ ] / A / E / Back / Select) is activated from the
+// rail, the action often re-renders (rebuilding the rail with shortcutFocusIdx
+// reset to -1). activateFocusedShortcut records the chip's scKey in
+// _pendingFooterKey so the NEXT setShortcuts re-asserts it by identity — keeping
+// the same chip highlighted (with a Back→Select fallback). Cleared by any
+// deliberate rail nav.
 function activateFocusedShortcut() {
   const items = footerFocusables();
   const el = items[shortcutFocusIdx];
   if (!el) return;
+  if (el._disabledInRail) return;   // needs an agent selected; inert from the rail
+  _pendingFooterKey = el._keepFocus ? (el.dataset.scKey || null) : null;
   // Synthesize a click — covers chips with click handlers AND action-bar
   // buttons. For chips without handlers (e.g. the "Enter Select" primary)
   // this is a no-op, which is correct — pressing Enter on it is the same
@@ -241,6 +357,8 @@ function setPrimaryShortcut(item) {
   const GAMEPAD = { cross: '✕', circle: '○', square: '□', triangle: '△' };
   const wrap = document.createElement('span');
   wrap.className = 'sc';
+  wrap.dataset.scKey = item.keyboard || item.gamepad || item.label || '';   // stable id for focus retention
+  wrap._disabledInRail = true;   // Select acts on the focused tile/bubble, not from the rail — show disabled + inert
   if (item.action) {
     wrap.style.cursor = 'pointer';
     wrap.addEventListener('click', () => item.action());
@@ -731,7 +849,9 @@ function refreshEffortChip() {
   else if (mode === MODE_GRID) updateGridShortcuts();
 }
 function effortChipItem() {
-  return { gamepad: 'touchpad', keyboard: 'R', label: 'Reasoning', action: () => cycleScopeEffort() };
+  // Hold to open the reasoning-effort picker (nudge ↑/↓ while held, release to
+  // commit) — same as holding the R key / the DualSense touchpad.
+  return { gamepad: 'touchpad', keyboard: 'R', label: 'Reasoning', hold: { start: openEffortPicker, end: commitEffortPicker } };
 }
 
 /* ---------- App state ---------- */
@@ -830,6 +950,12 @@ let newProjTopology = null;   // chosen during step 2 (no default selection)
 let newProjName     = '';                // captured during step 3
 let newProjGoal     = '';                // captured during step 4
 let newProjFeatures = '';                // captured during step 5
+/* Any work entered into the in-progress new project. Canceling from a later
+ * capture step discards ALL of it (name is always set by then), so the cancel
+ * confirmation keys off this — not just the current step's field. */
+function hasCaptureProgress() {
+  return !!(newProjName.trim() || newProjGoal.trim() || newProjFeatures.trim());
+}
 
 // Work topologies offered after role selection. Display copy lives here; the
 // operating rule written into project.md lives server-side (projects.js).
@@ -1204,6 +1330,7 @@ function handleProjectEditGamepad(b) {
 }
 // Cross release: cancel a remove-hold in the modal, or finish a tile long-press at L0.
 gp.addEventListener('release', (e) => {
+  if (e.detail.button === 'cross' && _footerHoldEl) { endChipHold(_footerHoldEl); return; }  // release a held footer chip
   if (e.detail.button === 'touchpad') { commitEffortPicker(); return; }
   if (editBubbleOpen && e.detail.button === 'cross' && editDictating) { endEditDictate(); return; }  // release stops dictation
   if (e.detail.button === 'cross' && _otherDictateBtn) { endOtherDictate(); return; }  // release stops "Other" dictation
@@ -1213,6 +1340,7 @@ gp.addEventListener('release', (e) => {
 });
 // Releasing Enter at L0 (no modal) finishes a tile long-press.
 window.addEventListener('keyup', (e) => {
+  if (e.key === 'Enter' && _footerHoldEl) { endChipHold(_footerHoldEl); return; }  // release a held footer chip
   if (e.key === 'Enter' && mode === MODE_PROJECTS && !projectEditOpen) endProjectHold(true);
   if (e.key === 'r' || e.key === 'R') commitEffortPicker();  // release R → set reasoning effort
 });
@@ -1985,7 +2113,7 @@ function renderNewProjectName() {
     </div>`;
   surfaceEl.appendChild(t);
   const tryCancelNameCapture = () => {
-    maybeConfirmCancel(!!newProjName.trim(), () => { stopMicVisualizer(); renderProjects(); });
+    maybeConfirmCancel(hasCaptureProgress(), () => { stopMicVisualizer(); renderProjects(); });
   };
   const nameBackEl   = t.querySelector('#capture-back');
   const nameCancelEl = t.querySelector('#capture-cancel');
@@ -2046,7 +2174,7 @@ function renderNewProjectGoal() {
     </div>`;
   surfaceEl.appendChild(t);
   const tryCancelGoalCapture = () => {
-    maybeConfirmCancel(!!newProjGoal.trim(), () => { stopMicVisualizer(); renderProjects(); });
+    maybeConfirmCancel(hasCaptureProgress(), () => { stopMicVisualizer(); renderProjects(); });
   };
   const goalBackEl   = t.querySelector('#capture-back');
   const goalCancelEl = t.querySelector('#capture-cancel');
@@ -2102,7 +2230,7 @@ function renderNewProjectFeatures() {
     </div>`;
   surfaceEl.appendChild(t);
   const tryCancelFeaturesCapture = () => {
-    maybeConfirmCancel(!!newProjFeatures.trim(), () => { stopMicVisualizer(); renderProjects(); });
+    maybeConfirmCancel(hasCaptureProgress(), () => { stopMicVisualizer(); renderProjects(); });
   };
   const featBackEl   = t.querySelector('#capture-back');
   const featCancelEl = t.querySelector('#capture-cancel');
@@ -2491,16 +2619,19 @@ function updateGridShortcuts() {
   const focused = activeProject.agents[gridIndex];
   const isLeadFocused = focused?.id === activeProject.leadAgentId;
   const items = [
-    { gamepad: 'r2', keyboard: 'V', label: 'Hold to talk', action: () => startPTT() },
+    { gamepad: 'r2', keyboard: 'V', label: 'Hold to talk', hold: { start: startPTT, end: endPTT } },
     effortChipItem(),
-    { gamepad: 'l1', keyboard: '[', label: 'Prev project', action: () => cycleProject(-1) },
-    { gamepad: 'r1', keyboard: ']', label: 'Next project', action: () => cycleProject(+1) },
+    { gamepad: 'l1', keyboard: '[', label: 'Prev project', keepFocus: true, action: () => cycleProject(-1) },
+    { gamepad: 'r1', keyboard: ']', label: 'Next project', keepFocus: true, action: () => cycleProject(+1) },
     {                    gamepad: 'triangle', keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
-    { gamepad: 'square', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
+    { gamepad: 'square', keyboard: 'E', label: 'Explorer', keepFocus: true, action: () => toggleFileExplorer() },
   ];
   if (!isLeadFocused) {
+    // Toggling an agent needs a grid tile selected, which isn't the case while
+    // focus is in the footer rail — so this chip shows disabled (and is inert)
+    // when reached by footer navigation.
     items.push({ gamepad: 'options', keyboard: 'Space', label: 'Agent on / off',
-                 action: () => toggleFocusedAgentEnabled() });
+                 disabledInRail: true, action: () => toggleFocusedAgentEnabled() });
   }
   items.push({ gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => exitToProjects() });
   setShortcuts(items);
@@ -3874,7 +4005,7 @@ function handleEditBubbleGamepad(button) {
 
 function _setL2Shortcuts() {
   setShortcuts([
-    { gamepad: 'r2',      keyboard: 'V', label: 'Hold to talk', action: () => startPTT() },
+    { gamepad: 'r2',      keyboard: 'V', label: 'Hold to talk', hold: { start: startPTT, end: endPTT } },
     effortChipItem(),
     {                     keyboard: '/', label: 'Type prompt',  action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     { gamepad: 'l1',      keyboard: '[', label: 'Prev agent',   action: () => cycleAgent(-1) },
@@ -3966,7 +4097,7 @@ function exitCouncilToGrid() { playSfx('zoomout'); renderGrid(); }
 function councilFooterShortcuts() {
   renderActionBar([]);
   setShortcuts([
-    { gamepad: 'r2', keyboard: 'V', label: 'Hold to talk', action: () => startPTT() },
+    { gamepad: 'r2', keyboard: 'V', label: 'Hold to talk', hold: { start: startPTT, end: endPTT } },
     { keyboard: '/', label: 'Type prompt', action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     { gamepad: 'triangle', keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
     { gamepad: 'square', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
@@ -4220,6 +4351,7 @@ async function runCouncilDeliberation() {
 /** Slide to the next / previous project from L1 (project detail). */
 function cycleProject(delta) {
   if (mode !== MODE_GRID || !activeProject) return;
+  if (fileViewerOpen) return;   // project switching is disabled while the md viewer is open
   // Only one project — nothing to switch to: rubberband to say so.
   if (projects.length < 2) { bumpEdge(surfaceEl, delta > 0 ? 'right' : 'left'); return; }
   const curIdx = projects.findIndex(p => p.id === activeProject.id);
@@ -4234,6 +4366,7 @@ function cycleProject(delta) {
     gridIndex = 0;
     zoomedIndex = 0;
     renderGrid();
+    if (fileExplorerOpen) refreshFileExplorer();   // show the new project's files (defined below)
   });
 }
 
@@ -4250,6 +4383,7 @@ function openAgentById(agentId) {
 
 function cycleAgent(delta) {
   if (mode !== MODE_ZOOM || !activeProject) return;
+  if (fileViewerOpen) return;   // agent switching is disabled while the md viewer is open
   const n = activeProject.agents.length;
   // Step in the requested direction to the next ENABLED agent — no wrap-around.
   let i = zoomedIndex + delta;
@@ -4633,6 +4767,28 @@ async function postPartialTranscript(blob) {
   finally { _partialBusy = false; }
 }
 
+/* Decode the recorded clip and report whether it's essentially silent — no
+ * sample ever reaches speech level. Uses PEAK amplitude (not RMS): a single
+ * real word spikes the peak even within a long mostly-quiet hold, while a
+ * silent hold stays flat. Conservative threshold so real (even quiet) speech is
+ * never dropped; fails OPEN (returns false) if the clip can't be decoded. */
+async function isProbablySilent(blob) {
+  try {
+    if (!blob || blob.size === 0) return true;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return false;
+    const buf = await blob.arrayBuffer();
+    const ac = new Ctx();
+    try {
+      const audio = await ac.decodeAudioData(buf);
+      const ch = audio.getChannelData(0);
+      let peak = 0;
+      for (let i = 0; i < ch.length; i += 8) { const a = Math.abs(ch[i]); if (a > peak) peak = a; }
+      return peak < 0.02;   // ≈ -34 dBFS; speech peaks well above, silence well below
+    } finally { try { ac.close(); } catch {} }
+  } catch { return false; }
+}
+
 async function postLocalTranscript(blob) {
   setIndicator('thinking', 'Transcribing…');
   try {
@@ -4654,6 +4810,13 @@ async function postLocalTranscript(blob) {
     const text = (data?.text || '').trim();
     setIndicator('idle', 'Connected');
     if (!text) { clearPendingBubble(); setIndicator('idle', 'No speech detected'); setTimeout(() => setIndicator('idle', 'Connected'), 1500); return; }
+    // Parakeet (like Whisper-family models) can hallucinate a short filler —
+    // "Yeah.", "you", "Thank you" — from a silent hold. Those are non-empty, so
+    // gate on the actual captured audio: if it never reached speech level, drop
+    // the phantom transcript instead of submitting it.
+    if (await isProbablySilent(blob)) {
+      clearPendingBubble(); setIndicator('idle', 'No speech detected'); setTimeout(() => setIndicator('idle', 'Connected'), 1500); return;
+    }
     // Hand off to the same routes Speech 'end' uses so the rest of
     // the app behaves identically to the browser-STT flow.
     dispatchTranscript(text);
@@ -5021,18 +5184,58 @@ function openActivityDrawer() {
   const headerEl = el.querySelector('header span');
   if (headerEl) headerEl.textContent = 'Activity';
   repaintActivityList();
+  // Pressing A / ▲ lands focus on the newest (top) entry so the feed is
+  // immediately navigable.
+  enterActivityFromSurface('first');
 }
 function closeActivityDrawer() {
   const el = document.getElementById('activity-drawer');
   if (!el) return;
   el.hidden = true;
   activityDrawerOpen = false;
+  activityFocused = false;
   document.body.dataset.activityDrawer = 'closed';
+}
+
+// ── Activity feed keyboard/gamepad navigation (view-only) ────────────────────
+let activityFocused = false;       // true while keyboard nav is inside the feed
+let activityFocusIdx = 0;
+let activityEntries = [];          // entry rows, in display order (newest first)
+function paintActivityFocus() {
+  activityEntries.forEach((el, i) => el.classList.toggle('focused', i === activityFocusIdx));
+  activityEntries[activityFocusIdx]?.scrollIntoView({ block: 'nearest' });
+}
+/* Step the activity cursor by ±1, clamped, nav sound on an actual move. */
+function stepActivityFocus(delta) {
+  if (!activityEntries.length) return;
+  const prev = activityFocusIdx;
+  activityFocusIdx = Math.max(0, Math.min(activityEntries.length - 1, activityFocusIdx + delta));
+  if (activityFocusIdx !== prev) playSfx('navigate');
+  paintActivityFocus();
+}
+/* Move focus from the main surface INTO the feed (Left at the grid's left edge,
+ * or opening via A / ▲). Entries are newest-first, so 'first' = newest (top).
+ * View-only: Up/Down highlight, no open. Returns false if nothing to focus. */
+function enterActivityFromSurface(which = 'first') {
+  if (!activityDrawerOpen || !activityEntries.length) return false;
+  if (isShortcutsFocused()) leaveShortcuts();   // came from the A footer chip
+  activityFocused = true;
+  ring.items?.forEach?.(el => el.classList.remove('focused'));
+  activityFocusIdx = which === 'last' ? activityEntries.length - 1 : 0;
+  paintActivityFocus();
+  return true;
+}
+/* Exit the feed back to the main surface (Right / Esc-less). */
+function exitActivityRight() {
+  activityFocused = false;
+  activityEntries.forEach(el => el.classList.remove('focused'));
+  ring.paint();
 }
 function repaintActivityList() {
   const list = document.querySelector('#activity-drawer .activity-list');
   if (!list) return;
   list.innerHTML = '';
+  activityEntries = [];
   // On L0 (the projects landing) show the cross-project feed with a
   // project-name crumb; inside a project filter to it. Keyed on mode, not
   // just activeProject — that record lingers after backing out to L0.
@@ -5082,6 +5285,12 @@ function repaintActivityList() {
         if (agentName && summary.startsWith(agentName)) {
           summary = summary.slice(agentName.length).replace(/^\s*[:\-–—]\s*/, '');
         }
+        // Drop a leading role tag the author line already shows — the full role
+        // label or a short acronym like "PM:" / "QA:".
+        if (role && summary.toLowerCase().startsWith(role.toLowerCase())) {
+          summary = summary.slice(role.length).replace(/^\s*[:\-–—]\s*/, '');
+        }
+        summary = summary.replace(/^\s*[A-Z]{2,4}\s*[:\-–—]\s*/, '');
       }
 
       const projEl = document.createElement('div');
@@ -5092,16 +5301,20 @@ function repaintActivityList() {
       authorEl.textContent = authorText;
       const sumEl = document.createElement('div');
       sumEl.className = 'activity-summary';
-      sumEl.textContent = summary;
+      sumEl.textContent = sentenceCase(summary);
       row.append(projEl, authorEl, sumEl, meta);
     } else {
       const line = document.createElement('div');
       line.className = 'activity-line';
-      line.textContent = entry.text;
+      line.textContent = sentenceCase(entry.text);
       row.append(line, meta);
     }
     list.appendChild(row);
+    activityEntries.push(row);
   }
+  // Keep the highlight valid across live re-renders while the feed is focused.
+  activityFocusIdx = Math.min(activityFocusIdx, Math.max(0, activityEntries.length - 1));
+  if (activityFocused) paintActivityFocus();
 }
 
 /* Cross-project feed entry → open the target project. If the entry
@@ -5545,6 +5758,7 @@ function bumpEdge(el, dir, d = 16) {
   if (!el) return;
   const off = { left: [-d, 0], right: [d, 0], up: [0, -d], down: [0, d] }[dir];
   if (!off) return;
+  playSfx('bump');   // audible "you've hit the edge" cue
   el.animate(
     [
       { transform: 'translate(0,0)' },
@@ -5825,6 +6039,10 @@ async function toggleFileExplorer() {
 }
 
 async function openFileExplorer() {
+  // Opened from the footer rail (E chip, a keepFocus action) → reveal the panel
+  // but leave focus on the chip; the user steps into the explorer deliberately.
+  // Any other entry point (e.g. the global E key) focuses it as before.
+  const fromRail = _pendingFooterKey != null;
   syncExplorerHeights();
   try {
     const r = await fetch(`/projects/${activeProject.id}/files`);
@@ -5839,9 +6057,11 @@ async function openFileExplorer() {
 
   fileDrawerEl.hidden = false;
   fileExplorerOpen = true;
-  explorerFocused = true;
-  fileFocus = 0;
-  paintFileFocus();
+  if (!fromRail) {
+    explorerFocused = true;
+    fileFocus = 0;
+    paintFileFocus();
+  }
   document.body.dataset.fileDrawer = 'open';
   if (drawerOpen) closeHistoryDrawer();
   if (memoryDrawerOpen) closeMemoryDrawer();
@@ -5896,6 +6116,7 @@ const fileViewerCloseEl = fileViewerEl.querySelector('.file-viewer-close');
 let fileViewerOpen      = false;
 fileViewerCloseEl?.addEventListener('click', (e) => {
   e.stopPropagation();
+  playSfx('select');   // close-button press feedback (the close itself plays swooshPrev)
   closeFileViewer();
 });
 // Right-arrow off the × button: move focus to the surface itself so
@@ -5903,6 +6124,7 @@ fileViewerCloseEl?.addEventListener('click', (e) => {
 fileViewerCloseEl?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault(); e.stopPropagation();
+    playSfx('select');   // close-button press feedback
     closeFileViewerToExplorer();
     return;
   }
@@ -6040,6 +6262,7 @@ async function openFocusedFile() {
 }
 
 function showFileViewer(path, body) {
+  playSfx('swooshNext');   // viewer slides in
   fileViewerPathEl.textContent = path;
   fileViewerBodyEl.textContent = body;
   fileViewerBodyEl.scrollTop = 0;
@@ -6054,11 +6277,15 @@ function showFileViewer(path, body) {
   explorerFocused = false;
   fileEntries.forEach(el => el.classList.remove('focused'));
   paintOpenFile();
+  _viewerNavSilent = true;   // opening plays swooshNext, not the focus nav sound
   setSurfaceCloseFocus(false);
   setViewerBodyFocus(true);
+  _viewerNavSilent = false;
 }
 
 function closeFileViewer() {
+  if (!fileViewerOpen) return;   // avoid a stray swoosh when already closed
+  playSfx('swooshPrev');   // viewer slides out
   fileViewerEl.hidden = true;
   fileViewerOpen = false;
   document.body.dataset.fileViewer = 'closed';
@@ -6102,7 +6329,9 @@ function setSurfaceCloseFocus(on) {
 // True while the file viewer's text container holds focus. In this state the
 // right stick scrolls the body and Up moves focus to the viewer's × button.
 let viewerBodyFocused = false;
+let _viewerNavSilent = false;   // suppress the nav SFX during open/close (swoosh plays instead)
 function setViewerBodyFocus(on) {
+  if (on && !viewerBodyFocused && !_viewerNavSilent) playSfx('navigate');   // moved INTO the body
   viewerBodyFocused = !!on;
   if (fileViewerBodyEl) fileViewerBodyEl.classList.toggle('focused', viewerBodyFocused);
   document.body.dataset.viewerBody = viewerBodyFocused ? 'true' : 'false';
@@ -6113,6 +6342,7 @@ function setViewerBodyFocus(on) {
 // Enter drops into the surface; Left returns to the viewer body.
 let surfaceContainerFocused = false;
 function setSurfaceContainerFocus(on) {
+  if (on && !surfaceContainerFocused && !_viewerNavSilent) playSfx('navigate');   // moved onto the surface container
   surfaceContainerFocused = !!on;
   surfaceEl.classList.toggle('container-focused', surfaceContainerFocused);
   document.body.dataset.surfaceContainer = surfaceContainerFocused ? 'true' : 'false';
@@ -6242,10 +6472,10 @@ gp.addEventListener('press', (e) => {
   // Left returns to the explorer, Right highlights the surface container,
   // Circle closes.
   if (viewerBodyFocused) {
-    if (b === 'up')     { setViewerBodyFocus(false); fileViewerCloseEl?.focus(); return; }
+    if (b === 'up')     { playSfx('navigate'); setViewerBodyFocus(false); fileViewerCloseEl?.focus(); return; }
     if (b === 'down')   { fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
     if (b === 'cross')  { fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
-    if (b === 'left')   { if (fileExplorerOpen) { setViewerBodyFocus(false); explorerFocused = true; paintFileFocus(); } return; }
+    if (b === 'left')   { if (fileExplorerOpen) { playSfx('navigate'); setViewerBodyFocus(false); explorerFocused = true; paintFileFocus(); } return; }
     if (b === 'right')  { setViewerBodyFocus(false); setSurfaceContainerFocus(true); return; }
     if (b === 'circle') { closeFileViewerToExplorer(); return; }
   }
@@ -6292,7 +6522,12 @@ gp.addEventListener('press', (e) => {
     if (b === 'right')  { moveShortcutFocus(+1); return; }
     if (b === 'up')     { leaveFooterUpward(); return; }
     if (b === 'down')   { return; }   // already the bottom row — no rubberband
-    if (b === 'cross')  { activateFocusedShortcut(); return; }
+    if (b === 'cross')  {
+      const el = footerFocusables()[shortcutFocusIdx];
+      if (el?._hold) beginChipHold(el);   // press-and-hold chip (talk / reasoning)
+      else activateFocusedShortcut();
+      return;
+    }
     if (b === 'circle') { leaveShortcuts(); ring.paint(); return; }
     return;
   }
@@ -6325,11 +6560,22 @@ gp.addEventListener('press', (e) => {
       if (b === 'cross')                { openFocusedFile(); return; }
       if (b === 'circle')               { closeFileExplorer(); return; }
     }
-    // Left off the leftmost grid column with the explorer open hops back in.
-    if (b === 'left' && fileExplorerOpen && !explorerFocused) {
+    if (activityDrawerOpen && activityFocused) {
+      // View-only feed: Up/Down highlight, Right leaves, Circle closes.
+      if (b === 'up')    { stepActivityFocus(-1); return; }
+      if (b === 'down')  { stepActivityFocus(+1); return; }
+      if (b === 'left')  { return; }
+      if (b === 'right') { exitActivityRight(); return; }
+      if (b === 'circle'){ closeActivityDrawer(); ring.paint(); return; }
+    }
+    // Left off the leftmost grid column with a left drawer open hops back in.
+    if (b === 'left' && (fileExplorerOpen || activityDrawerOpen) && !explorerFocused && !activityFocused) {
       const grid = surfaceEl.querySelector('.agent-grid');
       const cols = grid?._cols || 4;
-      if ((ring.index % cols) === 0) { enterExplorerFromSurface(); return; }
+      if ((ring.index % cols) === 0) {
+        if (activityDrawerOpen) enterActivityFromSurface('first'); else enterExplorerFromSurface();
+        return;
+      }
     }
     if (b === 'up' || b === 'down' || b === 'left' || b === 'right') gridMove(b);
     else if (b === 'cross')   enterZoom();
@@ -6353,6 +6599,13 @@ gp.addEventListener('press', (e) => {
       if (b === 'cross')                { openFocusedFile(); return; }
       if (b === 'circle')               { closeFileExplorer(); return; }
     }
+    if (activityDrawerOpen && activityFocused) {
+      if (b === 'up')    { stepActivityFocus(-1); return; }
+      if (b === 'down')  { stepActivityFocus(+1); return; }
+      if (b === 'left')  { return; }
+      if (b === 'right') { exitActivityRight(); return; }
+      if (b === 'circle'){ closeActivityDrawer(); ring.paint(); return; }
+    }
     // Chat-history navigation (mirrors the keyboard model): once a bubble is
     // focused, Up/Down walk bubbles, Left/Right cycle a bubble's action icons,
     // Cross activates, Down past the last bubble (or Circle) drops back out.
@@ -6362,9 +6615,10 @@ gp.addEventListener('press', (e) => {
       if (b === 'r1')     { cycleAgent(+1); return; }
       return;
     }
-    // Left at the first ring position with the explorer open hops back in.
-    if (b === 'left' && fileExplorerOpen && !explorerFocused && ring.index === 0) {
-      enterExplorerFromSurface(); return;
+    // Left at the first ring position with a left drawer open hops back in.
+    if (b === 'left' && (fileExplorerOpen || activityDrawerOpen) && !explorerFocused && !activityFocused && ring.index === 0) {
+      if (activityDrawerOpen) enterActivityFromSurface('first'); else enterExplorerFromSurface();
+      return;
     }
     // Surface ring. Up from the top enters the chat history (last bubble);
     // Down from the bottom drops into the footer shortcuts rail.
@@ -6572,6 +6826,7 @@ document.getElementById('settings-git-interval-dec')?.addEventListener('click', 
 document.getElementById('settings-git-interval-inc')?.addEventListener('click', () => stepGitInterval(+1));
 const settingsSaveEl      = document.getElementById('settings-save');
 const settingsCancelEl    = document.getElementById('settings-cancel');
+const settingsCloseEl     = document.getElementById('settings-close');
 const settingsTabEls      = [...document.querySelectorAll('.settings-tab')];
 const settingsPaneEls     = [...document.querySelectorAll('.settings-pane')];
 let settingsOpen = false;
@@ -6997,7 +7252,7 @@ function handleSettingsGamepad(button) {
   const isTab = settingsTabEls.includes(active);
   if (button === 'circle') { closeSettings(); return; }
   if (button === 'cross') {
-    if (active === settingsCancelEl) { closeSettings(); return; }
+    if (active === settingsCancelEl) { playSfx('select'); closeSettings(); return; }
     if (active === settingsSaveEl)   { saveSettings(); return; }
     if (active && active.tagName === 'BUTTON') { active.click(); return; }
     if (active && active.type === 'checkbox')  { active.checked = !active.checked; return; }
@@ -7018,6 +7273,16 @@ function handleSettingsGamepad(button) {
     const firstPane = items.find(el => !settingsTabEls.includes(el) && el !== settingsCancelEl && el !== settingsSaveEl);
     playSfx('navigate');
     (firstPane || settingsSaveEl)?.focus();
+    return;
+  }
+  // Up from a tab goes to the × close button (above the tab strip).
+  if (isTab && button === 'up') { playSfx('navigate'); settingsCloseEl?.focus(); return; }
+  // From the close button: Down returns to the active tab; Up/Left/Right stay put.
+  if (active === settingsCloseEl) {
+    if (button === 'down') {
+      playSfx('navigate');
+      (settingsTabEls.find(t => t.getAttribute('aria-selected') === 'true') || settingsTabEls[0])?.focus();
+    }
     return;
   }
   if (button === 'up')   { focusNextInModal(-1); return; }
@@ -7050,6 +7315,28 @@ settingsModalEl?.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') return;
     if (e.key === 'ArrowUp' && !atStart) return;
     if (e.key === 'ArrowDown' && !atEnd) return;
+  }
+
+  // The × close button sits above the tab strip: Down returns to the active
+  // tab; Up/Left/Right stay put (it's the top-most control). Enter/Escape fall
+  // through to native activation / the Escape branch above.
+  if (active === settingsCloseEl) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault(); e.stopPropagation();
+      playSfx('navigate');
+      (settingsTabEls.find(t => t.getAttribute('aria-selected') === 'true') || settingsTabEls[0])?.focus();
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault(); e.stopPropagation();   // swallow — nothing above the close button
+    }
+    return;
+  }
+
+  // Up from a tab goes to the × close button (above the tab strip).
+  if (isTab && e.key === 'ArrowUp') {
+    e.preventDefault(); e.stopPropagation();
+    playSfx('navigate');
+    settingsCloseEl?.focus();
+    return;
   }
 
   // Left/Right cycles tabs when a tab is focused.
@@ -7114,7 +7401,7 @@ settingsModalEl?.addEventListener('keydown', (e) => {
   // Enter on Cancel/Save activates them; Enter on an input triggers save
   // unless we're on a button (which has its own click handler).
   if (e.key === 'Enter') {
-    if (active === settingsCancelEl) { e.preventDefault(); e.stopPropagation(); closeSettings(); return; }
+    if (active === settingsCancelEl) { e.preventDefault(); e.stopPropagation(); playSfx('select'); closeSettings(); return; }
     if (active === settingsSaveEl)   { e.preventDefault(); e.stopPropagation(); saveSettings(); return; }
     if (active && active.tagName === 'BUTTON') { e.preventDefault(); e.stopPropagation(); active.click(); return; }
     if (active && (active.tagName === 'INPUT' && active.type !== 'checkbox')) {
@@ -7131,6 +7418,7 @@ settingsModalEl?.addEventListener('keydown', (e) => {
 });
 
 async function saveSettings() {
+  playSfx('select');   // confirm the press, like other buttons
   const updates = {};
   const apiKey = settingsApiKeyEl.value.trim();
   // Don't ship the placeholder back — that would clobber the real
@@ -7192,8 +7480,8 @@ settingsBtnEl?.addEventListener('keydown', (e) => {
   }
 });
 settingsSaveEl?.addEventListener('click', () => saveSettings());
-settingsCancelEl?.addEventListener('click', () => closeSettings());
-document.getElementById('settings-close')?.addEventListener('click', () => closeSettings());
+settingsCancelEl?.addEventListener('click', () => { playSfx('select'); closeSettings(); });
+document.getElementById('settings-close')?.addEventListener('click', () => { playSfx('select'); closeSettings(); });
 
 /* ---------- Full-screen toggle ---------- */
 const fullscreenBtnEl = document.getElementById('fullscreen-btn');
@@ -7263,6 +7551,13 @@ window.addEventListener('keydown', (e) => {
   // Escape is a one-shot back action — ignore auto-repeat. Otherwise a held Esc
   // fires repeated keydowns that over-navigate (e.g. add-agent → L1 → L0).
   if (e.key === 'Escape' && e.repeat) { e.preventDefault(); return; }
+
+  // A footer hold chip (talk / reasoning) is being held via Enter: swallow every
+  // Enter keydown for the duration. The first press started the hold through the
+  // rail branch below, but startPTT clears footer focus — so without this the
+  // auto-repeat Enters would fall through and fire the screen's default Enter
+  // action over and over. keyup ends the hold (global keyup handler).
+  if (e.key === 'Enter' && _footerHoldEl) { e.preventDefault(); return; }
 
   // Reasoning-effort picker: hold R, nudge ↑/↓, release R to set.
   const _typing = document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
@@ -7364,6 +7659,15 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'Enter')      { e.preventDefault(); openFocusedFile(); return; }
     if (e.key === 'Escape')     { e.preventDefault(); closeFileExplorer(); return; }
   }
+  // Activity feed (left drawer) — view-only: Up/Down highlight entries, Right
+  // leaves to the grid, Esc closes. Left is swallowed. No open (Enter).
+  if (activityDrawerOpen && activityFocused) {
+    if (e.key === 'ArrowUp')    { e.preventDefault(); stepActivityFocus(-1); return; }
+    if (e.key === 'ArrowDown')  { e.preventDefault(); stepActivityFocus(+1); return; }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); exitActivityRight(); return; }
+    if (e.key === 'Escape')     { e.preventDefault(); closeActivityDrawer(); ring.paint(); return; }
+  }
   // Shortcuts rail (bottom-left) is part of the focus order: arrow-down
   // from the main surface enters it; arrow-up exits back to the grid.
   if (isShortcutsFocused()) {
@@ -7379,7 +7683,13 @@ window.addEventListener('keydown', (e) => {
       else ring.paint();
       return;
     }
-    if (e.key === 'Enter')      { e.preventDefault(); activateFocusedShortcut(); return; }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const el = footerFocusables()[shortcutFocusIdx];
+      if (el?._hold) { if (!e.repeat) beginChipHold(el); }   // press-and-hold chip (talk / reasoning)
+      else activateFocusedShortcut();
+      return;
+    }
     if (e.key === 'Escape')     { e.preventDefault(); leaveShortcuts(); ring.paint(); return; }
   }
 
@@ -7483,10 +7793,10 @@ window.addEventListener('keydown', (e) => {
   // back into the explorer, Right highlights the surface container to the
   // right, Down nudge-scrolls, Esc closes.
   if (viewerBodyFocused) {
-    if (e.key === 'ArrowUp')    { e.preventDefault(); setViewerBodyFocus(false); fileViewerCloseEl?.focus(); return; }
+    if (e.key === 'ArrowUp')    { e.preventDefault(); playSfx('navigate'); setViewerBodyFocus(false); fileViewerCloseEl?.focus(); return; }
     if (e.key === 'ArrowDown')  { e.preventDefault(); fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
     if (e.key === 'ArrowLeft' && fileExplorerOpen) {
-      e.preventDefault(); setViewerBodyFocus(false); explorerFocused = true; paintFileFocus(); return;
+      e.preventDefault(); playSfx('navigate'); setViewerBodyFocus(false); explorerFocused = true; paintFileFocus(); return;
     }
     if (e.key === 'ArrowRight') { e.preventDefault(); setViewerBodyFocus(false); setSurfaceContainerFocus(true); return; }
     if (e.key === 'Enter')      { e.preventDefault(); fileViewerBodyEl.scrollBy({ top: 80, behavior: 'instant' }); return; }
@@ -7522,10 +7832,14 @@ window.addEventListener('keydown', (e) => {
     // × close, Left/Right flow across rows, Down drops into the footer rail.)
     // Left from the leftmost grid column with the explorer open hops
     // focus back into the explorer.
-    if (e.key === 'ArrowLeft' && fileExplorerOpen && !explorerFocused) {
+    if (e.key === 'ArrowLeft' && (fileExplorerOpen || activityDrawerOpen) && !explorerFocused && !activityFocused) {
       const grid = surfaceEl.querySelector('.agent-grid');
       const cols = grid?._cols || 4;
-      if ((ring.index % cols) === 0) { e.preventDefault(); enterExplorerFromSurface(); return; }
+      if ((ring.index % cols) === 0) {
+        e.preventDefault();
+        if (activityDrawerOpen) enterActivityFromSurface('first'); else enterExplorerFromSurface();
+        return;
+      }
     }
     if (dir) {
       // gridMove owns edge behavior: Down off the last content row drops into
@@ -7551,8 +7865,10 @@ window.addEventListener('keydown', (e) => {
       if (ring.index === 0 && focusSurfaceClose()) { e.preventDefault(); return; }
     }
     // Left at the first ring position with explorer open hops back in.
-    if (e.key === 'ArrowLeft' && fileExplorerOpen && !explorerFocused && ring.index === 0) {
-      e.preventDefault(); enterExplorerFromSurface(); return;
+    if (e.key === 'ArrowLeft' && (fileExplorerOpen || activityDrawerOpen) && !explorerFocused && !activityFocused && ring.index === 0) {
+      e.preventDefault();
+      if (activityDrawerOpen) enterActivityFromSurface('first'); else enterExplorerFromSurface();
+      return;
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault();
