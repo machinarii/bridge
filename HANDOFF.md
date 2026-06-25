@@ -84,6 +84,26 @@ The feed was display-only; it now mirrors the file explorer's focus model but **
 - **Project/agent switching disabled while the viewer is open:** `cycleProject`/`cycleAgent` early-return on `fileViewerOpen` (covers `[`/`]` keys, L1/R1 buttons, two-finger swipe, and the footer chip). The `[`/`]` chips are also **hidden** via CSS (`body[data-file-viewer="open"] #shortcuts-rail .sc[data-sc-key="["/"]"]`) — `display:none` also drops them from footer nav.
 - **Explorer follows the project:** switching projects with the explorer open reloads its tree via `refreshFileExplorer()` (re-fetch + `rebuildFileEntries`, closes a stale viewer, preserves open/focus state).
 
+### L1 decluttered — voice / reasoning / type-prompt removed
+L1 (project grid) is navigation-only now. The **V hold-to-talk**, **R reasoning**, and **`/` type-prompt** affordances are gone — chip AND capability:
+- V: chip dropped from `updateGridShortcuts`; `MODE_GRID` removed from `PTT_MODES` so the V key / R2 button no-op on L1 (L0 talk-to-lead unchanged).
+- R: chip dropped; `effortScope()` returns null for `MODE_GRID`, so the R key / touchpad picker is inert on L1. **Reasoning effort is now L2 (per-agent) only — there's no longer a way to set project-level effort.**
+- `/`: the global handler was firing in every mode; now gated off on `MODE_PROJECTS` (L0) and `MODE_GRID` (L1).
+
+### Confirmation modals + more sound feedback
+- **New SFX clip `notification`** (`sounds/ui-sound-notification.m4a`, copied to `app/renderer/sounds/`): plays when a confirm modal appears (`maybeConfirmCancel`).
+- Confirm-modal **buttons → `select`** on press (Yes/No, all input paths), **`navigate`** when toggling between them (keyboard + gamepad).
+- **Settings + fullscreen icons → `select`** (added in `openSettings`/`toggleFullscreen`, so every entry point is covered).
+- **New-project Cancel** only plays `zoomout` when it leaves directly; when there's progress it pops the confirm modal instead (which plays `notification`) — no double sound.
+- Copy: typed-input placeholder "press Enter" → **"press return"**.
+
+### `[` / `]` chips now flash when pressed
+`slideAgent`'s `doSwap()` is **synchronous**, so `cycleProject`/`cycleAgent` rebuild the footer rail immediately, destroying the chip the keydown just started flashing (other keys don't rebuild the rail, so they worked). Fix: re-flash the `[`/`]` chip (keyboard + gamepad glyph) right after the slide.
+
+### Activity drawer follow-ups
+- **A chip keeps focus when activated from the rail.** Re-added `keepFocus` to the A chips; `openActivityDrawer` only auto-enters the feed (newest entry) when **not** from the rail (`_pendingFooterKey == null`) — same rule as the Explorer chip. So the **A key/▲** enters the panel, but **Enter/X on the highlighted A chip** opens it and keeps focus on the chip.
+- **Header is fixed, not sticky.** The drawer is now a flex column where only `.activity-list` scrolls (`overscroll-behavior: contain`). This keeps the heading always visible, out of the overscroll bounce, and stops `scrollIntoView` from parking the first entry under it (the header is 66px — taller than a sticky scroll-offset would reliably clear).
+
 ## What's new (previous session — background runs, council parity, bubble/sound polish)
 
 All renderer + a few server changes. New server module: `council-store.js`. New
