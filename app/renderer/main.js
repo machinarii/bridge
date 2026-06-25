@@ -56,6 +56,7 @@ const backShortcutEl   = document.getElementById('back-shortcut');
  * missing file) are swallowed — sound is never load-bearing. */
 const SFX_FILES = {
   navigate:   'sounds/ui-sound-navigate.m4a',
+  navStrip:   'sounds/ui-sound-navigate-strip.m4a',   // moving across the footer shortcut rail
   zoomin:     'sounds/ui-sound-zoomin.m4a',
   zoomout:    'sounds/ui-sound-zoomout.m4a',
   swooshNext: 'sounds/ui-sound-swoosh-next.m4a',   // ] — slide right
@@ -66,6 +67,7 @@ const SFX_FILES = {
 // (e.g. ×0.7 = -3dB) are barely audible — adjust in big steps.
 const SFX_VOLUME = 0.084;                   // default per-play gain
 const SFX_VOLUMES = {                       // per-sound overrides
+  navStrip:   0.3,
   swooshNext: 0.02,
   swooshPrev: 0.02,
 };
@@ -188,6 +190,7 @@ function paintShortcutFocus() {
 function enterShortcuts() {
   const items = footerFocusables();
   if (items.length === 0) return false;
+  if (shortcutFocusIdx < 0) playSfx('navStrip');   // moved into the footer rail
   shortcutFocusIdx = 0;
   paintShortcutFocus();
   return true;
@@ -212,7 +215,9 @@ function moveShortcutFocus(delta) {
   const items = footerFocusables();
   const n = items.length;
   if (n === 0) return;
+  const prev = shortcutFocusIdx;
   shortcutFocusIdx = (shortcutFocusIdx + delta + n) % n;
+  if (shortcutFocusIdx !== prev) playSfx('navStrip');   // moved across the footer rail
   paintShortcutFocus();
 }
 function activateFocusedShortcut() {
