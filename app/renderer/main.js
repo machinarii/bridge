@@ -57,6 +57,7 @@ const backShortcutEl   = document.getElementById('back-shortcut');
 const SFX_FILES = {
   navigate:   'sounds/ui-sound-navigate.m4a',
   navStrip:   'sounds/ui-sound-navigate-strip.m4a',   // moving across the footer shortcut rail
+  select:     'sounds/ui-sound-select.m4a',           // selecting a choice / pressing a button
   zoomin:     'sounds/ui-sound-zoomin.m4a',
   zoomout:    'sounds/ui-sound-zoomout.m4a',
   swooshNext: 'sounds/ui-sound-swoosh-next.m4a',   // ] — slide right
@@ -2833,7 +2834,7 @@ function buildChoiceList(choices, agent, picked, skippable = false, handlers = {
     skip.type = 'button';
     skip.className = 'choice-skip';
     skip.textContent = 'Skip for now';
-    skip.addEventListener('click', (e) => { e.stopPropagation(); if (handlers.onSkip) handlers.onSkip(); else skipChoices(wrap, agent); });
+    skip.addEventListener('click', (e) => { e.stopPropagation(); playSfx('select'); if (handlers.onSkip) handlers.onSkip(); else skipChoices(wrap, agent); });
     actions.appendChild(skip);
   }
   if (hasChoices) {
@@ -2844,6 +2845,7 @@ function buildChoiceList(choices, agent, picked, skippable = false, handlers = {
     submit.textContent = 'Submit';
     submit.addEventListener('click', (e) => {
       e.stopPropagation();
+      playSfx('select');
       if (handlers.onSubmit) {
         const arr = [...wrap.querySelectorAll('.choice-btn[aria-pressed="true"]')]
           .map(b => (b.dataset.choice || b.textContent).trim()).filter(Boolean);
@@ -2874,6 +2876,7 @@ function endOtherDictate() {
   endPTT();
 }
 function toggleChoice(btn) {
+  playSfx('select');   // selecting / deselecting a choice in a bubble
   const on = btn.getAttribute('aria-pressed') === 'true';
   btn.setAttribute('aria-pressed', on ? 'false' : 'true');
   btn.classList.toggle('selected', !on);
