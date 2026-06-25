@@ -35,14 +35,18 @@ function paintGamepadGlyph(g, key) {
 }
 
 const surfaceEl       = document.getElementById('surface');
-// New-project capture flow: Cancel / Back play the step-back sound, Clear plays
-// the select sound. Delegated + capture-phase so it fires even though each
-// button's own click handler re-renders (and removes) the node. The IDs are
-// reused across all three capture steps (name / goal / features).
+// New-project capture flow: Back plays the step-back sound, Clear plays the
+// select sound, and Cancel "zooms out" ONLY when it leaves directly — when
+// there's progress to lose it pops the "do you really want to cancel?" confirm
+// instead (no zoomout here; the dialog owns that moment). Delegated +
+// capture-phase so it fires even though each button's own click handler
+// re-renders (and removes) the node. IDs are reused across all three steps.
 surfaceEl?.addEventListener('click', (e) => {
   const b = e.target.closest?.('#capture-cancel, #capture-back, #capture-redo');
   if (!b) return;
-  playSfx(b.id === 'capture-redo' ? 'select' : 'zoomout');
+  if (b.id === 'capture-redo') { playSfx('select'); return; }
+  if (b.id === 'capture-cancel' && hasCaptureProgress()) return;   // confirm dialog will show
+  playSfx('zoomout');
 }, true);
 const indicatorEl     = document.getElementById('listening-indicator');     // removed from DOM
 const indicatorTextEl = indicatorEl?.querySelector('.state-text') || null;
@@ -72,6 +76,7 @@ const SFX_FILES = {
   swooshNext: 'sounds/ui-sound-swoosh-next.m4a',   // ] — slide right
   swooshPrev: 'sounds/ui-sound-swoosh-prev.m4a',   // [ — slide left (reversed)
   bump:       'sounds/ui-sound-bump.m4a',          // rubberband at a navigation edge
+  notification: 'sounds/ui-sound-notification.m4a',  // a confirmation modal appears
 };
 // Perceived loudness is logarithmic: linear gain 0.12 ≈ -12dB from the
 // original 0.5 ≈ roughly half as loud to the ear. Small linear cuts
@@ -761,8 +766,8 @@ function effortForAgent(pid, aid) { return _lvl(_effortStore.agent?.[aid]) || _l
 function effortForProject(pid)    { return _lvl(_effortStore.proj?.[pid]) || 'high'; }
 /* Which scope the picker edits, by screen: L2 → this agent, L1 → this project. */
 function effortScope() {
+  // Reasoning effort is set per-agent on L2 only — L1 no longer exposes it.
   if (mode === MODE_ZOOM && currentAgent()) return { kind: 'agent', id: currentAgent().id };
-  if (mode === MODE_GRID && activeProject)  return { kind: 'project', id: activeProject.id };
   return null;
 }
 function scopeEffort(scope) {
@@ -1353,7 +1358,7 @@ function updatePickerShortcuts() {
   // Hold V / R2 to talk still works on L0; we just don't surface it as a footer
   // chip here.
   setShortcuts([
-    {                gamepad: 'triangle', keyboard: 'A', label: 'Activity',
+    {                gamepad: 'triangle', keyboard: 'A', label: 'Activity', keepFocus: true,
       action: () => toggleActivityDrawer() },
   ]);
 }
@@ -2619,11 +2624,9 @@ function updateGridShortcuts() {
   const focused = activeProject.agents[gridIndex];
   const isLeadFocused = focused?.id === activeProject.leadAgentId;
   const items = [
-    { gamepad: 'r2', keyboard: 'V', label: 'Hold to talk', hold: { start: startPTT, end: endPTT } },
-    effortChipItem(),
     { gamepad: 'l1', keyboard: '[', label: 'Prev project', keepFocus: true, action: () => cycleProject(-1) },
     { gamepad: 'r1', keyboard: ']', label: 'Next project', keepFocus: true, action: () => cycleProject(+1) },
-    {                    gamepad: 'triangle', keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
+    {                    gamepad: 'triangle', keyboard: 'A', label: 'Activity', keepFocus: true, action: () => toggleActivityDrawer() },
     { gamepad: 'square', keyboard: 'E', label: 'Explorer', keepFocus: true, action: () => toggleFileExplorer() },
   ];
   if (!isLeadFocused) {
@@ -3808,6 +3811,7 @@ function maybeConfirmCancel(hasUnsaved, onCancel) {
   confirmCancelPending = onCancel;
   confirmCancelOpen = true;
   confirmCancelModalEl.hidden = false;
+  playSfx('notification');   // a confirmation modal appeared
   setTimeout(() => confirmCancelNoEl.focus(), 0);
 }
 
@@ -3817,8 +3821,9 @@ function closeConfirmCancel() {
   confirmCancelPending = null;
 }
 
-confirmCancelNoEl?.addEventListener('click', () => closeConfirmCancel());
+confirmCancelNoEl?.addEventListener('click', () => { playSfx('select'); closeConfirmCancel(); });
 confirmCancelYesEl?.addEventListener('click', () => {
+  playSfx('select');
   const fn = confirmCancelPending;
   closeConfirmCancel();
   if (fn) fn();
@@ -3828,6 +3833,7 @@ confirmCancelModalEl?.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeConfirmCancel(); return; }
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     e.preventDefault(); e.stopPropagation();
+    playSfx('navigate');   // moved between Yes / No
     (document.activeElement === confirmCancelYesEl ? confirmCancelNoEl : confirmCancelYesEl)?.focus();
     return;
   }
@@ -4010,7 +4016,7 @@ function _setL2Shortcuts() {
     {                     keyboard: '/', label: 'Type prompt',  action: () => { typedWrap.hidden = false; typedInput.focus(); } },
     { gamepad: 'l1',      keyboard: '[', label: 'Prev agent',   action: () => cycleAgent(-1) },
     { gamepad: 'r1',      keyboard: ']', label: 'Next agent',   action: () => cycleAgent(+1) },
-    {                     gamepad: 'triangle', keyboard: 'A', label: 'Activity',     action: () => toggleActivityDrawer() },
+    {                     gamepad: 'triangle', keyboard: 'A', label: 'Activity', keepFocus: true, action: () => toggleActivityDrawer() },
     { gamepad: 'square', keyboard: 'E', label: 'Explorer',     action: () => toggleFileExplorer() },
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back',       action: () => pressCircle() },
   ]);
@@ -4099,7 +4105,7 @@ function councilFooterShortcuts() {
   setShortcuts([
     { gamepad: 'r2', keyboard: 'V', label: 'Hold to talk', hold: { start: startPTT, end: endPTT } },
     { keyboard: '/', label: 'Type prompt', action: () => { typedWrap.hidden = false; typedInput.focus(); } },
-    { gamepad: 'triangle', keyboard: 'A', label: 'Activity', action: () => toggleActivityDrawer() },
+    { gamepad: 'triangle', keyboard: 'A', label: 'Activity', keepFocus: true, action: () => toggleActivityDrawer() },
     { gamepad: 'square', keyboard: 'E', label: 'Explorer', action: () => toggleFileExplorer() },
     { gamepad: 'circle', keyboard: 'Esc', label: 'Back', action: () => exitCouncilToGrid() },
   ]);
@@ -4368,6 +4374,10 @@ function cycleProject(delta) {
     renderGrid();
     if (fileExplorerOpen) refreshFileExplorer();   // show the new project's files (defined below)
   });
+  // slideAgent's doSwap rebuilt the footer rail synchronously, eating the
+  // keydown's chip flash — re-light the pressed [ / ] chip on the fresh rail.
+  flashShortcutByKey(delta > 0 ? ']' : '[');
+  flashShortcutByGamepad(delta > 0 ? 'r1' : 'l1');
 }
 
 /* Jump straight to a specific agent's L2 chat (used by handoff bubbles). */
@@ -4395,6 +4405,9 @@ function cycleAgent(delta) {
   playSfx(delta > 0 ? 'swooshNext' : 'swooshPrev');   // agent → agent slide
   _focusLastOnNextChatRender = true;   // switched to another agent → focus its last bubble
   slideAgent(delta, () => { zoomedIndex = i; renderZoom(); });
+  // The slide rebuilt the footer rail synchronously — re-light the [ / ] chip.
+  flashShortcutByKey(delta > 0 ? ']' : '[');
+  flashShortcutByGamepad(delta > 0 ? 'r1' : 'l1');
 }
 
 /** Cross-fade slide between two agent screens at L2. The outgoing
@@ -4523,7 +4536,7 @@ async function executeAction(action, sourceSpec) {
 }
 
 /* ---------- PTT + intent submission ---------- */
-const PTT_MODES = new Set([MODE_PROJECTS, MODE_ZOOM, MODE_GRID, MODE_COUNCIL, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL, MODE_NEW_PROJ_FEATURES]);
+const PTT_MODES = new Set([MODE_PROJECTS, MODE_ZOOM, MODE_COUNCIL, MODE_NEW_PROJ_NAME, MODE_NEW_PROJ_GOAL, MODE_NEW_PROJ_FEATURES]);
 
 /* Voice capture always uses local STT via MediaRecorder -> /transcribe.
  * When the sidecar is unavailable we surface an error instead of
@@ -5184,9 +5197,11 @@ function openActivityDrawer() {
   const headerEl = el.querySelector('header span');
   if (headerEl) headerEl.textContent = 'Activity';
   repaintActivityList();
-  // Pressing A / ▲ lands focus on the newest (top) entry so the feed is
-  // immediately navigable.
-  enterActivityFromSurface('first');
+  // Pressing the A key / ▲ button lands focus on the newest (top) entry so the
+  // feed is immediately navigable. But activating the A *chip* from the footer
+  // rail (which sets _pendingFooterKey) keeps focus on the chip instead — same
+  // rule as the Explorer chip.
+  if (_pendingFooterKey == null) enterActivityFromSurface('first');
 }
 function closeActivityDrawer() {
   const el = document.getElementById('activity-drawer');
@@ -6434,6 +6449,7 @@ gp.addEventListener('press', (e) => {
   // input leaks to the screen underneath and the modal can't be answered.
   if (confirmCancelOpen) {
     if (b === 'left' || b === 'right') {
+      playSfx('navigate');   // moved between Yes / No
       (document.activeElement === confirmCancelYesEl ? confirmCancelNoEl : confirmCancelYesEl)?.focus();
     } else if (b === 'cross') {
       (document.activeElement === confirmCancelYesEl ? confirmCancelYesEl : confirmCancelNoEl)?.click();
@@ -7136,6 +7152,7 @@ async function ensureRolesList() {
 
 async function openSettings() {
   if (settingsOpen || editBubbleOpen || confirmCancelOpen || projectEditOpen) return;
+  playSfx('select');   // settings icon press
   settingsOpen = true;
   settingsModalEl.hidden = false;
   selectSettingsTab('general');
@@ -7492,6 +7509,7 @@ const fsBridge = window.bridge;          // present only under Electron
 let electronFs = false;                   // tracks native window full-screen state
 function isFullscreen() { return fsBridge ? electronFs : !!document.fullscreenElement; }
 function toggleFullscreen() {
+  playSfx('select');   // fullscreen icon press
   if (fsBridge) { fsBridge.toggleFullscreen(); return; }
   if (isFullscreen()) document.exitFullscreen?.();
   else document.documentElement.requestFullscreen?.().then(lockEscapeKey).catch(() => {});
@@ -7635,7 +7653,11 @@ window.addEventListener('keydown', (e) => {
       return;
     }
   }
-  if (bareKey && e.key === '/')  { e.preventDefault(); typedWrap.hidden = false; typedInput.focus(); return; }
+  // Type-prompt is for talking to an agent / council / capture — not the L0
+  // projects grid or the L1 project grid.
+  if (bareKey && e.key === '/' && mode !== MODE_PROJECTS && mode !== MODE_GRID) {
+    e.preventDefault(); typedWrap.hidden = false; typedInput.focus(); return;
+  }
 
   // Universal Tab: jumps focus into the footer rail from anywhere. Once
   // there, the rail keydown handler below takes over.
