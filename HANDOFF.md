@@ -40,7 +40,21 @@ Notes:
 - Voice is **Parakeet-only** — it never falls back to the browser engine. If the sidecar is down, voice shows a visible STT error.
 - **QA shortcut:** `npm run qa:new -- trading` (or `recipes` / `iot`) seeds a fully-formed project from prefilled name/objective/features and kicks off — skips the capture UI. Prefilled copy-paste text for the capture screens + a flow walkthrough live in **`QA-GUIDE.md`**.
 
-## What's new (this session — footer focus retention, hold-to-talk, voice + sound polish)
+## What's new (this session — capture-flow type sizing + mic-stack stability + `/`·`A`·`E` sound)
+
+Renderer-only (`app/renderer/main.js`, `style.css`). No server changes; server suite untouched. **Verify renderer edits with `node --check --input-type=module < app/renderer/main.js`** (plain `node --check` misses duplicate top-level declarations, which blank the screen).
+
+### Capture textboxes: smaller text + agent-bubble live transcript
+- **Live transcript** (`.mic-live-text`) now renders in the **agent-bubble font** (JetBrains Mono ExtraLight, `font-weight:200`) and is sized down **1.25rem → 0.95rem**.
+- **Smaller text across the new-project flow:** `.capture-value` (name/objective/features box) **1.4rem → 1.1rem**; each accumulated block `.capture-block` **1.05rem → 0.9rem** (name filled-state inherits the value size).
+
+### Mic-stack no longer shifts the UI when the wave appears
+Starting to talk swapped the small "Hold V to talk" hint for the 60px wave (`.mic-bars`), and because the capture tile is vertically centered that height change pushed the textbox + heading above it up/down. Fix: `.mic-label` now occupies the **same fixed 60px height** as `.mic-bars` (flex-centered), so toggling hint↔wave is height-neutral and nothing above moves. (The live-transcript slot still expands when recognized words arrive — separate, later slot.)
+
+### `/`, `A`, `E` keys play the `select` sound
+The bare-key shortcuts — `/` (type prompt), `A` (activity drawer), `E` (file explorer) — now `playSfx('select')` (`sounds/ui-sound-select.m4a`) inside their existing guards, so the click only fires when the key actually triggers its action (never while typing in a text field; `A`/`/` only in their active modes).
+
+## What's new (previous session — footer focus retention, hold-to-talk, voice + sound polish)
 
 Renderer-only (`app/renderer/main.js`, `style.css`). No server changes; server suite untouched. **Verify renderer edits with `node --check --input-type=module < app/renderer/main.js`** — plain `node --check` parses as a *script* and misses **duplicate top-level declarations**, which are a fatal SyntaxError in module mode and **blank the whole screen**. main.js is ~8k lines, so a helper you reach for often already exists — **grep the name before adding any top-level `function`/`let`/`const`.** For a true boot check, load the app headlessly in Electron and read `console.error` + `#surface` child count. Still **re-test in the app after a hard refresh.**
 
@@ -116,7 +130,7 @@ L1 (project grid) is navigation-only now. The **V hold-to-talk**, **R reasoning*
 - **File explorer:** removed the agent name (e.g. "Rowan") shown next to role/charter `.md` filenames — just the filename now.
 - **MD viewer × button:** plays only the close swoosh now (the `select` press sound was removed).
 
-## What's new (previous session — background runs, council parity, bubble/sound polish)
+## What's new (earlier session — background runs, council parity, bubble/sound polish)
 
 All renderer + a few server changes. New server module: `council-store.js`. New
 tests: `cancel.test.js`, `health.test.js`, `schema.test.js`, `smoke-flow.test.js`

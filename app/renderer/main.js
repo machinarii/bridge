@@ -1995,16 +1995,16 @@ function micStackHtml() {
       </div>
     </div>`;
 }
-/* Inner markup of a capture field. Name (default) is a single value. The
- * objective / features fields pass {keepMic:true}: each dictation / typed entry
- * is a separate block (blocks are joined by a blank line in state), and the mic
- * prompt stays below so the user can hold V / type "/" again to add another. */
-function captureValueInner(text, { keepMic = false } = {}) {
-  if (!text) return micStackHtml();
-  if (!keepMic) return escapeHtml(text);
-  const blocks = String(text).split(/\n{2,}/).map(b => b.trim()).filter(Boolean)
+/* Inner markup of a capture FIELD (just the entered text — the mic prompt is a
+ * sibling below the box). Name (default) is a single value; the objective /
+ * features fields pass {blocks:true}: each dictation / typed entry is a separate
+ * block (joined by a blank line in state). */
+function captureValueInner(text, { blocks = false } = {}) {
+  if (!text) return '';
+  if (!blocks) return escapeHtml(text);
+  const html = String(text).split(/\n{2,}/).map(b => b.trim()).filter(Boolean)
     .map(b => `<div class="capture-block">${escapeHtml(b)}</div>`).join('');
-  return `<div class="capture-blocks">${blocks}</div>${micStackHtml()}`;
+  return `<div class="capture-blocks">${html}</div>`;
 }
 /* Append a dictated / typed entry as a new block (blank-line separated), or set
  * it as the first block. Used by the objective / features fields. */
@@ -2124,6 +2124,7 @@ function renderNewProjectName() {
   t.innerHTML = `
     <h2>Name this project</h2>
     <div class="capture-value ${newProjName ? 'has-value' : ''}">${captureValueInner(newProjName)}</div>
+    <div class="capture-mic">${micStackHtml()}</div>
     ${newProjName.trim().length > NAME_LIMIT
       ? `<div class="capture-toolong">Long name — we'll automatically shorten it to ${NAME_LIMIT} characters.</div>`
       : ''}
@@ -2190,7 +2191,8 @@ function renderNewProjectGoal() {
   t.className = 'capture-tile capture-tall' + (entering ? ' capture-enter' : '');
   t.innerHTML = `
     <h2>What's the objective?</h2>
-    <div class="capture-value ${newProjGoal ? 'has-value' : ''}">${captureValueInner(newProjGoal, { keepMic: true })}</div>
+    <div class="capture-value ${newProjGoal ? 'has-value' : ''}">${captureValueInner(newProjGoal, { blocks: true })}</div>
+    <div class="capture-mic">${micStackHtml()}</div>
     <div class="role-confirm-row">
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
       <button type="button" class="role-cancel role-back" id="capture-back">Back</button>
@@ -2246,7 +2248,8 @@ function renderNewProjectFeatures() {
   t.className = 'capture-tile capture-tall' + (entering ? ' capture-enter' : '');
   t.innerHTML = `
     <h2>What are the top features?</h2>
-    <div class="capture-value ${newProjFeatures ? 'has-value' : ''}">${captureValueInner(newProjFeatures, { keepMic: true })}</div>
+    <div class="capture-value ${newProjFeatures ? 'has-value' : ''}">${captureValueInner(newProjFeatures, { blocks: true })}</div>
+    <div class="capture-mic">${micStackHtml()}</div>
     <div class="role-confirm-row">
       <button type="button" class="role-cancel" id="capture-cancel">Cancel</button>
       <button type="button" class="role-cancel role-back" id="capture-back">Back</button>
@@ -6610,6 +6613,7 @@ gp.addEventListener('press', (e) => {
       if (b === 'left')  { return; }
       if (b === 'right') { exitActivityRight(); return; }
       if (b === 'circle'){ closeActivityDrawer(); ring.paint(); return; }
+      if (b === 'cross') { return; }   // view-only feed — X does nothing on an entry
     }
     // Left off the leftmost grid column with a left drawer open hops back in.
     if (b === 'left' && (fileExplorerOpen || activityDrawerOpen) && !explorerFocused && !activityFocused) {
@@ -6648,6 +6652,7 @@ gp.addEventListener('press', (e) => {
       if (b === 'left')  { return; }
       if (b === 'right') { exitActivityRight(); return; }
       if (b === 'circle'){ closeActivityDrawer(); ring.paint(); return; }
+      if (b === 'cross') { return; }   // view-only feed — X does nothing on an entry
     }
     // Chat-history navigation (mirrors the keyboard model): once a bubble is
     // focused, Up/Down walk bubbles, Left/Right cycle a bubble's action icons,
@@ -7662,6 +7667,7 @@ window.addEventListener('keydown', (e) => {
     // toggleFileExplorer bails outside the surface modes (L1 / L2 /
     // add-agent), so no extra guard needed here.
     e.preventDefault();
+    playSfx('select');
     toggleFileExplorer();
     return;
   }
@@ -7676,6 +7682,7 @@ window.addEventListener('keydown', (e) => {
     if (mode === MODE_GRID || mode === MODE_ZOOM ||
         mode === MODE_ADD_AGENT || mode === MODE_PROJECTS) {
       e.preventDefault();
+      playSfx('select');
       toggleActivityDrawer();
       return;
     }
@@ -7683,7 +7690,7 @@ window.addEventListener('keydown', (e) => {
   // Type-prompt is for talking to an agent / council / capture — not the L0
   // projects grid or the L1 project grid.
   if (bareKey && e.key === '/' && mode !== MODE_PROJECTS && mode !== MODE_GRID) {
-    e.preventDefault(); typedWrap.hidden = false; typedInput.focus(); return;
+    e.preventDefault(); playSfx('select'); typedWrap.hidden = false; typedInput.focus(); return;
   }
 
   // Universal Tab: jumps focus into the footer rail from anywhere. Once
@@ -7716,6 +7723,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft')  { e.preventDefault(); return; }
     if (e.key === 'ArrowRight') { e.preventDefault(); exitActivityRight(); return; }
     if (e.key === 'Escape')     { e.preventDefault(); closeActivityDrawer(); ring.paint(); return; }
+    if (e.key === 'Enter')      { e.preventDefault(); return; }   // view-only feed — Enter does nothing on an entry
   }
   // Shortcuts rail (bottom-left) is part of the focus order: arrow-down
   // from the main surface enters it; arrow-up exits back to the grid.
