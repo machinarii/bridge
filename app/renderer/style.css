@@ -2700,22 +2700,11 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .mic-stack {
   display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
 }
-.mic-live-text {
-  min-height: 1.5em;
-  max-width: 80vw;
-  text-align: center;
-  /* Agent-bubble font (JetBrains Mono ExtraLight), sized down from 1.25rem. */
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.95rem;
-  font-weight: 200;
-  color: var(--fg);
-  letter-spacing: 0.01em;
-  line-height: 1.35;
-  /* Hold space so the rest of the stack doesn't jump as text appears. */
-}
-/* Collapse the live-text slot when empty so the hold hint and the wave stay
-   vertically centered in the (taller) capture box. */
-.mic-live-text:empty { display: none; }
+/* The live partial-transcript preview is intentionally NOT shown above the
+   wave — it caused a text slot to pop in over the animation. The final
+   transcript still lands in the capture box below. Kept in the DOM (so the
+   partial handler has a target) but never rendered. */
+.mic-live-text { display: none; }
 
 /* Text-box entrance when transitioning into the name / objective screens. */
 @keyframes captureBoxIn {
