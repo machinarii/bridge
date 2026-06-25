@@ -1308,7 +1308,12 @@ function createSurfaceCloseButton(onClose) {
 
 function focusSurfaceClose() {
   const btn = surfaceEl.querySelector('.surface-close');
-  if (btn) { btn.focus(); ring.items.forEach(el => el.classList.remove('focused')); return true; }
+  if (btn) {
+    if (document.activeElement !== btn) playSfx('navigate');   // cursor moved to the × close
+    btn.focus();
+    ring.items.forEach(el => el.classList.remove('focused'));
+    return true;
+  }
   return false;
 }
 
@@ -3510,6 +3515,15 @@ function registerNavBubbles(container) {
   chatBubbleIdx = -1;
 }
 
+/* Single-press Back from a selected bubble: leave L2 directly rather than first
+ * un-selecting the bubble (which used to require a second press). Council exits
+ * to the grid; an agent uses the canonical pressCircle (its spec's circle
+ * action, else exitZoom). */
+function backFromBubbleView() {
+  if (mode === MODE_COUNCIL) exitCouncilToGrid();
+  else pressCircle();
+}
+
 /* Keyboard navigation for a focused chat bubble — shared by agent L2 (MODE_ZOOM)
  * and the council (MODE_COUNCIL). Returns true if it consumed the key. */
 function bubbleNavKeydown(e) {
@@ -3542,7 +3556,7 @@ function bubbleNavKeydown(e) {
     const approve = chatBubbles[chatBubbleIdx]?.querySelector('.bubble-kickoff-actions .role-confirm');
     if (approve) { e.preventDefault(); approve.click(); return true; }
   }
-  if (e.key === 'Escape') { e.preventDefault(); leaveBubbleFocus(); ring.paint(); return true; }
+  if (e.key === 'Escape') { e.preventDefault(); backFromBubbleView(); return true; }
   return false;
 }
 
@@ -3570,7 +3584,7 @@ function bubbleNavButton(b) {
     if (approve) approve.click();
     return true;
   }
-  if (b === 'circle') { leaveBubbleFocus(); ring.paint(); return true; }
+  if (b === 'circle') { backFromBubbleView(); return true; }
   return false;
 }
 function isBubbleFocused() {
