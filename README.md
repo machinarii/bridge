@@ -1,11 +1,8 @@
 # Bridge
 
-## Command center for multi-agentic orchestration using diverse input modalities (voice, trackpad/mouse, keyboard and gamepad) for ultimate productivity.
+## Multi-agent command center with multi-modal input methods for ultimate productivity.
 
-
-> **Bridge: A multi-agent command center with multi-modal input**
-
-> **Brings autonomous, multi-step, and parallel task execution to agents through a graphical desktop interface with gamepad and voice.**
+> **Brings autonomous, multi-step, and parallel task execution to agent orchestration through a graphical desktop interface via input method of your choice: trackpad/mouse, gamepad, keyboard and/or voice.**
 
 Bridge is a **command center for managing multi-agent work** — a productivity surface for running teams of role-based AI agents across multiple projects. You describe intent; the orchestrator routes it to the right agents, and composes a consistent, navigable surface. Agents work **in parallel** — many run at once across your projects — and can define work topology so that agents can work dynamically. The goal is to make *coordinating a team of agents* — assigning, steering, and tracking their work — fast, low-friction and goal-oriented.
 
