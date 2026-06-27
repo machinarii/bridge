@@ -40,7 +40,17 @@ Notes:
 - Voice is **Parakeet-only** — it never falls back to the browser engine. If the sidecar is down, voice shows a visible STT error.
 - **QA shortcut:** `npm run qa:new -- trading` (or `recipes` / `iot`) seeds a fully-formed project from prefilled name/objective/features and kicks off — skips the capture UI. Prefilled copy-paste text for the capture screens + a flow walkthrough live in **`QA-GUIDE.md`**.
 
-## What's new (this session — capture-flow type sizing + mic-stack stability + `/`·`A`·`E` sound)
+## What's new (this session — designer skills bundled into Bridge)
+
+Server-side (`app/server/skills.js` + `skill-playbooks/`). Four design skills now ship **in the Bridge repo** — no separate `~/.claude/skills/` install needed. They flow through the existing skill registry → orchestrator prompt-injection path like every other skill.
+
+- **New registry entries** (`SKILLS` in `skills.js`), scoped to the `designer` role (+ a second role each): `design-brief` (+pm), `design-consultation`, `design-review` (+qa), `creative-director` (+marketing). `brand-guidelines` already existed — it now gets a real playbook instead of a one-line capability.
+- **Condensed playbooks** vendored at `skill-playbooks/<id>.md` (~1.5KB each, house style) for all five, distilled from the upstreams (open-design, gstack, smixs) — NOT the raw 13–105KB upstream `SKILL.md` files, and with no gstack-runtime plumbing. So they inject as full playbooks, capped at `MAX_TASK_PLAYBOOKS=3` per task.
+- **`TASK_KEYWORDS`** added for each so task-aware selection fires (e.g. "review spacing/hierarchy" → `design-review`; "brand from scratch" → `design-consultation`; "campaign concept" → `creative-director`).
+- Toggle them in **Settings → Skills** like any other skill (persisted in `SKILLS_DISABLED`).
+- **Needs a `npm run server` restart** — the `SKILLS` array is built at module load, so a running server won't see the new entries until restarted. Tests: all 207 server tests pass (`cd app/server && node --test`).
+
+## What's new (previous session — capture-flow type sizing + mic-stack stability + `/`·`A`·`E` sound)
 
 Renderer-only (`app/renderer/main.js`, `style.css`). No server changes; server suite untouched. **Verify renderer edits with `node --check --input-type=module < app/renderer/main.js`** (plain `node --check` misses duplicate top-level declarations, which blank the screen).
 
