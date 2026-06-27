@@ -65,6 +65,13 @@ export const SKILLS = [
   { id: 'awesome-design',    name: 'Design system inspirations', description: 'Ready-to-use DESIGN.md design systems by aesthetic family — drop one in and scaffold a full UI from exact design tokens.', roles: ['designer'], source: 'https://github.com/VoltAgent/awesome-claude-design' },
   { id: 'ui-ux-pro',         name: 'UI/UX Pro Max',        description: 'Design-system generator — 67 UI styles, 161 palettes, 57 font pairings, 99 UX guidelines, tailored per project across 15 stacks.', roles: ['designer'], source: 'https://github.com/nextlevelbuilder/ui-ux-pro-max-skill' },
   { id: 'web-motion-3d',     name: 'Web motion & 3D',      description: 'Interactive web experiences — Three.js/R3F, GSAP ScrollTrigger, spring physics, Lottie/Rive, and integration patterns.', roles: ['designer', 'sw_engineer'], source: 'https://github.com/freshtechbro/claudedesignskills' },
+
+  // — design direction & systems (nexu-io/open-design catalog; gstack, smixs) —
+  { id: 'design-brief',      name: 'Design brief',         description: 'Turn a vague request ("make it professional") into a concrete DESIGN.md across 8 explicit dimensions — palette, typography, layout, mood, density, depth, component style, and anti-patterns.', roles: ['designer', 'pm'], source: 'https://github.com/nexu-io/open-design' },
+  { id: 'design-consultation', name: 'Design consultation', description: 'Stand up a complete design system from scratch — understand the product, research the landscape, then propose aesthetic/type/color/layout/spacing/motion and preview it before any pixels ship.', roles: ['designer'], source: 'https://github.com/garrytan/gstack' },
+  { id: 'design-review',     name: 'Design review',        description: 'Designer’s-eye QA — catch visual inconsistency, spacing/hierarchy problems, AI-slop patterns, and sluggish interactions, then fix them with atomic commits and before/after evidence.', roles: ['designer', 'qa'], source: 'https://github.com/garrytan/gstack' },
+  { id: 'creative-director', name: 'Creative director',    description: 'AI creative director — 20+ ideation methodologies (SCAMPER, TRIZ, SIT, Bisociation, Synectics) and a 3-axis evaluation calibrated against award standards, run as a 5-phase brief→concept→presentation process.', roles: ['designer', 'marketing'], source: 'https://github.com/smixs/creative-director-skill' },
+
   { id: 'webapp-testing',    name: 'Web app testing',      description: 'Drive and test web apps end-to-end with Playwright automation.',              roles: ['qa'], source: 'https://github.com/anthropics/skills' },
 
   // — documents & comms (anthropics/skills) —
@@ -163,6 +170,10 @@ const TASK_KEYWORDS = {
   'awesome-design':    ['design system', 'token', 'design.md', 'aesthetic', 'scaffold'],
   'ui-ux-pro':         ['design system', 'palette', 'font', 'ux', 'style guide', 'color', 'theme'],
   'web-motion-3d':     ['3d', 'three.js', 'webgl', 'animation', 'motion', 'scroll', 'lottie', 'parallax', 'interactive'],
+  'design-brief':      ['design brief', 'brief', 'design.md', 'make it professional', 'design spec', 'mood', 'density', 'palette', 'design direction'],
+  'design-consultation': ['design system', 'design consultation', 'from scratch', 'brand from zero', 'design kickoff', 'visual identity', 'art direction', 'design language'],
+  'design-review':     ['design review', 'visual audit', 'design qa', 'spacing', 'alignment', 'hierarchy', 'inconsistent', 'slop', 'before after', 'polish', 'pre-launch'],
+  'creative-director': ['creative director', 'campaign', 'concept', 'creative critique', 'scamper', 'big idea', 'ideation', 'award'],
   'webapp-testing':    ['test', 'e2e', 'playwright', 'browser', 'regression', 'click through', 'automation'],
   'doc-coauthoring':   ['draft', 'document', 'doc', 'write up', 'co-author', 'memo'],
   'docx':              ['word', 'docx', 'contract', 'redline', 'tracked changes', 'agreement'],
