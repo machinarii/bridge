@@ -333,7 +333,7 @@ kbd {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
-  color: var(--fg-dim);
+  color: #fff;
   width: 36px; height: 36px;
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer;
@@ -358,7 +358,7 @@ kbd {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
-  color: var(--fg-dim);
+  color: #fff;
   width: 36px; height: 36px;
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer;
