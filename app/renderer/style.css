@@ -2145,7 +2145,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 #action-bar {
   display: inline-flex; justify-content: flex-end; align-items: center;
   flex: 0 0 auto;
-  background: rgba(20,22,28,0.92);
+  background: transparent;
   padding: 4px 0;
   border-radius: 10px;
 }
