@@ -7,7 +7,7 @@ import { getRole, listRoles, kickoffPriority } from './roles.js';
 import { getProject, setKickoff, getKickoff, TOPOLOGIES, addAgent } from './projects.js';
 import { appendTurn, getContext, setLastSpec } from './scratchpad.js';
 import { getModelForRole, getRouterModel } from './models.js';
-import { emitNotification, emitActivity, emitDelegate, emitStatus, publish as publishEvent } from './events.js';
+import { emitNotification, emitActivity, emitDelegate, emitStatus, emitRunResult, publish as publishEvent } from './events.js';
 import { writeNote, readNote } from './backends/notes.js';
 import { commitIfChanged } from './workspace.js';
 import { generateBuildPlan, runScaffold } from './scaffold.js';
@@ -512,10 +512,17 @@ export async function assignKickoffTasks(projectId, opts = {}) {
 export async function startTeamWork(projectId, opts = {}, { excludeAgentId = null } = {}) {
   if (opts.callText && !opts.interpret) return;   // injected/unit-test mode — don't hit the network
   const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
-  if (!opts.interpret && (!apiKey || apiKey.includes('replace-me'))) return;
+  const assignments = getKickoff(projectId).assignments || [];
+  if (!opts.interpret && (!apiKey || apiKey.includes('replace-me'))) {
+    // Never stall silently: the kickoff looked complete but nothing would run.
+    if (assignments.length) {
+      emitNotification({ kind: 'warn', projectId, title: 'Team could not start',
+                         body: 'OPENROUTER_API_KEY is missing — the assigned tasks are waiting. Add the key in Settings.' });
+    }
+    return;
+  }
   let project = getProject(projectId);
   if (!project) return;
-  const assignments = getKickoff(projectId).assignments || [];
   if (!assignments.length) return;
 
   const resolved = [];
@@ -723,6 +730,7 @@ export async function executeBuild(projectId, opts = {}) {
     setKickoff(projectId, { status: 'run_pending' });
     emitStatus(projectId, buildAgentId, 'idle');
     emitActivity(projectId, `${sweName}: scaffold complete${auto ? '' : ' — offered to run'}`, buildAgentId, auto ? undefined : { awaitKind: 'reply' });
+    emitRunResult(projectId, { ok: true, phase: 'scaffold', summary: `scaffolded ${r.fileCount} files (${r.commitSha})` });
     return { handled: true, intent: 'scaffolded', spec, ok: true };
   }
   // failure case (closingSpec, status build_pending, intent 'scaffold_failed')
@@ -733,6 +741,7 @@ export async function executeBuild(projectId, opts = {}) {
   emitActivity(projectId, `${sweName}: scaffold failed`, buildAgentId);
   emitNotification({ kind: 'warn', projectId, title: `${sweName}: scaffold failed`,
                      body: String(r.reason || 'unknown error').slice(0, 140) });
+  emitRunResult(projectId, { ok: false, phase: 'scaffold', summary: String(r.reason || 'unknown error').slice(0, 200) });
   return { handled: true, intent: 'scaffold_failed', spec, ok: false };
 }
 
@@ -772,6 +781,7 @@ export async function executeRun(projectId, opts = {}) {
     completeToken(token);
   }
   let body;
+  let previewUrl = null;
   if (r.daemonDown) body = "I couldn't reach the Docker engine — start it (e.g. `colima start`) and say \"Run it\" again.";
   else if (r.ok) {
     body = `✅ It runs — install, build, and tests all pass${r.rounds ? ` (after ${r.rounds} fix round${r.rounds === 1 ? '' : 's'})` : ''}. Everything's committed in the project repo.`;
@@ -783,6 +793,7 @@ export async function executeRun(projectId, opts = {}) {
       try {
         const prev = await previewer(projectId);
         if (prev.ok) {
+          previewUrl = prev.url;
           body += `\n\nTry it yourself: [${prev.url}](${prev.url})` +
                   (prev.ready ? '' : ' — still booting, give it a few seconds') + '.';
         }
@@ -804,6 +815,12 @@ export async function executeRun(projectId, opts = {}) {
   emitNotification({ kind: r.ok ? 'info' : 'warn', projectId,
                      title: r.ok ? `${project.name}: build verified` : `${project.name}: run ${r.daemonDown ? 'needs Docker' : 'still failing'}`,
                      body: r.ok ? 'Install, build, and tests all pass.' : body.slice(0, 140) });
+  emitRunResult(projectId, {
+    ok: !!r.ok, phase: 'run',
+    summary: r.ok ? 'install, build, and tests all pass'
+                  : (r.daemonDown ? 'Docker engine unreachable' : `\`${r.lastStep}\` still failing after ${r.rounds} round(s)`),
+    ...(previewUrl ? { url: previewUrl } : {}),
+  });
   return { handled: true, intent: r.ok ? 'verified' : 'run_failed', spec, ok: !!r.ok };
 }
 

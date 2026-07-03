@@ -21,17 +21,20 @@
 let _nextId = 1;
 const subscribers = new Set(); // each: { projectId | null, write(ev) }
 
-// Recent Activity-feed events (activity + delegate only) kept for backfill, so a
-// freshly-connected or reloaded client isn't blank — SSE has no history of its
-// own. Status/token/note events are live-only and NOT buffered.
+// Recent Activity-feed events (activity + delegate + run_result) kept for
+// backfill, so a freshly-connected or reloaded client isn't blank — SSE has no
+// history of its own. run_result is buffered because it's the durable terminal
+// verdict of a build/run: a client that reloaded mid-run must still learn how
+// it ended. Status/token/note events are live-only and NOT buffered.
 const FEED_BUFFER = [];
 const FEED_BUFFER_MAX = 200;
+const BUFFERED_TYPES = new Set(['activity', 'delegate', 'run_result']);
 
 /** publish(event) — broadcast to every interested subscriber. */
 export function publish(event) {
   if (!event || typeof event !== 'object') return;
   const out = { id: _nextId++, at: Date.now(), ...event };
-  if (out.type === 'activity' || out.type === 'delegate') {
+  if (BUFFERED_TYPES.has(out.type)) {
     FEED_BUFFER.push(out);
     if (FEED_BUFFER.length > FEED_BUFFER_MAX) FEED_BUFFER.shift();
   }
@@ -101,4 +104,9 @@ export function emitDelegate(projectId, fromAgentId, toAgentId, task, extra) {
 }
 export function emitNotification(opts) {
   publish({ type: 'notification', ...opts });
+}
+/** Durable terminal verdict of a scaffold/run: { ok, phase, summary, url? }.
+ * Buffered, so a reloaded client still learns how the run ended. */
+export function emitRunResult(projectId, payload) {
+  publish({ type: 'run_result', projectId, ...payload });
 }
