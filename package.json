@@ -1,7 +1,7 @@
 {
   "name": "bridge",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Bridge — a multi-agent command center, packaged as a macOS app.",
   "main": "app/electron/main.js",
   "scripts": {
