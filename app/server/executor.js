@@ -20,8 +20,19 @@ import { callOpenRouterText } from './llm.js';
 
 const MAX_ACTIVE = 3;     // concurrent agent turns per project
 const MAX_ATTEMPTS = 2;   // 1 retry on a thrown turn
+const TURN_TIMEOUT_MS = 240_000;  // a hung turn fails instead of freezing the queue
 
 const draining = new Map();  // projectId → in-flight drain promise
+
+/** Reject after `ms` so a turn whose connection stalled forever fails the task
+ * (and retries/reports through the normal path) instead of wedging its worker. */
+function withTimeout(promise, ms, label) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise).finally(() => clearTimeout(timer)),
+    new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`${label} timed out after ${ms}ms`)), ms); }),
+  ]);
+}
 
 /** Queue a task and kick the project's drain loop (idempotent). Returns the task. */
 export function enqueueTask({ projectId, agentId, description, from = null }, opts = {}) {
@@ -31,24 +42,46 @@ export function enqueueTask({ projectId, agentId, description, from = null }, op
 }
 
 /** Run queued tasks for a project, up to MAX_ACTIVE at a time, until the queue
- * is empty. Re-entrant: a second call while running returns the same promise. */
+ * is empty. Re-entrant: a second call while running returns the same promise.
+ * A work-stealing POOL (not a batch): every task completion and every enqueue
+ * pumps the scheduler, so a free slot picks up new work immediately — one slow
+ * turn never holds up the others, and tasks enqueued mid-drain (delegations)
+ * start as soon as a slot frees (the old batch model waited for the whole
+ * batch before starting more). */
 export function drain(projectId, opts = {}) {
-  if (draining.has(projectId)) return draining.get(projectId);
-  const p = (async () => {
-    for (;;) {
-      const batch = [];
-      while (batch.length < (opts.maxActive || MAX_ACTIVE)) {
-        const t = nextQueued(projectId);
-        if (!t) break;
-        updateTask(t.id, { status: 'in_progress', attempts: t.attempts + 1 });
-        batch.push(runTask(getTask(t.id), opts));
-      }
-      if (!batch.length) break;
-      await Promise.allSettled(batch);
-    }
-  })().finally(() => draining.delete(projectId));
-  draining.set(projectId, p);
-  return p;
+  const existing = draining.get(projectId);
+  if (existing) { pump(projectId); return existing.promise; }
+  const state = { active: 0, opts, max: opts.maxActive || MAX_ACTIVE };
+  state.promise = new Promise(r => { state.resolve = r; });
+  draining.set(projectId, state);
+  pump(projectId);
+  maybeSettle(projectId);   // nothing queued at all → settle immediately
+  return state.promise;
+}
+
+function pump(projectId) {
+  const state = draining.get(projectId);
+  if (!state) return;
+  while (state.active < state.max) {
+    const t = nextQueued(projectId);
+    if (!t) break;
+    // Claiming (queued → in_progress) is synchronous, so two pumps can never
+    // grab the same task.
+    updateTask(t.id, { status: 'in_progress', attempts: t.attempts + 1 });
+    state.active++;
+    runTask(getTask(t.id), state.opts)
+      .catch(err => console.warn(`[executor] runTask ${t.id}:`, err?.message))
+      .finally(() => { state.active--; pump(projectId); maybeSettle(projectId); });
+  }
+}
+
+function maybeSettle(projectId) {
+  const state = draining.get(projectId);
+  if (!state) return;
+  if (state.active === 0 && !nextQueued(projectId)) {
+    draining.delete(projectId);
+    state.resolve();
+  }
 }
 
 /** The user messaged an agent that was blocked waiting on them — the agent
@@ -75,10 +108,10 @@ async function runTask(task, opts = {}) {
   const fromRole = task.from?.role || getRole('pm').label;
   try {
     emitDelegate(task.projectId, task.from?.agentId || project.leadAgentId, agent.id, task.description);
-    const spec = await interpret({
+    const spec = await withTimeout(interpret({
       projectId: task.projectId, agentId: agent.id, text: task.description, effort: 'high',
       handoff: { from: fromName, fromRole, to: agent.name, toRole: getRole(agent.role).label },
-    });
+    }), opts.turnTimeoutMs || TURN_TIMEOUT_MS, `${agent.name} turn`);
     setLastSpec(agent.id, spec);
     // Keep the agent visibly working through the settle phase: interpretIntent
     // ends on 'idle', but settleReply may still run a PM auto-answer + a second
@@ -133,10 +166,10 @@ async function settleReply(task, project, agent, spec, opts) {
       const lead = project.agents.find(a => a.id === project.leadAgentId);
       const interpret = opts.interpret || interpretIntent;
       emitDelegate(project.id, project.leadAgentId, agent.id, answer);
-      const spec2 = await interpret({
+      const spec2 = await withTimeout(interpret({
         projectId: project.id, agentId: agent.id, text: answer, effort: 'high',
         handoff: { from: lead?.name || 'PM', fromRole: getRole('pm').label, to: agent.name, toRole: getRole(agent.role).label },
-      });
+      }), opts.turnTimeoutMs || TURN_TIMEOUT_MS, `${agent.name} turn`);
       setLastSpec(agent.id, spec2);
       return settleReply(getTask(task.id), project, agent, spec2, opts);
     }
