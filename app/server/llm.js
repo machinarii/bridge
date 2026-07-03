@@ -5,6 +5,32 @@ import { recordModelCall } from './metrics.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const PLAN_TIMEOUT_MS = 20_000;
+
+/* Transient upstream failures (rate limit, low-credit 402, 5xx, dropped
+ * connection) get an exponential-backoff retry instead of instantly failing
+ * the agent turn — the metrics log showed bursts of sub-300ms failures killing
+ * whole review rounds. Honors Retry-After. Never retries 4xx caller bugs or
+ * an AbortError (that's the caller's own timeout/cancel). */
+const RETRYABLE_STATUS = new Set([402, 408, 429, 500, 502, 503, 504]);
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+export async function fetchWithRetry(url, init, { retries = 2, baseDelayMs = 1000, _fetch = fetch, _sleep = sleep } = {}) {
+  let lastErr = null;
+  for (let attempt = 0; ; attempt++) {
+    let r = null;
+    try {
+      r = await _fetch(url, init);
+      if (!RETRYABLE_STATUS.has(r.status) || attempt >= retries) return r;
+    } catch (err) {
+      if (err?.name === 'AbortError' || attempt >= retries) throw err;
+      lastErr = err;
+    }
+    const retryAfter = Number(r?.headers?.get?.('Retry-After')) * 1000;
+    const delay = retryAfter > 0 ? retryAfter : baseDelayMs * 2 ** attempt;
+    console.warn(`[openrouter] transient failure (${r ? `HTTP ${r.status}` : lastErr?.message}) — retry ${attempt + 1}/${retries} in ${delay}ms`);
+    await _sleep(delay);
+  }
+}
 // Cap output so OpenRouter reserves a bounded amount against the account balance
 // instead of the model's full ceiling (~65536), which 402s on low credit. Plans
 // and docs fit comfortably; still well under a typical balance.
@@ -15,7 +41,7 @@ export async function callOpenRouterText({ apiKey, model, prompt, timeoutMs = PL
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const t0 = Date.now();
   try {
-    const r = await fetch(OPENROUTER_URL, {
+    const r = await fetchWithRetry(OPENROUTER_URL, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json',
                  'HTTP-Referer': 'http://localhost/bridge', 'X-Title': 'Bridge - kickoff' },
@@ -46,7 +72,7 @@ export async function callOpenRouterJSON({ apiKey, model, prompt, timeoutMs = PL
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const t0 = Date.now();
   try {
-    const r = await fetch(OPENROUTER_URL, {
+    const r = await fetchWithRetry(OPENROUTER_URL, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json',
                  'HTTP-Referer': 'http://localhost/bridge', 'X-Title': 'Bridge - council' },

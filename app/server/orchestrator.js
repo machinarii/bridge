@@ -10,9 +10,14 @@ import { recordModelCall } from './metrics.js';
 import { emitStatus, emitActivity, emitToken } from './events.js';
 import { validateTileSpec, repairPrompt } from './schema.js';
 import { throwIfCanceled } from './cancel.js';
-import { callOpenRouterJSON } from './llm.js';
+import { callOpenRouterJSON, fetchWithRetry } from './llm.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+// Hard ceilings so a stalled connection can never hang an agent turn (and with
+// it the whole executor queue) forever. Generous: reasoning turns are slow.
+const TURN_FETCH_TIMEOUT_MS = 180_000;
+const CLASSIFY_TIMEOUT_MS = 10_000;
+const STREAM_DEADLINE_MS = 300_000;
 
 /* Shared response voice + conduct for every agent. Injected into the tile-spec
  * and prose system prompts, and reused by the kickoff + team-synthesis prompts. */
@@ -254,7 +259,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
     // "Building" (it's writing code), everyone else as "Drafting".
     emitStatus(projectId, agentId, agent?.role === 'sw_engineer' ? 'building' : 'drafting');
     const t0 = Date.now();
-    const resp = await fetch(OPENROUTER_URL, {
+    const resp = await fetchWithRetry(OPENROUTER_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -263,6 +268,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
         'X-Title': `Bridge - ${agent.name}`,
       },
       body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages, ...samplingFor({ effort, regenerate }) }),
+      signal: AbortSignal.timeout(TURN_FETCH_TIMEOUT_MS),
     });
 
     if (!resp.ok) {
@@ -376,6 +382,7 @@ async function classifyIntent({ apiKey, text }) {
     const r = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(CLASSIFY_TIMEOUT_MS),
       body: JSON.stringify({
         model: getRouterModel(),
         max_tokens: 4,
@@ -395,6 +402,12 @@ async function classifyIntent({ apiKey, text }) {
 /* Stream a chat completion, invoking onDelta(text) per content chunk. Returns
  * the full accumulated text. Throws on a non-OK / bodyless response. */
 async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
+  // One controller covers connect AND the whole read loop: a stream that stalls
+  // without ever sending [DONE] aborts at the deadline instead of hanging the
+  // turn (and the executor queue behind it) forever.
+  const ctrl = new AbortController();
+  const deadline = setTimeout(() => ctrl.abort(), STREAM_DEADLINE_MS);
+  try {
   const resp = await fetch(OPENROUTER_URL, {
     method: 'POST',
     headers: {
@@ -404,6 +417,7 @@ async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
       'X-Title': 'Bridge',
     },
     body: JSON.stringify({ model, stream: true, messages, ...(extra || {}) }),
+    signal: ctrl.signal,
   });
   if (!resp.ok || !resp.body) throw new Error(`stream ${resp.status}`);
   const reader = resp.body.getReader();
@@ -427,6 +441,7 @@ async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
     }
   }
   return full;
+  } finally { clearTimeout(deadline); }
 }
 
 /* Returns a hydrated 'reader' spec on success, or null to defer to the JSON
