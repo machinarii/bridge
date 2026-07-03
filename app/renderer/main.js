@@ -1702,6 +1702,7 @@ async function renderNewProjectRoles() {
   // Close × at top-right and Cancel both abort to L0, but confirm first
   // if the user has selected any role beyond the default PM.
   const tryCancelRolePicker = () => {
+    playSfx('select');   // Cancel is a press like any other — audible feedback
     const hasSelections = newProjRoleIds.some(r => r !== 'pm');
     maybeConfirmCancel(hasSelections, () => renderProjects());
   };
@@ -7636,6 +7637,13 @@ fullscreenBtnEl?.addEventListener('keydown', (e) => {
 if (fsBridge) {
   fsBridge.onFullscreenChange((v) => { electronFs = v; paintFullscreenIcon(); });
   fsBridge.isFullscreen?.().then((v) => { electronFs = !!v; paintFullscreenIcon(); }).catch(() => {});
+  // Esc in native full screen arrives via IPC (main intercepts the raw key so
+  // macOS can't exit full screen with it). Re-dispatch it from <body> so it
+  // bubbles through every normal Esc handler — modals, bubble nav, Back.
+  fsBridge.onEscapePressed?.(() => {
+    document.body.dispatchEvent(new KeyboardEvent('keydown',
+      { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }));
+  });
 } else {
   document.addEventListener('fullscreenchange', () => {
     paintFullscreenIcon();
