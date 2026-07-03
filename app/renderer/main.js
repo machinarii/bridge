@@ -1170,8 +1170,10 @@ function renderProjects() {
   // sliver of row 3 peeks above the fold, and the bottom fade hints at the
   // rest, lifting once the user reaches the end.
   grid.classList.toggle('overflowing', tileEls.length > cols * rows);
-  const updateFade = () => grid.classList.toggle('fade-bottom',
-    grid.scrollHeight - grid.clientHeight - grid.scrollTop > 4);
+  const updateFade = () => {
+    grid.classList.toggle('fade-bottom', grid.scrollHeight - grid.clientHeight - grid.scrollTop > 4);
+    grid.classList.toggle('fade-top', grid.scrollTop > 4);
+  };
   grid.addEventListener('scroll', updateFade, { passive: true });
   requestAnimationFrame(updateFade);
   ring.set(tileEls);

@@ -2290,11 +2290,20 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   grid-auto-rows: calc((100% - 1.5rem) / 2.2);
 }
 .project-picker::-webkit-scrollbar { display: none; }
-/* Soft bottom fade while more rows are below the fold — toggled in JS so the
- * last row reads at full strength once scrolled to the end. */
+/* Soft fades where rows crop at the scrollport: bottom while more rows sit
+ * below the fold, top once scrolled (cards otherwise cut sharply right under
+ * the heading). Toggled in JS so edges read at full strength at rest. */
 .project-picker.fade-bottom {
   -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 84px), transparent 100%);
   mask-image: linear-gradient(180deg, #000 calc(100% - 84px), transparent 100%);
+}
+.project-picker.fade-top {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 84px);
+  mask-image: linear-gradient(180deg, transparent 0, #000 84px);
+}
+.project-picker.fade-top.fade-bottom {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 84px, #000 calc(100% - 84px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 84px, #000 calc(100% - 84px), transparent 100%);
 }
 .project-tile {
   position: relative;
