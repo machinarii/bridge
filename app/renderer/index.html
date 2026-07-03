@@ -136,6 +136,7 @@
         <button type="button" class="settings-tab" data-tab="mcp" role="tab" aria-selected="false">MCP</button>
         <button type="button" class="settings-tab" data-tab="git" role="tab" aria-selected="false">Git</button>
         <button type="button" class="settings-tab" data-tab="health" role="tab" aria-selected="false">Health</button>
+        <button type="button" class="settings-tab" data-tab="themes" role="tab" aria-selected="false">Themes</button>
         <button type="button" class="settings-tab" data-tab="about" role="tab" aria-selected="false">About</button>
       </div>
 
@@ -190,6 +191,11 @@
       <section class="settings-pane" data-tab="health" hidden>
         <p class="settings-meta">Live checks for key runtime dependencies.</p>
         <div id="settings-health"></div>
+      </section>
+
+      <section class="settings-pane" data-tab="themes" hidden>
+        <p class="settings-meta">Shift the app's color mood — backdrop, panels, and modals together. Applies instantly and is remembered on this device.</p>
+        <div id="settings-themes" class="theme-swatches" role="radiogroup" aria-label="Color theme"></div>
       </section>
 
       <section class="settings-pane" data-tab="git" hidden>

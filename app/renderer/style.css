@@ -17,7 +17,7 @@
   position: fixed; z-index: 60;
   left: 50%; top: 50%; transform: translate(-50%, -50%);
   min-width: 220px; padding: 1rem 1.1rem;
-  background: rgba(18,18,20,0.96);
+  background: hsl(var(--surface-hue) 12% 7% / 0.96);
   border: 1px solid rgba(255,255,255,0.14);
   border-radius: 14px;
   box-shadow: 0 18px 60px rgba(0,0,0,0.55);
@@ -65,11 +65,17 @@ body[data-input-mode="gamepad"]  .sc.sc-kbd-only { display: none !important; }
 }
 
 :root {
-  /* Ash-neutral surfaces (no blue cast) — panels, drawers, and modals all
-   * build on these, so they sit naturally on the warm backdrop. */
-  --bg: #0e0e10;
-  --bg-elev: #151517;
-  --bg-elev-2: #202024;
+  /* Theme hue — set by Settings → Themes (JS writes it on <html>). Every
+   * surface below derives from it, so panels, drawers, and modals shift
+   * together with the backdrop; 0deg = the warm sunset default. */
+  --theme-hue: 0deg;
+  --surface-hue: calc(15deg + var(--theme-hue));
+  /* Near-neutral dark surfaces with a whisper of the theme hue (10% sat)
+   * so a theme change reads everywhere without tinting text areas hard. */
+  --bg: hsl(var(--surface-hue) 10% 6%);
+  --bg-elev: hsl(var(--surface-hue) 10% 8%);
+  --bg-elev-2: hsl(var(--surface-hue) 10% 13%);
+  --panel: hsl(var(--surface-hue) 12% 7% / 0.55);   /* translucent L1/L2 panel base */
   --fg: #ececee;
   --fg-dim: #9c9ca2;
   --accent: #6ea8ff;
@@ -86,13 +92,7 @@ body[data-input-mode="gamepad"]  .sc.sc-kbd-only { display: none !important; }
 html, body {
   margin: 0;
   height: 100%;
-  /* Abstract backdrop: cover + center + fixed = edge-to-edge at any window
-   * size, never tiled, no gaps. The scrim layer keeps light text legible
-   * over the image's bright areas; --bg backstops while the jpg loads. */
-  background:
-    linear-gradient(rgba(10, 14, 20, 0.38), rgba(10, 14, 20, 0.38)),
-    url('/assets/abstract-background.jpg?v=5') center / cover no-repeat fixed,
-    var(--bg);
+  background: var(--bg);   /* backstop; the image lives on body::before */
   color: var(--fg);
   font-family: 'Barlow Condensed', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-weight: 300;
@@ -100,6 +100,23 @@ html, body {
   line-height: 1.45;
   overflow: hidden;
   user-select: none;
+}
+
+/* Abstract backdrop on its own fixed layer so the theme hue can rotate it:
+ * cover + center = edge-to-edge at any window size, never tiled, no gaps.
+ * The scrim keeps light text legible over the image's bright areas (it's
+ * near-neutral, so the hue rotation barely touches it). Negative z-index
+ * paints it above the body backstop, below all content. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(rgba(10, 14, 20, 0.38), rgba(10, 14, 20, 0.38)),
+    url('/assets/abstract-background.jpg?v=5') center / cover no-repeat;
+  filter: hue-rotate(var(--theme-hue, 0deg));
+  pointer-events: none;
 }
 h1, h2, h3, h4, h5, h6 { font-family: inherit; font-weight: 400; letter-spacing: -0.01em; }
 .tile-context, #breadcrumbs { font-weight: 400; }
@@ -384,7 +401,7 @@ kbd {
 #confirm-cancel-modal[hidden] { display: none !important; }
 #confirm-cancel-modal {
   position: fixed; inset: 0;
-  background: rgba(10,10,12,0.62);
+  background: hsl(var(--surface-hue) 10% 4% / 0.62);
   backdrop-filter: blur(6px);
   display: flex; align-items: center; justify-content: center;
   z-index: 110;
@@ -399,7 +416,7 @@ kbd {
 #project-edit-modal[hidden] { display: none !important; }
 #project-edit-modal {
   position: fixed; inset: 0;
-  background: rgba(10,10,12,0.62);
+  background: hsl(var(--surface-hue) 10% 4% / 0.62);
   backdrop-filter: blur(6px);
   display: flex; align-items: center; justify-content: center;
   z-index: 110;
@@ -466,7 +483,7 @@ kbd {
 #edit-bubble-modal[hidden] { display: none !important; }
 #edit-bubble-modal {
   position: fixed; inset: 0;
-  background: rgba(10,10,12,0.62);
+  background: hsl(var(--surface-hue) 10% 4% / 0.62);
   backdrop-filter: blur(6px);
   display: flex; align-items: center; justify-content: center;
   z-index: 100;
@@ -528,7 +545,7 @@ kbd {
 #settings-modal[hidden] { display: none !important; }
 #settings-modal {
   position: fixed; inset: 0;
-  background: rgba(10,10,12,0.62);
+  background: hsl(var(--surface-hue) 10% 4% / 0.62);
   backdrop-filter: blur(6px);
   display: flex; align-items: center; justify-content: center;
   z-index: 100;
@@ -842,6 +859,43 @@ kbd {
   gap: 0.5rem;
 }
 
+/* ===== Settings → Themes ===== */
+.theme-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+}
+.theme-swatch {
+  appearance: none;
+  display: flex; flex-direction: column; align-items: center; gap: 0.45rem;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+  color: var(--fg-dim);
+  font-family: inherit;
+  font-size: 0.85em;
+  transition: border-color 120ms, background 120ms, color 120ms;
+}
+.theme-swatch:hover { background: rgba(255,255,255,0.06); color: var(--fg); }
+.theme-swatch.active {
+  border-color: var(--focus, #ffffff);
+  color: var(--fg);
+  box-shadow: 0 0 0 1px var(--focus, #ffffff);
+}
+/* Chip previews the theme: the backdrop's pink→orange→dark arc, rotated by
+ * the option's hue — a faithful little forecast of the whole app. */
+.theme-swatch .swatch-chip {
+  width: 64px; height: 44px;
+  border-radius: 8px;
+  background: linear-gradient(135deg,
+    hsl(calc(345deg + var(--swatch-hue, 0deg)) 70% 62%) 0%,
+    hsl(calc(22deg + var(--swatch-hue, 0deg)) 75% 55%) 55%,
+    hsl(calc(11deg + var(--swatch-hue, 0deg)) 35% 10%) 100%);
+  border: 1px solid rgba(255,255,255,0.18);
+}
+
 .health-head {
   display: grid;
   gap: 0.2rem;
@@ -1075,7 +1129,7 @@ kbd {
 #listening-indicator {
   display: inline-flex; align-items: center; gap: 10px;
   padding: 5px 12px; border-radius: 999px;
-  background: rgba(18,18,20,0.92);
+  background: hsl(var(--surface-hue) 12% 7% / 0.92);
   border: none;
   color: var(--fg-dim);
   font-weight: 300;
@@ -1189,7 +1243,7 @@ body[data-mode="add_agent"] #surface {
     radial-gradient(ellipse 120% 80% at 50% -10%,
       color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%,
       transparent 60%),
-    rgba(18, 18, 20, 0.55);
+    var(--panel);
   /* Fully borderless — a transparent border here double-composites the
    * translucent bg along the 1px border strip (bright hairline artifact). */
   border: none;
@@ -1210,7 +1264,7 @@ body[data-mode="zoom"] #surface {
 /* Create-flow screens (roles → topology → name → goal → features): same
  * translucent ash panel as L1, minus the project-color wash (no project yet). */
 body[data-mode^="new_project_"] #surface {
-  background: rgba(18, 18, 20, 0.55);
+  background: var(--panel);
   border: none;
 }
 
@@ -1441,7 +1495,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
     radial-gradient(ellipse 120% 80% at 50% -10%,
       color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%,
       transparent 60%),
-    rgba(18, 18, 20, 0.55);
+    var(--panel);
 }
 .agent-view::before { content: none; }
 .agent-view > * { position: relative; }
@@ -1484,9 +1538,9 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
      content dissolves into it. Warm dark ash — a touch of red/orange so the
      band blends into the sunset backdrop instead of reading flat black. */
   background: linear-gradient(to bottom,
-    rgba(46, 24, 19, 0.94) 0%,
-    rgba(42, 23, 19, 0.90) 45%,
-    rgba(36, 20, 17, 0.70) 72%,
+    hsl(calc(11deg + var(--theme-hue, 0deg)) 42% 13% / 0.94) 0%,
+    hsl(calc(11deg + var(--theme-hue, 0deg)) 39% 12% / 0.90) 45%,
+    hsl(calc(11deg + var(--theme-hue, 0deg)) 36% 10% / 0.70) 72%,
     transparent 100%);
 }
 .agent-view .agent-header::after { content: none; }   /* old opaque band removed */
@@ -2273,7 +2327,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 
 #ptt-typed {
   display: block;
-  background: rgba(18,18,20,0.97);
+  background: hsl(var(--surface-hue) 12% 7% / 0.97);
   border: 1px solid rgba(255,255,255,0.22);
   border-radius: var(--steam-radius);
   min-height: var(--steam-input-h);
@@ -2444,7 +2498,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   padding: 2rem;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center;
-  background: rgba(18,18,20,0.97);
+  background: hsl(var(--surface-hue) 12% 7% / 0.97);
   border: 2px dashed rgba(255,255,255,0.25);
   border-top: 4px solid #6ea8ff;
   border-radius: 16px;
@@ -2856,7 +2910,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 /* ===== History drawer (L2 right side) ===== */
 #history-drawer.drawer {
   position: fixed; top: 4rem; right: 0; bottom: 4rem;
-  width: 360px; background: rgba(18,18,20,0.96);
+  width: 360px; background: hsl(var(--surface-hue) 12% 7% / 0.96);
   border-left: 1px solid rgba(255,255,255,0.12);
   overflow-y: auto; padding: 0;
   z-index: 60;
@@ -3234,7 +3288,7 @@ body[data-file-drawer="open"] #file-viewer.drawer.left.wide {
   position: fixed; top: 5rem; left: 50%; transform: translateX(-50%);
   width: min(640px, 80vw);
   padding: 1rem 1.25rem;
-  background: rgba(18,18,20,0.97);
+  background: hsl(var(--surface-hue) 12% 7% / 0.97);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 12px;
   z-index: 70;
