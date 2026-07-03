@@ -158,6 +158,50 @@ test('a turn that keeps throwing fails after MAX_ATTEMPTS', async () => {
   } finally { deleteProject(p.id); }
 });
 
+test('a hung turn times out and fails instead of freezing the queue', async () => {
+  const p = await createProject({ name: 'Exec Hang', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    const interpret = () => new Promise(() => {});   // never resolves — a stalled connection
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'hung task' }, { interpret, turnTimeoutMs: 25 });
+    await drain(p.id, { interpret, turnTimeoutMs: 25 });
+    const [t] = listTasks(p.id);
+    assert.equal(t.status, 'failed');
+    assert.match(t.output, /timed out/);
+  } finally { deleteProject(p.id); }
+});
+
+test('a slow task does not block a sibling task from completing (no head-of-line blocking)', async () => {
+  const p = await createProject({ name: 'Exec Pool', goal: 'g', roleIds: ['pm', 'designer', 'sw_engineer', 'qa'], topology: 'hub-and-spoke' });
+  try {
+    const agents = getProject(p.id).agents.filter(a => a.role !== 'pm');
+    const [slow, fastA, fastB] = agents;
+    let fastDoneWhileSlowRunning = false;
+    let slowRunning = false;
+    const interpret = async ({ agentId }) => {
+      if (agentId === slow.id) {
+        slowRunning = true;
+        await new Promise(r => setTimeout(r, 120));
+        slowRunning = false;
+        return deliverableSpec('slow done');
+      }
+      await new Promise(r => setTimeout(r, 10));
+      if (slowRunning) fastDoneWhileSlowRunning = true;
+      return deliverableSpec('fast done');
+    };
+    // With MAX_ACTIVE=3 all three start together; the old batch model would be
+    // fine here, but with maxActive=2 the old code waited for the WHOLE batch
+    // (slow + fastA) before starting fastB. The pool starts fastB as soon as
+    // fastA's worker frees up, while slow is still running.
+    for (const a of [slow, fastA, fastB]) {
+      enqueueTask({ projectId: p.id, agentId: a.id, description: `task ${a.role}` }, { interpret, maxActive: 2 });
+    }
+    await drain(p.id, { interpret, maxActive: 2 });
+    assert.ok(listTasks(p.id).every(t => t.status === 'done'));
+    assert.ok(fastDoneWhileSlowRunning, 'a later task ran to completion while the slow one was still in flight');
+  } finally { deleteProject(p.id); }
+});
+
 const { statusSnapshot } = await import('./events.js');
 
 test('agent stays non-idle through the settle phase (no status gap for the PM answer)', async () => {
