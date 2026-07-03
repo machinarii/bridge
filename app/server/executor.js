@@ -11,7 +11,7 @@ import { createTask, getTask, updateTask, nextQueued, tasksForAgent } from './ta
 import { getProject, addAgent } from './projects.js';
 import { getRole } from './roles.js';
 import { charterFileNameFor } from './charters.js';
-import { interpretIntent } from './orchestrator.js';
+import { interpretIntent, kickoffDecisionsBlock } from './orchestrator.js';
 import { setLastSpec, appendTurn } from './scratchpad.js';
 import { emitActivity, emitDelegate, emitNotification, emitStatus, publish as publishEvent } from './events.js';
 import { readNote, writeNote } from './backends/notes.js';
@@ -169,7 +169,8 @@ async function tryPmAnswer(project, agent, spec, opts = {}) {
     `Your teammate ${agent.name} (${getRole(agent.role)?.label}) asked this while working on their task:\n` +
     `---\n${question}\nOptions offered: ${spec.choices.join(' / ')}\n---\n` +
     (prd ? `Project PRD:\n---\n${String(prd).slice(0, 4000)}\n---\n` : '') +
-    `If the PRD, the goal, or sound product judgment determines the answer, reply with ONLY that answer ` +
+    kickoffDecisionsBlock(project.id) +
+    `If the PRD, the kickoff decisions, the goal, or sound product judgment determines the answer, reply with ONLY that answer ` +
     `(short and direct; picking one of the options is fine). ` +
     `If this genuinely needs the human's preference or information you don't have, reply with exactly: ASK USER`;
   const raw = await ct({ apiKey, model: getModelForRole('pm'), prompt, timeoutMs: 20_000 });
