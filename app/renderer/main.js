@@ -1096,6 +1096,20 @@ function setContextLabel(text, color) {
   setBreadcrumbs([{ label: text, color }]);
 }
 
+/* L0 clock — "8:33pm": 12-hour, no leading zero, lowercase, no space. */
+function clockText(d = new Date()) {
+  let h = d.getHours();
+  const ampm = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  return `${h}:${String(d.getMinutes()).padStart(2, '0')}${ampm}`;
+}
+// One ticker for the app's lifetime; writes only while the L0 clock exists
+// (renderProjects re-creates it with fresh text on every visit).
+setInterval(() => {
+  const el = document.querySelector('.project-heading .l0-clock');
+  if (el) el.textContent = clockText();
+}, 30_000);
+
 function renderProjects() {
   delete document.body.dataset.addAgentOpen;
   mode = MODE_PROJECTS;
@@ -1105,10 +1119,11 @@ function renderProjects() {
   surfaceEl.innerHTML = '';
   saveNavState();
 
-  // Heading at top-left of the surface, like the project detail screen.
+  // Heading at top-left of the surface, like the project detail screen —
+  // with a live clock on the right (smaller than the title, baseline-aligned).
   const heading = document.createElement('header');
   heading.className = 'project-heading';
-  heading.innerHTML = `<h2 class="project-title">Projects</h2>`;
+  heading.innerHTML = `<h2 class="project-title">Projects</h2><span class="l0-clock" aria-hidden="true">${clockText()}</span>`;
   surfaceEl.appendChild(heading);
 
   // Fixed 4×2 layout — "+ New" is always one of the 8 cells.
@@ -1506,11 +1521,28 @@ function surfaceContentRect() {
   };
 }
 
+/* The morph target must be measured with the DESTINATION mode's surface
+ * styling — zoom strips the surface padding entirely and L0 is frameless — or
+ * the clone grows toward a rect inset by the SOURCE mode's padding and the
+ * real view pops to a different size when it renders mid-morph (visible as
+ * the container enlarging with a gap on one side). Flip the body's mode
+ * attribute just long enough to measure; nothing paints in between. */
+function surfaceContentRectFor(destMode) {
+  const prev = document.body.dataset.mode;
+  document.body.dataset.mode = destMode;
+  const rect = surfaceContentRect();
+  if (prev === undefined) delete document.body.dataset.mode;
+  else document.body.dataset.mode = prev;
+  return rect;
+}
+
 async function openFocused() {
   const idx = ring.index;
   const sourceTile = ring.current();
   const sourceRect = sourceTile?.getBoundingClientRect();
-  const targetRect = surfaceContentRect();
+  // Destination: the create flow or the L1 grid — both use the default padded
+  // surface, unlike the frameless L0 we're leaving.
+  const targetRect = surfaceContentRectFor(MODE_GRID);
   playSfx('zoomin');   // L0 → L1 (project tile selected; also "+ New")
   if (idx === tileCount() - 1) {
     // "+ New" — enter create flow with the same morph as a project tile.
@@ -2722,7 +2754,7 @@ async function enterZoom(specOverride) {
     // handler (→ L0). openAddAgentPicker re-sets it at the handoff.
     mode = MODE_ADD_AGENT;
     playSfx('zoomin');   // L1 → add-agent picker ("+ Add agent" tile selected)
-    await forwardMorph(addTile, addRect, surfaceContentRect(), () => openAddAgentPicker());
+    await forwardMorph(addTile, addRect, surfaceContentRectFor(MODE_ADD_AGENT), () => openAddAgentPicker());
     return;
   }
   const wasAtGrid = mode !== MODE_ZOOM;
@@ -2738,7 +2770,9 @@ async function enterZoom(specOverride) {
   playSfx('zoomin');   // L1 → L2 (agent tile selected)
   const sourceTile = ring.current();
   const sourceRect = sourceTile?.getBoundingClientRect();
-  const targetRect = surfaceContentRect();
+  // Destination: zoom mode, where the surface sheds its padding — measuring in
+  // grid mode landed the morph 28px short and the view popped wider on render.
+  const targetRect = surfaceContentRectFor(MODE_ZOOM);
   zoomStack.push(sourceRect);
   zoomedIndex = idx;
   mode = MODE_ZOOM;

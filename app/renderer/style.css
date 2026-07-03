@@ -1196,6 +1196,22 @@ body[data-mode="projects"] #surface {
   overflow: visible;
 }
 
+/* L0 heading row: "Projects" on the left, live clock on the right. Baseline
+ * alignment keeps the (smaller) clock visually level with the title. Scoped
+ * to L0 — L1 reuses .project-heading with a stacked title + goal. */
+body[data-mode="projects"] .project-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.l0-clock {
+  font-size: 1.05rem;
+  font-weight: 300;
+  color: var(--fg-dim, #8b97a8);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ===== Project heading (L1 — top-left, above grid) ===== */
 .project-heading {
   padding: 0.25rem 0.5rem 0.75rem;
