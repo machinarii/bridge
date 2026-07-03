@@ -637,7 +637,7 @@ function backZoomWithSnapshot(resolveToRect, renderNewView) {
     background: bgTransparent
       ? 'linear-gradient(180deg, rgba(46,24,19,0.62) 0%, rgba(26,15,13,0.66) 100%)'
       : cs.background,
-    border: bgTransparent || cs.borderStyle === 'none' ? '1px solid rgba(255,255,255,0.14)' : cs.border,
+    border: 'none',   // containers are borderless now — the card matches
     borderRadius: bgTransparent ? 'var(--radius, 14px)' : cs.borderRadius,
     boxShadow: 'none',
   });
