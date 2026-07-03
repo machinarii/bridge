@@ -31,6 +31,7 @@
       "app/electron/**/*",
       "app/server/**/*",
       "app/renderer/**/*",
+      "app/assets/**/*",
       "!app/server/node_modules/.cache/**/*",
       "!app/stt/.venv/**/*",
       "!app/state/**/*",
