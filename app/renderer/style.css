@@ -569,7 +569,7 @@ kbd {
 
 .settings-card {
   position: relative;
-  width: min(850px, 92vw);
+  width: min(960px, 92vw);   /* roomy enough for the full tab row (incl. Themes) */
   background: var(--bg-elev);
   border: 1px solid #2a2a2e;
   border-radius: var(--radius);
