@@ -2115,7 +2115,9 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   100% { transform: scale(1); }
 }
 .glyph.pressed { animation: shortcutPress 280ms cubic-bezier(.2,.8,.2,1); }
-#shortcuts-rail .sc.focused .label { opacity: 1; color: var(--fg); }
+#shortcuts-rail .sc.focused .label,
+#back-shortcut .sc.focused .label,
+#primary-shortcut .sc.focused .label { opacity: 1; color: #fff; }
 #primary-shortcut,
 #back-shortcut {
   display: inline-flex; align-items: center; gap: 0.5rem;
