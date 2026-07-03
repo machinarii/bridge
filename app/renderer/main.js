@@ -1166,9 +1166,17 @@ function renderProjects() {
   tileEls.push(plus);
 
   surfaceEl.appendChild(grid);
+  // 9+ tiles overflow into a 3rd full-height row that scrolls; the bottom fade
+  // hints at it and lifts once the user reaches the end.
+  const updateFade = () => grid.classList.toggle('fade-bottom',
+    grid.scrollHeight - grid.clientHeight - grid.scrollTop > 4);
+  grid.addEventListener('scroll', updateFade, { passive: true });
+  requestAnimationFrame(updateFade);
   ring.set(tileEls);
   ring.index = clamp(pickerIndex, 0, tileEls.length - 1);
   ring.paint();
+  // A cursor restored onto an overflow row (9+ projects) starts in view.
+  ring.current()?.scrollIntoView({ block: 'nearest' });
 
   renderActionBar([]); // no separate "Open" verb — covered by Select chip
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
