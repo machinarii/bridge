@@ -12,7 +12,7 @@ import { writeNote, readNote } from './backends/notes.js';
 import { commitIfChanged } from './workspace.js';
 import { generateBuildPlan, runScaffold } from './scaffold.js';
 import { deepenCharters } from './charters.js';
-import { startTeamReview, currentReviewAgent, recordPlan, teamReviewQuestion } from './team-review.js';
+import { startTeamReview, currentReviewAgent, recordPlan, teamReviewQuestion, planAgentTurn, teamReviewAgents } from './team-review.js';
 import { enqueueTask } from './executor.js';
 import { runAndFix, classifyFailure } from './run-fix.js';
 import { startPreview } from './preview.js';
@@ -34,20 +34,44 @@ function isRunApproval(text) {
   return t === RUN_CHOICES[0] || (AFFIRM.test(t) && !NEGATE.test(t));
 }
 
+/* Autonomous build/run (Cowork-style): once the kickoff Q&A is answered, the
+ * pipeline proceeds through scaffold → sandbox run on its own — no "Build it"
+ * / "Run it" gates. Default ON at runtime; unit tests inject callText and keep
+ * the manual gates unless they opt in with opts.autoRun. Set
+ * BRIDGE_AUTO_BUILD=off to restore the manual gates. */
+function isAutoRun(opts) {
+  if (opts.autoRun !== undefined) return !!opts.autoRun;
+  return !opts.callText && process.env.BRIDGE_AUTO_BUILD !== 'off';
+}
+
+/** Fire-and-forget: scaffold, then (on success) install/build/test in the
+ * sandbox. Every terminus posts to the build owner's chat + activity feed, so
+ * nothing ends silently even though nobody is awaiting this chain. */
+function autoBuildAndRun(projectId, opts) {
+  (async () => {
+    const b = await executeBuild(projectId, opts);
+    if (b?.ok) await executeRun(projectId, opts);
+  })().catch(err => console.warn('[kickoff] auto build+run:', err?.message));
+}
+
 // "Skip for now" on a question bubble: advance past the question without
 // recording an answer. The client sends this exact literal; question specs flag
 // themselves `skippable` so the renderer shows the Skip button.
 export const SKIP_TOKEN = 'Skip for now';
 export function isSkip(text) { return String(text || '').trim() === SKIP_TOKEN; }
 
-/** A build-plan turn: the proposed stack + file tree, as a choice bubble. */
-function buildPlanSpec(plan) {
+/** A build-plan turn: the proposed stack + file tree. In auto mode it's an
+ * announcement (the build starts on its own); otherwise a choice bubble. */
+function buildPlanSpec(plan, auto = false) {
   const tree = plan.files.map(f => `- \`${f.path}\` — ${f.purpose}`).join('\n');
   const body = `Here's the build plan (${plan.stack || 'app'}): ${plan.summary || ''}\n\n` +
-    `**Files I'll scaffold:**\n${tree}\n\nReady to scaffold these into the project repo?`;
+    `**Files I'll scaffold:**\n${tree}\n\n` +
+    (auto
+      ? `I'm starting the build now — I'll scaffold these, then install, build, and test in a sandbox and report back.`
+      : `Ready to scaffold these into the project repo?`);
   return JSON.stringify({
     intent: 'answer', template: 'reader', context: 'Build plan', title: 'Build plan',
-    body, choices: BUILD_CHOICES,
+    body, ...(auto ? {} : { choices: BUILD_CHOICES }),
   });
 }
 
@@ -126,9 +150,11 @@ async function ensureBuildAgent(projectId) {
 
 async function proposeBuildOrClose(projectId, ct, apiKey, project, opts) {
   let plan = null;
-  try { plan = await generateBuildPlan(projectId, { callText: ct, apiKey }); } catch { /* no plan */ }
+  try { plan = await generateBuildPlan(projectId, { callText: ct, apiKey }); }
+  catch (err) { console.warn(`[kickoff] build plan failed for ${projectId}: ${err?.message || err}`); }
   if (plan && plan.files?.length) {
-    const spec = buildPlanSpec(plan);
+    const auto = isAutoRun(opts);
+    const spec = buildPlanSpec(plan, auto);
     // Build + scaffolding is engineering work: hand it off to the software
     // engineer. The PM announces the handoff in the lead chat; the build plan
     // and its "Build it" approval live in the engineer's chat.
@@ -153,10 +179,12 @@ async function proposeBuildOrClose(projectId, ct, apiKey, project, opts) {
       appendTurn(project.leadAgentId, 'assistant', handoff);
       emitNotification({ kind: 'info', projectId, title: 'Build handed to engineering',
                          body: `${swe.name} has the build plan for ${project.name}.` });
-      // The build is the engineer's (it still awaits the user's "Build it"). The
-      // REST of the team starts their tasks now, in parallel — they don't wait
-      // for the build. Exclude the engineer (already has the build handoff).
+      // The REST of the team starts their tasks now, in parallel — they don't
+      // wait for the build. Exclude the engineer (already has the build handoff).
       startTeamWork(projectId, opts, { excludeAgentId: swe.id });
+      // Auto mode: the build starts itself (scaffold → sandbox run) instead of
+      // waiting for the user to type "Build it".
+      if (auto) autoBuildAndRun(projectId, opts);
       return { handled: true, intent: 'build_handoff', spec: handoff };
     }
     // No separate engineer available — keep the plan in the lead chat (fallback).
@@ -165,6 +193,7 @@ async function proposeBuildOrClose(projectId, ct, apiKey, project, opts) {
     emitActivity(projectId, 'PM: build plan ready', project.leadAgentId, { awaitKind: 'reply' });
     // Still delegate the rest of the team in parallel (lead owns the build here).
     startTeamWork(projectId, opts, { excludeAgentId: project.leadAgentId });
+    if (auto) autoBuildAndRun(projectId, opts);
     return { handled: true, intent: 'build_plan', spec };
   }
   const spec = closingSpec("Thanks — that's everything I needed. Kickoff is complete: the docs are up to date and the team has its starting tasks. Ask me anything from here.");
@@ -663,6 +692,121 @@ export async function executeKickoff(projectId, opts = {}) {
   return { ran: true, assigned };
 }
 
+/** Scaffold the repo from the stored build plan and post the result to the
+ * build owner's chat. Shared by the manual "Build it" gate and the autonomous
+ * chain. Returns { handled, intent, spec, ok }. */
+export async function executeBuild(projectId, opts = {}) {
+  const k = getKickoff(projectId);
+  const project = getProject(projectId);
+  if (!project) return { handled: false, ok: false };
+  const buildAgentId = k.buildAgentId || project.leadAgentId;
+  const sweName = project.agents.find(a => a.id === buildAgentId)?.name || 'Engineer';
+  emitStatus(projectId, buildAgentId, 'scaffolding');
+  emitActivity(projectId, `${sweName}: scaffolding…`, buildAgentId);
+  const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+  const token = opts.cancelToken || createCancelToken({ kind: 'scaffold', projectId, ownerAgentId: buildAgentId });
+  let r;
+  try { r = await runScaffold(projectId, { callText: opts.callText || callOpenRouterText, apiKey, cancelToken: token }); }
+  catch (e) { r = { ok: false, reason: String(e?.message || e) }; }
+  finally { completeToken(token); }
+  const issueNote = r.ok && r.issues?.length
+    ? ` ⚠️ ${r.issues.length} file${r.issues.length === 1 ? '' : 's'} have syntax issues I'd fix in a follow-up pass: ${r.issues.map(i => '`' + i.path + '`').join(', ')}.`
+    : '';
+  if (r.ok) {
+    const auto = isAutoRun(opts);
+    const body = `Done — scaffolded ${r.fileCount} file${r.fileCount === 1 ? '' : 's'} and committed them (${r.commitSha}).${issueNote} ` +
+      (auto ? 'Now installing, building, and testing it in a sandbox to make sure it runs…'
+            : 'Want me to install, build, and test it in a sandbox to make sure it runs?');
+    const spec = JSON.stringify({ intent: 'answer', template: 'reader', context: 'Scaffold', title: 'Scaffolded', body,
+                                  ...(auto ? {} : { choices: RUN_CHOICES }) });
+    appendTurn(buildAgentId, 'assistant', spec);
+    setKickoff(projectId, { status: 'run_pending' });
+    emitStatus(projectId, buildAgentId, 'idle');
+    emitActivity(projectId, `${sweName}: scaffold complete${auto ? '' : ' — offered to run'}`, buildAgentId, auto ? undefined : { awaitKind: 'reply' });
+    return { handled: true, intent: 'scaffolded', spec, ok: true };
+  }
+  // failure case (closingSpec, status build_pending, intent 'scaffold_failed')
+  const spec = closingSpec(`Scaffold didn't complete: ${r.reason || 'unknown error'}. The plan is still ready — say "Build it" to retry.`);
+  appendTurn(buildAgentId, 'assistant', spec);
+  setKickoff(projectId, { status: 'build_pending' });
+  emitStatus(projectId, buildAgentId, 'idle');
+  emitActivity(projectId, `${sweName}: scaffold failed`, buildAgentId);
+  emitNotification({ kind: 'warn', projectId, title: `${sweName}: scaffold failed`,
+                     body: String(r.reason || 'unknown error').slice(0, 140) });
+  return { handled: true, intent: 'scaffold_failed', spec, ok: false };
+}
+
+/** Install/build/test the scaffolded repo in the sandbox (with fix rounds) and
+ * post the verdict to the build owner's chat. Shared by the manual "Run it"
+ * gate and the autonomous chain. Returns { handled, intent, spec, ok }. */
+export async function executeRun(projectId, opts = {}) {
+  const project = getProject(projectId);
+  if (!project) return { handled: false, ok: false };
+  const k = getKickoff(projectId);
+  const buildAgentId = k.buildAgentId || project.leadAgentId;
+  const sweName = project.agents.find(a => a.id === buildAgentId)?.name || 'Engineer';
+  emitStatus(projectId, buildAgentId, 'testing');
+  emitActivity(projectId, `${sweName}: running install / build / test…`, buildAgentId);
+  const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+  const token = opts.cancelToken || createCancelToken({ kind: 'run_fix', projectId, ownerAgentId: buildAgentId });
+  let r;
+  try {
+    r = await runAndFix(projectId, {
+      callText: opts.callText || callOpenRouterText,
+      runner: opts.runner,
+      apiKey,
+      cancelToken: token,
+    });
+  } catch (err) {
+    if (err?.code === 'CANCELED') {
+      const spec = closingSpec('Run canceled. The current repo state is unchanged. Say "Run it" to resume later.');
+      appendTurn(buildAgentId, 'assistant', spec);
+      setKickoff(projectId, { status: 'run_pending' });
+      emitStatus(projectId, buildAgentId, 'idle');
+      emitActivity(projectId, `${sweName}: run canceled`, buildAgentId);
+      completeToken(token);
+      return { handled: true, intent: 'run_canceled', spec, ok: false };
+    }
+    throw err;
+  } finally {
+    completeToken(token);
+  }
+  let body;
+  if (r.daemonDown) body = "I couldn't reach the Docker engine — start it (e.g. `colima start`) and say \"Run it\" again.";
+  else if (r.ok) {
+    body = `✅ It runs — install, build, and tests all pass${r.rounds ? ` (after ${r.rounds} fix round${r.rounds === 1 ? '' : 's'})` : ''}. Everything's committed in the project repo.`;
+    // Keep the app running in a preview container and hand the user a link to
+    // verify it themselves. Best-effort: a preview failure never spoils the
+    // green report. Skipped in unit-test mode (injected runner, no previewer).
+    const previewer = opts.startPreview || (opts.runner ? null : startPreview);
+    if (previewer) {
+      try {
+        const prev = await previewer(projectId);
+        if (prev.ok) {
+          body += `\n\nTry it yourself: [${prev.url}](${prev.url})` +
+                  (prev.ready ? '' : ' — still booting, give it a few seconds') + '.';
+        }
+      } catch (e) { console.warn('[preview]', e?.message); }
+    }
+  }
+  else {
+    const cls = classifyFailure(r.lastStep, r.lastOutput);
+    const note = cls.kind === 'environment'
+      ? ` This looks like ${cls.hint} — I've adjusted the sandbox setup; another "Run it" may clear it.`
+      : cls.kind === 'dependency' ? ` This looks like ${cls.hint}.` : '';
+    body = `Couldn't get it green after ${r.rounds} round${r.rounds === 1 ? '' : 's'} — the \`${r.lastStep}\` step still fails.${note} Latest output:\n\n\`\`\`\n${String(r.lastOutput || '').slice(-1200)}\n\`\`\`\n\nSay "Run it" to try again.`;
+  }
+  const spec = closingSpec(body);
+  appendTurn(buildAgentId, 'assistant', spec);
+  setKickoff(projectId, { status: r.ok ? 'verified' : (r.daemonDown ? 'run_pending' : 'built') });
+  emitStatus(projectId, buildAgentId, 'idle');
+  emitActivity(projectId, r.ok ? `${sweName}: build + test green` : `${sweName}: still failing`, buildAgentId);
+  emitNotification({ kind: r.ok ? 'info' : 'warn', projectId,
+                     title: r.ok ? `${project.name}: build verified` : `${project.name}: run ${r.daemonDown ? 'needs Docker' : 'still failing'}`,
+                     body: r.ok ? 'Install, build, and tests all pass.' : body.slice(0, 140) });
+  return { handled: true, intent: r.ok ? 'verified' : 'run_failed', spec, ok: !!r.ok };
+}
+
 export async function handleLeadMessageDuringKickoff(projectId, text, opts = {}) {
   const k = getKickoff(projectId);
 
@@ -697,20 +841,23 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
       emitActivity(projectId, `PM: question ${nextIdx + 1} ready`, project.leadAgentId, { awaitKind: 'reply' });
       return { handled: true, intent: 'next_question', spec };
     }
-    // Out of PM questions — start the team planning round: each specialist asks
-    // the user ONE question, one at a time. Send the first now.
+    // Out of PM questions — the user has answered everything upfront. The
+    // specialists draft their domain plans AUTONOMOUSLY from the docs and the
+    // recorded decisions (no per-specialist interrogation round), then the PM
+    // proposes the build. This is the "answer once, then self-driving" hinge.
     setKickoff(projectId, { qIdx: nextIdx });
     const ct = opts.callText || callOpenRouterText;
     const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
     startTeamReview(projectId);
-    const first = await nextTeamReviewQuestion(projectId, ct, apiKey);
-    if (first) {
-      appendTurn(project.leadAgentId, 'assistant', first.spec);
-      setKickoff(projectId, { status: 'team_review' });
-      emitActivity(projectId, `${first.agent.name}: has a question`, project.leadAgentId, { awaitKind: 'reply' });
-      return { handled: true, intent: 'team_review_question', spec: first.spec };
+    const specialists = teamReviewAgents(projectId);
+    if (specialists.length) {
+      emitActivity(projectId, 'Team: drafting domain plans…', project.leadAgentId);
+      await Promise.all(specialists.map(a =>
+        planAgentTurn(projectId, a.id, { callText: ct, apiKey })
+          .catch(err => console.warn(`[kickoff] plan (${a.name}): ${err?.message || err}`))));
+      const repo = getProject(projectId)?.repoPath;
+      if (repo) { try { commitIfChanged(repo, 'Add team planning notes'); } catch {} }
     }
-    // No specialists with a usable question → straight to the build plan.
     return await proposeBuildOrClose(projectId, ct, apiKey, project, opts);
   }
 
@@ -750,40 +897,13 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     // Only the build owner drives this phase; a message from anyone else (e.g.
     // the PM) falls through to a normal reply.
     if ((opts.agentId || buildAgentId) !== buildAgentId) return { handled: false };
-    const sweName = project.agents.find(a => a.id === buildAgentId)?.name || 'Engineer';
     if (!isBuildApproval(text)) {
       // "Hold off / adjust" → let the normal /interpret reply handle it (it
       // appends the user turn and generates the engineer's conversational reply).
       return { handled: true, intent: 'build_hold', awaiting: true };
     }
     appendTurn(buildAgentId, 'user', text);
-    emitStatus(projectId, buildAgentId, 'scaffolding');
-    emitActivity(projectId, `${sweName}: scaffolding…`, buildAgentId);
-    const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
-    const token = opts.cancelToken || createCancelToken({ kind: 'scaffold', projectId, ownerAgentId: buildAgentId });
-    let r;
-    try { r = await runScaffold(projectId, { callText: opts.callText || callOpenRouterText, apiKey, cancelToken: token }); }
-    catch (e) { r = { ok: false, reason: String(e?.message || e) }; }
-    finally { completeToken(token); }
-    const issueNote = r.ok && r.issues?.length
-      ? ` ⚠️ ${r.issues.length} file${r.issues.length === 1 ? '' : 's'} have syntax issues I'd fix in a follow-up pass: ${r.issues.map(i => '`' + i.path + '`').join(', ')}.`
-      : '';
-    if (r.ok) {
-      const body = `Done — scaffolded ${r.fileCount} file${r.fileCount === 1 ? '' : 's'} and committed them (${r.commitSha}).${issueNote} Want me to install, build, and test it in a sandbox to make sure it runs?`;
-      const spec = JSON.stringify({ intent: 'answer', template: 'reader', context: 'Scaffold', title: 'Scaffolded', body, choices: RUN_CHOICES });
-      appendTurn(buildAgentId, 'assistant', spec);
-      setKickoff(projectId, { status: 'run_pending' });
-      emitStatus(projectId, buildAgentId, 'idle');
-      emitActivity(projectId, `${sweName}: scaffold complete — offered to run`, buildAgentId, { awaitKind: 'reply' });
-      return { handled: true, intent: 'scaffolded', spec };
-    }
-    // failure case (closingSpec, status build_pending, intent 'scaffold_failed')
-    const spec = closingSpec(`Scaffold didn't complete: ${r.reason || 'unknown error'}. The plan is still ready — say "Build it" to retry.`);
-    appendTurn(buildAgentId, 'assistant', spec);
-    setKickoff(projectId, { status: 'build_pending' });
-    emitStatus(projectId, buildAgentId, 'idle');
-    emitActivity(projectId, `${sweName}: scaffold failed`, buildAgentId);
-    return { handled: true, intent: 'scaffold_failed', spec };
+    return await executeBuild(projectId, opts);
   }
 
   // Run the project in a sandbox: install/build/test, fix failures, report —
@@ -793,7 +913,6 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
     if (!project) return { handled: false };
     const buildAgentId = k.buildAgentId || project.leadAgentId;
     if ((opts.agentId || buildAgentId) !== buildAgentId) return { handled: false };
-    const sweName = project.agents.find(a => a.id === buildAgentId)?.name || 'Engineer';
     appendTurn(buildAgentId, 'user', text);
     if (!isRunApproval(text)) {
       const spec = closingSpec("No problem — the code's committed in the project repo. Ask me anything from here.");
@@ -801,63 +920,7 @@ export async function handleLeadMessageDuringKickoff(projectId, text, opts = {})
       setKickoff(projectId, { status: 'done' });
       return { handled: true, intent: 'run_declined', spec };
     }
-    emitStatus(projectId, buildAgentId, 'testing');
-    emitActivity(projectId, `${sweName}: running install / build / test…`, buildAgentId);
-    const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
-    const token = opts.cancelToken || createCancelToken({ kind: 'run_fix', projectId, ownerAgentId: buildAgentId });
-    let r;
-    try {
-      r = await runAndFix(projectId, {
-        callText: opts.callText || callOpenRouterText,
-        runner: opts.runner,
-        apiKey,
-        cancelToken: token,
-      });
-    } catch (err) {
-      if (err?.code === 'CANCELED') {
-        const spec = closingSpec('Run canceled. The current repo state is unchanged. Say "Run it" to resume later.');
-        appendTurn(buildAgentId, 'assistant', spec);
-        setKickoff(projectId, { status: 'run_pending' });
-        emitStatus(projectId, buildAgentId, 'idle');
-        emitActivity(projectId, `${sweName}: run canceled`, buildAgentId);
-        completeToken(token);
-        return { handled: true, intent: 'run_canceled', spec };
-      }
-      throw err;
-    } finally {
-      completeToken(token);
-    }
-    let body;
-    if (r.daemonDown) body = "I couldn't reach the Docker engine — start it (e.g. `colima start`) and say \"Run it\" again.";
-    else if (r.ok) {
-      body = `✅ It runs — install, build, and tests all pass${r.rounds ? ` (after ${r.rounds} fix round${r.rounds === 1 ? '' : 's'})` : ''}. Everything's committed in the project repo.`;
-      // Keep the app running in a preview container and hand the user a link to
-      // verify it themselves. Best-effort: a preview failure never spoils the
-      // green report. Skipped in unit-test mode (injected runner, no previewer).
-      const previewer = opts.startPreview || (opts.runner ? null : startPreview);
-      if (previewer) {
-        try {
-          const prev = await previewer(projectId);
-          if (prev.ok) {
-            body += `\n\nTry it yourself: [${prev.url}](${prev.url})` +
-                    (prev.ready ? '' : ' — still booting, give it a few seconds') + '.';
-          }
-        } catch (e) { console.warn('[preview]', e?.message); }
-      }
-    }
-    else {
-      const cls = classifyFailure(r.lastStep, r.lastOutput);
-      const note = cls.kind === 'environment'
-        ? ` This looks like ${cls.hint} — I've adjusted the sandbox setup; another "Run it" may clear it.`
-        : cls.kind === 'dependency' ? ` This looks like ${cls.hint}.` : '';
-      body = `Couldn't get it green after ${r.rounds} round${r.rounds === 1 ? '' : 's'} — the \`${r.lastStep}\` step still fails.${note} Latest output:\n\n\`\`\`\n${String(r.lastOutput || '').slice(-1200)}\n\`\`\`\n\nSay "Run it" to try again.`;
-    }
-    const spec = closingSpec(body);
-    appendTurn(buildAgentId, 'assistant', spec);
-    setKickoff(projectId, { status: r.ok ? 'verified' : (r.daemonDown ? 'run_pending' : 'built') });
-    emitStatus(projectId, buildAgentId, 'idle');
-    emitActivity(projectId, r.ok ? `${sweName}: build + test green` : `${sweName}: still failing`, buildAgentId);
-    return { handled: true, intent: r.ok ? 'verified' : 'run_failed', spec };
+    return await executeRun(projectId, opts);
   }
 
   if (k.status !== 'awaiting_approval') return { handled: false };

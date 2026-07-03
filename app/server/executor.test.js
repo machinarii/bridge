@@ -158,6 +158,29 @@ test('a turn that keeps throwing fails after MAX_ATTEMPTS', async () => {
   } finally { deleteProject(p.id); }
 });
 
+test('a blocked task auto-resumes on best judgment after the fallback window', async () => {
+  const p = await createProject({ name: 'Exec Fallback', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    const interpret = async ({ text }) =>
+      /best judgment/.test(text)
+        ? { intent: 'answer', template: 'reader', title: 'Done', body: 'Went with dark theme.' }
+        : questionSpec('Dark or light?', ['Dark', 'Light']);
+    const callText = async () => 'ASK USER';   // the PM can't answer either
+    const opts = { interpret, callText, apiKey: 'k', blockTimeoutMs: 20 };
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'pick theme' }, opts);
+    await drain(p.id, opts);
+    assert.equal(listTasks(p.id)[0].status, 'blocked_on_user', 'blocks first — the user gets a window to reply');
+    const deadline = Date.now() + 2000;
+    while (listTasks(p.id)[0].status !== 'done' && Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 10));
+    }
+    const [t] = listTasks(p.id);
+    assert.equal(t.status, 'done', 'fallback resumed and completed the task');
+    assert.match(t.output, /dark theme/i);
+  } finally { deleteProject(p.id); }
+});
+
 test('a hung turn times out and fails instead of freezing the queue', async () => {
   const p = await createProject({ name: 'Exec Hang', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
   try {

@@ -52,12 +52,20 @@ No irreversible/destructive actions without confirmation. Never expose API keys,
  * role in what it actually delivers inside Bridge (docs + code), not real-world
  * tools or hand-offs. */
 const ROLE_GUIDANCE = {
-  designer: `As the Designer you work in written documents and code — never visual-design tools (there is no Figma/Sketch in Bridge). Follow this sequence, and do NOT skip ahead:
-1. Write the design foundation as a markdown doc: design principles, UI guidelines, creative direction, and system design. Then ask the user to confirm before continuing (offer choices if a direction is open).
-2. After they confirm, write use cases and user flows as a markdown doc. Then ask the user to confirm.
-3. Only once the full design documentation is complete and the user has reviewed it, build the GUI directly in code.
+  designer: `As the Designer you work in written documents and code — never visual-design tools (there is no Figma/Sketch in Bridge). Deliver in this sequence:
+1. The design foundation as a markdown doc: design principles, UI guidelines, creative direction, and system design.
+2. Use cases and user flows as a markdown doc.
+3. The GUI, built directly in code.
+When working a delegated task, produce the stages in order WITHOUT stopping to ask for confirmation — list any open design decisions (and the option you chose) at the end of each doc instead. In a direct chat with the user, pause after each stage for their feedback.
 Never promise a Figma file, an external link, a channel post, or a delivery date.`,
 };
+
+/* Injected when the turn is a delegated task (executor / team fan-out), where
+ * stopping to ask the user defeats the autonomous pipeline. */
+const AUTONOMY_GUIDANCE = `
+## Working autonomously (this is a delegated task)
+The user already answered the kickoff questions — check the recorded decisions above before asking anything. Prefer decisions over questions: pick the option that best serves the goal, state your assumption briefly in the deliverable, and complete the work in this reply. Only include "choices" when you genuinely cannot proceed without the user.
+`;
 function roleGuidance(roleId) {
   const g = ROLE_GUIDANCE[roleId];
   return g ? `\n${g}\n` : '';
@@ -106,7 +114,7 @@ function customInstructionsBlock() {
   return ins ? `\n\nAdditional user instructions (always follow):\n${ins}\n` : '';
 }
 
-function systemPrompt({ project, agent, sharedFrom, text }) {
+function systemPrompt({ project, agent, sharedFrom, text, autonomous = false }) {
   const role = getRole(agent.role);
   const charter = readProjectCharter(project, agent.role);
   const topo = project.topology ? TOPOLOGIES[project.topology] : null;
@@ -122,7 +130,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${kickoffDecisionsBlock(project.id)}${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}
+${kickoffDecisionsBlock(project.id)}${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}${autonomous ? AUTONOMY_GUIDANCE : ''}
 Stay in role and on-goal. Speak briefly, in first person when relevant. The user is talking to you specifically.${customInstructionsBlock()}
 ${RESPONSE_STYLE}
 
@@ -207,6 +215,9 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
   if (!agent) throw new Error(`unknown agent: ${agentId}`);
 
   const apiKey = process.env.OPENROUTER_API_KEY;
+  // A handoff means this turn is a delegated task, not a live user chat — the
+  // agent should decide-and-proceed instead of stopping to ask the user.
+  const autonomous = !!handoff;
   // A delegated task records as a From→To handoff turn (so it doesn't render as
   // the user's own "you" bubble). `text` is still the prompt for the model.
   if (handoff) {
@@ -239,7 +250,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
   // Anything unexpected falls through to the structured JSON tile path below,
   // so the worst case is exactly today's behavior.
   try {
-    const streamed = await tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate, effort });
+    const streamed = await tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate, effort, autonomous });
     if (streamed) { emitStatus(projectId, agentId, 'idle'); return streamed; }
   } catch (err) {
     console.warn('[stream] falling back to JSON tile path:', err?.message);
@@ -249,7 +260,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
 
   const history = getContext(agentId).messages.slice(0, -1);
   const messages = [
-    { role: 'system', content: systemPrompt({ project, agent, sharedFrom, text }) },
+    { role: 'system', content: systemPrompt({ project, agent, sharedFrom, text, autonomous }) },
     ...history,
     { role: 'user', content: text },
   ];
@@ -355,7 +366,7 @@ function parseSpec(raw) {
  * intents (note/list/compose/…) still use the structured path. */
 
 /* Role + charter, but instruct a direct prose reply (no JSON tile spec). */
-function proseSystemPrompt({ project, agent, sharedFrom, text }) {
+function proseSystemPrompt({ project, agent, sharedFrom, text, autonomous = false }) {
   const role = getRole(agent.role);
   const charter = readProjectCharter(project, agent.role);
   const topo = project.topology ? TOPOLOGIES[project.topology] : null;
@@ -370,7 +381,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${kickoffDecisionsBlock(project.id)}${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}
+${kickoffDecisionsBlock(project.id)}${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}${autonomous ? AUTONOMY_GUIDANCE : ''}
 Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.${customInstructionsBlock()}
 ${RESPONSE_STYLE}`;
 }
@@ -446,12 +457,12 @@ async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
 
 /* Returns a hydrated 'reader' spec on success, or null to defer to the JSON
  * tile path (action intents, empty output, or classify failure). */
-async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate = 0, effort = 'high' }) {
+async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate = 0, effort = 'high', autonomous = false }) {
   if (await classifyIntent({ apiKey, text }) !== 'answer') return null;
   emitStatus(projectId, agentId, agent?.role === 'sw_engineer' ? 'building' : 'drafting');
   const history = getContext(agentId).messages.slice(0, -1);
   const messages = [
-    { role: 'system', content: proseSystemPrompt({ project, agent, sharedFrom, text }) },
+    { role: 'system', content: proseSystemPrompt({ project, agent, sharedFrom, text, autonomous }) },
     ...history,
     { role: 'user', content: text },
   ];

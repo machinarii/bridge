@@ -21,6 +21,10 @@ import { callOpenRouterText } from './llm.js';
 const MAX_ACTIVE = 3;     // concurrent agent turns per project
 const MAX_ATTEMPTS = 2;   // 1 retry on a thrown turn
 const TURN_TIMEOUT_MS = 240_000;  // a hung turn fails instead of freezing the queue
+// A blocked task doesn't wait on the user forever: after this window the PM
+// directs the agent to proceed on best judgment (once per task). Set
+// BRIDGE_BLOCKED_TIMEOUT_MIN=0 to disable the fallback.
+const BLOCKED_FALLBACK_MS = Number(process.env.BRIDGE_BLOCKED_TIMEOUT_MIN ?? 10) * 60_000;
 
 const draining = new Map();  // projectId → in-flight drain promise
 
@@ -179,6 +183,7 @@ async function settleReply(task, project, agent, spec, opts) {
     emitActivity(project.id, `${agent.name}: needs your input`, agent.id, { awaitKind: 'reply' });
     emitNotification({ kind: 'info', projectId: project.id, title: `${agent.name} needs input`,
                        body: String(spec.title || spec.body || '').slice(0, 140) });
+    scheduleBlockedFallback(task, opts);
     return;
   }
 
@@ -186,6 +191,49 @@ async function settleReply(task, project, agent, spec, opts) {
   const body = String(spec?.body || spec?.title || '').trim();
   updateTask(task.id, { status: 'done', output: body.slice(0, 2000) });
   reportToLead(project, agent, task, body);
+}
+
+/** After the fallback window, a task still blocked on the user resumes on the
+ * PM's best-judgment directive — once per task (autoResumed guard), so a
+ * repeat question blocks permanently and genuinely waits for the human. */
+function scheduleBlockedFallback(task, opts = {}) {
+  const ms = opts.blockTimeoutMs ?? BLOCKED_FALLBACK_MS;
+  if (!(ms > 0)) return;
+  if (getTask(task.id)?.autoResumed) return;
+  const timer = setTimeout(() => {
+    resumeBlockedTask(task.id, opts)
+      .catch(err => console.warn(`[executor] blocked fallback ${task.id}:`, err?.message));
+  }, ms);
+  timer.unref?.();
+}
+
+/** Resume a blocked task with a best-judgment directive from the PM. No-op if
+ * the user already answered (status changed) or the task is gone. */
+export async function resumeBlockedTask(taskId, opts = {}) {
+  const task = getTask(taskId);
+  if (!task || task.status !== 'blocked_on_user') return;
+  const project = getProject(task.projectId);
+  const agent = project?.agents.find(a => a.id === task.agentId);
+  if (!project || !agent) return;
+  const directive = 'No reply from the user — use your best judgment: pick the option that best serves the ' +
+    'project goal, state your assumption briefly, and complete the task in this reply.';
+  updateTask(task.id, { status: 'in_progress', autoResumed: true });
+  emitActivity(project.id, `${agent.name}: no reply — proceeding on best judgment`, agent.id);
+  const interpret = opts.interpret || interpretIntent;
+  const lead = project.agents.find(a => a.id === project.leadAgentId);
+  emitStatus(project.id, agent.id, 'analyzing');
+  try {
+    emitDelegate(project.id, project.leadAgentId, agent.id, directive);
+    const spec = await withTimeout(interpret({
+      projectId: project.id, agentId: agent.id, text: directive, effort: 'high',
+      handoff: { from: lead?.name || 'PM', fromRole: getRole('pm').label, to: agent.name, toRole: getRole(agent.role).label },
+    }), opts.turnTimeoutMs || TURN_TIMEOUT_MS, `${agent.name} turn`);
+    setLastSpec(agent.id, spec);
+    await settleReply(getTask(task.id), project, agent, spec, opts);
+  } catch (err) {
+    updateTask(task.id, { status: 'failed', output: String(err?.message || err) });
+    emitActivity(project.id, `${agent.name}: task failed — ${String(err?.message || err).slice(0, 80)}`, agent.id);
+  } finally { emitStatus(project.id, agent.id, 'idle'); }
 }
 
 /** PM answers a specialist's question from the PRD/goal, or returns null to
