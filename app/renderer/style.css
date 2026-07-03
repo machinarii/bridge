@@ -1178,6 +1178,9 @@ body[data-mode="add_agent"] #surface {
       color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%,
       transparent 60%),
     var(--bg-elev);
+  /* Heading breathing room matches L2: 1.25rem above the title text
+   * (.project-heading pads 0.25rem itself; L2's .agent-header pads 1.25rem). */
+  padding-top: 1rem;
 }
 
 /* L2 lets .agent-view BE the visible container — no nested chrome. The council
@@ -2263,12 +2266,22 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
    * bottom with a fade (see .fade-bottom). 0.75rem = the one visible gap. */
   grid-auto-rows: calc((100% - 0.75rem) / 2);
   gap: 0.75rem;
-  /* Mirror .agent-grid (L1): 1rem top/bottom, 0.5rem left/right. */
-  padding: 1rem 0.5rem;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: none;   /* console look — the cursor + fade signal overflow */
+  /* A scroll container clips BOTH axes, which cut the focused tile's ~28px
+   * glow at the sides and above row one. Give the scrollport glow room via
+   * padding, and pull the box back out with negative margins so the tiles
+   * keep their 1rem/0.5rem visual inset (mirroring .agent-grid on L1). */
+  --glow-room: 28px;
+  padding: var(--glow-room);
+  margin: calc(1rem - var(--glow-room)) calc(0.5rem - var(--glow-room));
+}
+/* 9+ tiles: shave the rows slightly so a sliver of row 3 shows above the
+ * fold — a scroll hint stronger than the fade alone. */
+.project-picker.overflowing {
+  grid-auto-rows: calc((100% - 1.5rem) / 2.2);
 }
 .project-picker::-webkit-scrollbar { display: none; }
 /* Soft bottom fade while more rows are below the fold — toggled in JS so the
