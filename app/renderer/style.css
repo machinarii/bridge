@@ -1417,15 +1417,17 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
      wider, softer fade. */
   --header-h: 8.5rem;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
   overflow: hidden;
   /* Match the L1 surface backdrop exactly so the L2 container reads
-   * as "the same room, zoomed in" rather than a new visual context. */
+   * as "the same room, zoomed in" rather than a new visual context:
+   * translucent ash-black base (neutral, no blue cast) under the
+   * project-color radial wash. */
   background:
     radial-gradient(ellipse 120% 80% at 50% -10%,
       color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%,
       transparent 60%),
-    var(--bg-elev);
+    rgba(18, 18, 20, 0.55);
 }
 .agent-view::before { content: none; }
 .agent-view > * { position: relative; }
