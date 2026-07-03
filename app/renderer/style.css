@@ -89,7 +89,7 @@ html, body {
    * over the image's bright areas; --bg backstops while the jpg loads. */
   background:
     linear-gradient(rgba(10, 14, 20, 0.38), rgba(10, 14, 20, 0.38)),
-    url('/assets/abstract-background.jpg?v=4') center / cover no-repeat fixed,
+    url('/assets/abstract-background.jpg?v=5') center / cover no-repeat fixed,
     var(--bg);
   color: var(--fg);
   font-family: 'Barlow Condensed', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
