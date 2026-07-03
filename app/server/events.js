@@ -18,6 +18,10 @@
  * stamped on the way out so renderers can dedupe / replay.
  */
 
+import { appendFileSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { stateDir, ensureStateDir } from './state-dir.js';
+
 let _nextId = 1;
 const subscribers = new Set(); // each: { projectId | null, write(ev) }
 
@@ -30,13 +34,47 @@ const FEED_BUFFER = [];
 const FEED_BUFFER_MAX = 200;
 const BUFFERED_TYPES = new Set(['activity', 'delegate', 'run_result']);
 
+/* Feed durability: buffered events also append to events.jsonl in the state
+ * dir (same pattern as agent-metrics.jsonl) and rehydrate on boot, so the
+ * Activity panel survives a server/app restart instead of coming up blank.
+ * The file is compacted back to the buffer tail when it grows past the cap. */
+const PERSIST_COMPACT_LINES = 2000;
+function eventsFile() { return join(stateDir(), 'events.jsonl'); }
+
+let hydrated = false;
+function hydrateOnce() {
+  if (hydrated) return;
+  hydrated = true;
+  try {
+    if (!existsSync(eventsFile())) return;
+    const lines = readFileSync(eventsFile(), 'utf8').split('\n').filter(Boolean);
+    const tail = lines.slice(-FEED_BUFFER_MAX);
+    for (const line of tail) {
+      try {
+        const ev = JSON.parse(line);
+        if (!ev || !BUFFERED_TYPES.has(ev.type)) continue;
+        FEED_BUFFER.push(ev);
+        if (typeof ev.id === 'number' && ev.id >= _nextId) _nextId = ev.id + 1;
+      } catch { /* skip a corrupt line */ }
+    }
+    if (lines.length > PERSIST_COMPACT_LINES) writeFileSync(eventsFile(), tail.join('\n') + '\n', 'utf8');
+  } catch (err) { console.warn('[events] hydrate failed:', err?.message); }
+}
+
+function persist(ev) {
+  try { ensureStateDir(); appendFileSync(eventsFile(), JSON.stringify(ev) + '\n', 'utf8'); }
+  catch (err) { console.warn('[events] persist failed:', err?.message); }
+}
+
 /** publish(event) — broadcast to every interested subscriber. */
 export function publish(event) {
   if (!event || typeof event !== 'object') return;
+  hydrateOnce();
   const out = { id: _nextId++, at: Date.now(), ...event };
   if (BUFFERED_TYPES.has(out.type)) {
     FEED_BUFFER.push(out);
     if (FEED_BUFFER.length > FEED_BUFFER_MAX) FEED_BUFFER.shift();
+    persist(out);
   }
   for (const sub of subscribers) {
     // null projectId on the subscriber means "all projects"; otherwise
@@ -49,6 +87,7 @@ export function publish(event) {
 /** subscribe(projectId, write) — register an SSE writer. Returns
  *  an unsubscribe fn. projectId === null means "all projects". */
 export function subscribe(projectId, write) {
+  hydrateOnce();
   const sub = { projectId: projectId || null, write };
   // Backfill the recent feed (chronological) so the client's Activity panel is
   // populated on connect. Flagged backfill:true so the renderer only feeds the
@@ -64,6 +103,14 @@ export function subscribe(projectId, write) {
 
 /** Test/diagnostic helper: the current feed-buffer length. */
 export function _feedBufferSize() { return FEED_BUFFER.length; }
+
+/** Test helper: wipe the in-memory buffer and rehydrate from disk, as a fresh
+ * process would on boot. */
+export function _simulateRestartForTests() {
+  FEED_BUFFER.length = 0;
+  hydrated = false;
+  hydrateOnce();
+}
 
 // Live per-agent status verbs (non-idle only), so a freshly-loaded client can
 // rehydrate "who's working right now" — SSE has no history and status events
