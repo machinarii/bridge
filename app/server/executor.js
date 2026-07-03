@@ -151,6 +151,9 @@ async function settleReply(task, project, agent, spec, opts) {
     }
     if (!target) {
       updateTask(task.id, { status: 'failed', output: `delegate to unknown role "${toRole}"` });
+      emitActivity(project.id, `${agent.name}: task failed — delegate to unknown role "${toRole}"`, agent.id);
+      emitNotification({ kind: 'warn', projectId: project.id, title: `${agent.name}: delegation failed`,
+                         body: `No agent for role "${toRole}" — task: ${task.description.slice(0, 100)}` });
       return;
     }
     const desc = (String(spec.task || '').trim() || `Help with: ${spec.body || ''}`).slice(0, 400);
