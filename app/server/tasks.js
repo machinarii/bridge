@@ -58,6 +58,10 @@ export function listTasks(projectId) {
   return load().tasks.filter(t => t.projectId === projectId).map(t => ({ ...t }));
 }
 
+export function listAllTasks() {
+  return load().tasks.map(t => ({ ...t }));
+}
+
 export function tasksForAgent(agentId, status = null) {
   return load().tasks
     .filter(t => t.agentId === agentId && (!status || t.status === status))
