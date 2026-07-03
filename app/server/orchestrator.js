@@ -1,4 +1,4 @@
-import { listNotes } from './backends/notes.js';
+import { listNotes, readNote } from './backends/notes.js';
 import { appendTurn, getContext } from './scratchpad.js';
 import { getProject, TOPOLOGIES } from './projects.js';
 import { readProjectCharter } from './charters.js';
@@ -84,6 +84,17 @@ function skillsBlock(roleId, taskText) {
 
 /* Tile-spec contract is unchanged from Aurora MVP — see prior README. */
 
+/* The kickoff Q&A answers, resolved into open-questions.md by writeDecisionsDoc
+ * (kickoff.js). Injected into every agent prompt so specialists actually see
+ * what the user decided — without this they re-ask answered questions and
+ * block on the user. Empty until at least one answer is recorded. */
+export function kickoffDecisionsBlock(projectId) {
+  let doc = '';
+  try { doc = readNote(projectId, 'open-questions') || ''; } catch { return ''; }
+  if (!/\*\*Answer:\*\*/.test(doc)) return '';   // unresolved template — nothing decided yet
+  return `\nDecisions the user already made during kickoff — treat these as settled. Do NOT re-ask any of them:\n---\n${doc.slice(0, 4000)}\n---\n`;
+}
+
 /* User-defined custom instructions (Settings → Instructions). Empty by default. */
 function customInstructionsBlock() {
   const ins = (process.env.AI_INSTRUCTIONS || '').trim();
@@ -106,7 +117,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}
+${kickoffDecisionsBlock(project.id)}${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}
 Stay in role and on-goal. Speak briefly, in first person when relevant. The user is talking to you specifically.${customInstructionsBlock()}
 ${RESPONSE_STYLE}
 
@@ -353,7 +364,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}
+${kickoffDecisionsBlock(project.id)}${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}
 Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.${customInstructionsBlock()}
 ${RESPONSE_STYLE}`;
 }
