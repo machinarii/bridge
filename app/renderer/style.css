@@ -1184,12 +1184,16 @@ body[data-mode="zoom"] #surface {
 }
 
 /* L0 is frameless too: the project tiles sit directly on the baseplate, with
- * no parent-container panel (background/border/radius) around the picker. */
+ * no parent-container panel (background/border/radius) around the picker.
+ * overflow stays visible — the surface is transparent here, and clipping it
+ * would cut the focused tile's soft glow at the left/right edges (the picker
+ * only pads 0.5rem while the glow reaches ~28px). */
 body[data-mode="projects"] #surface {
   background: transparent;
   border: none;
   padding: 0;
   border-radius: 0;
+  overflow: visible;
 }
 
 /* ===== Project heading (L1 — top-left, above grid) ===== */
