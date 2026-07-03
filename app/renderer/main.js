@@ -624,7 +624,8 @@ function backZoomWithSnapshot(resolveToRect, renderNewView) {
   const cs = getComputedStyle(surfaceEl);
   // L2's #surface is transparent (the .agent-view is the visible container), so
   // a snapshot of it would be invisible — the back-zoom would show nothing.
-  // Fall back to the standard surface-card look so the shrink is always visible.
+  // Fall back to the ash-black panel look (matching the L1/L2 containers) so
+  // the shrink is visible without flashing the old bluish card.
   const bgTransparent = cs.backgroundImage === 'none' &&
     (cs.backgroundColor === 'rgba(0, 0, 0, 0)' || cs.backgroundColor === 'transparent');
   Object.assign(overlay.style, {
@@ -632,8 +633,8 @@ function backZoomWithSnapshot(resolveToRect, renderNewView) {
     left: `${sRect.left}px`, top: `${sRect.top}px`,
     width: `${sRect.width}px`, height: `${sRect.height}px`,
     margin: '0', pointerEvents: 'none', zIndex: '50',
-    background: bgTransparent ? 'var(--bg-elev, #131a23)' : cs.background,
-    border: bgTransparent || cs.borderStyle === 'none' ? '1px solid #1d2734' : cs.border,
+    background: bgTransparent ? 'rgba(18, 18, 20, 0.92)' : cs.background,
+    border: bgTransparent || cs.borderStyle === 'none' ? '1px solid rgba(255,255,255,0.14)' : cs.border,
     borderRadius: bgTransparent ? 'var(--radius, 14px)' : cs.borderRadius,
     boxShadow: 'none',
   });
