@@ -1467,12 +1467,12 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   z-index: 3;                            /* above bubbles, below .surface-close (z5) */
   pointer-events: none;                  /* never intercept the close-x or the scrollbar gutter */
   /* Opaque at the very top (name fully legible) fading to transparent so
-     content dissolves into it; color-mix with transparent (not solid)
-     lets the agent-color glow tint the band. */
+     content dissolves into it. Ash black (neutral — matches the panel base,
+     no blue cast); the translucency lets the agent-color glow tint the band. */
   background: linear-gradient(to bottom,
-    color-mix(in oklab, var(--bg-elev) 94%, transparent) 0%,
-    color-mix(in oklab, var(--bg-elev) 90%, transparent) 45%,
-    color-mix(in oklab, var(--bg-elev) 70%, transparent) 72%,
+    rgba(18, 18, 20, 0.94) 0%,
+    rgba(18, 18, 20, 0.90) 45%,
+    rgba(18, 18, 20, 0.70) 72%,
     transparent 100%);
 }
 .agent-view .agent-header::after { content: none; }   /* old opaque band removed */
