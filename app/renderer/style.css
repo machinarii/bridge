@@ -1490,7 +1490,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
 .agent-view .agent-header::after { content: none; }   /* old opaque band removed */
 .agent-view .agent-header .agent-title {
   display: flex; flex-direction: column;
-  padding: 0.25rem 0.5rem 0.75rem 2em;
+  padding: 0.25rem 0.5rem 0.75rem 38px;
 }
 .agent-view .agent-header .name-large {
   font-size: 1.5rem;
