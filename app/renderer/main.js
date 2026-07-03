@@ -7616,15 +7616,18 @@ document.getElementById('settings-close')?.addEventListener('click', () => { pla
  * the backdrop image (hue-rotate), the L2 header band, and the back-zoom
  * card derive from it, so the whole app shifts together. Per-device. */
 const THEMES = [
-  { id: 'sunset', label: 'Sunset', hue: 0 },     // the warm default
-  { id: 'forest', label: 'Forest', hue: 120 },
-  { id: 'ocean',  label: 'Ocean',  hue: 200 },
-  { id: 'violet', label: 'Violet', hue: 265 },
-  { id: 'rose',   label: 'Rose',   hue: 320 },
+  // Sunset = the original look: hue 0 leaves the backdrop untouched and 4%
+  // surface saturation is the pre-theme neutral ash, exactly as it was.
+  { id: 'sunset', label: 'Sunset', hue: 0,   sat: '4%'  },
+  { id: 'forest', label: 'Forest', hue: 120, sat: '12%' },
+  { id: 'ocean',  label: 'Ocean',  hue: 200, sat: '12%' },
+  { id: 'violet', label: 'Violet', hue: 265, sat: '12%' },
+  { id: 'rose',   label: 'Rose',   hue: 320, sat: '12%' },
 ];
 function applyTheme(id, { persist = true } = {}) {
   const t = THEMES.find(x => x.id === id) || THEMES[0];
   document.documentElement.style.setProperty('--theme-hue', `${t.hue}deg`);
+  document.documentElement.style.setProperty('--theme-sat', t.sat || '4%');
   if (persist) { try { localStorage.setItem('bridge-theme', t.id); } catch {} }
   document.querySelectorAll('#settings-themes .theme-swatch').forEach(el => {
     const on = el.dataset.theme === t.id;
