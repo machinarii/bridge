@@ -2760,7 +2760,11 @@ async function enterZoom(specOverride) {
   // role picker with the same zoom-in morph as a real agent tile.
   if (mode !== MODE_ZOOM && ring.current()?.dataset.council === 'true') {
     playSfx('zoomin');   // L1 → council, same as zooming into an agent
-    openCouncil();
+    // Same zoom-morph as an agent tile — the council was the one L1→L2
+    // entry that snapped with no transition.
+    const councilTile = ring.current();
+    const councilRect = councilTile?.getBoundingClientRect();
+    await forwardMorph(councilTile, councilRect, surfaceContentRectFor(MODE_ZOOM), () => openCouncil());
     return;
   }
   if (mode !== MODE_ZOOM && ring.current()?.dataset.addAgent === 'true') {
