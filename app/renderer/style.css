@@ -1894,10 +1894,9 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   /* Slide left by the FULL footprint of the action row hanging off the
    * bubble's right edge (margin-left 1.25rem + the ~72px icon row), so the
    * row always lands inside the chat column regardless of bubble width.
-   * A smaller shift only cleared narrow bubbles by leaning on the scroll
-   * box's right padding — wide bubbles then overflowed into a horizontal
-   * scrollbar. Sizing the shift to the footprint removes that dependency. */
-  transform: translateX(-6rem);
+   * Sized to the actual footprint — the old flat 6rem (132px at the 22px
+   * root size) overshot by ~30px and read as the bubble jumping left. */
+  transform: translateX(calc(-72px - 1.25rem));
 }
 .agent-view .bubble .bubble-time {
   flex: 1 1 auto;
