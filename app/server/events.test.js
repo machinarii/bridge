@@ -1,6 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { publish, subscribe, emitActivity, emitDelegate, emitStatus, emitRunResult, statusSnapshot, _feedBufferSize } from './events.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+// Isolate state to a throwaway dir — the feed buffer persists to events.jsonl.
+process.env.BRIDGE_STATE_DIR = mkdtempSync(join(tmpdir(), 'bridge-state-'));
+import { publish, subscribe, emitActivity, emitDelegate, emitStatus, emitRunResult, statusSnapshot, _feedBufferSize, _simulateRestartForTests } from './events.js';
+
+test('feed events survive a server restart (persisted + rehydrated)', () => {
+  emitActivity('pPersist', 'Iris: durable entry', 'pPersist__designer');
+  emitRunResult('pPersist', { ok: true, phase: 'run', summary: 'green' });
+  // Simulate a restart: wipe the in-memory buffer, rehydrate from disk.
+  _simulateRestartForTests();
+  const got = [];
+  const unsub = subscribe('pPersist', (ev) => got.push(ev));
+  try {
+    assert.ok(got.some(e => e.type === 'activity' && /durable entry/.test(e.summary)),
+      'activity rehydrated from disk after restart');
+    assert.ok(got.some(e => e.type === 'run_result' && e.ok === true),
+      'run_result rehydrated from disk after restart');
+    assert.ok(got.every(e => e.backfill === true), 'rehydrated events replay as backfill');
+  } finally { unsub(); }
+});
 
 test('run_result events are buffered and replayed to late subscribers', () => {
   emitRunResult('pRun', { ok: true, phase: 'run', url: 'http://localhost:4512', summary: 'build + test green' });

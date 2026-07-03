@@ -1183,6 +1183,15 @@ body[data-mode="zoom"] #surface {
   border-radius: 0;
 }
 
+/* L0 is frameless too: the project tiles sit directly on the baseplate, with
+ * no parent-container panel (background/border/radius) around the picker. */
+body[data-mode="projects"] #surface {
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+}
+
 /* ===== Project heading (L1 — top-left, above grid) ===== */
 .project-heading {
   padding: 0.25rem 0.5rem 0.75rem;
