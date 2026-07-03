@@ -7589,11 +7589,14 @@ settingsMcpAddEl?.addEventListener('click', () => {
   populateMcpList(settingsMcpEntries);
 });
 
-settingsBtnEl?.addEventListener('click', (e) => { e.stopPropagation(); openSettings(); });
+// Blur after opening — same stuck-focus trap as the fullscreen button: a
+// focused gear re-fires on the next Enter meant for a tile.
+settingsBtnEl?.addEventListener('click', (e) => { e.stopPropagation(); openSettings(); settingsBtnEl.blur(); });
 settingsBtnEl?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault(); e.stopPropagation();
     openSettings();
+    settingsBtnEl.blur();
   }
 });
 settingsSaveEl?.addEventListener('click', () => saveSettings());
@@ -7627,11 +7630,15 @@ function paintFullscreenIcon() {
   fullscreenBtnEl.setAttribute('aria-label', label);
   fullscreenBtnEl.setAttribute('title', fs ? 'Exit full screen' : 'Full screen');
 }
-fullscreenBtnEl?.addEventListener('click', (e) => { e.stopPropagation(); toggleFullscreen(); });
+/* Blur after acting: the button would otherwise keep DOM focus, staying
+ * highlighted through card navigation and re-firing on the next Enter
+ * (surprise full-screen exit while selecting a tile). */
+fullscreenBtnEl?.addEventListener('click', (e) => { e.stopPropagation(); toggleFullscreen(); fullscreenBtnEl.blur(); });
 fullscreenBtnEl?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault(); e.stopPropagation();
     toggleFullscreen();
+    fullscreenBtnEl.blur();
   }
 });
 if (fsBridge) {
