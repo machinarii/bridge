@@ -1177,8 +1177,8 @@ function renderProjects() {
   ring.set(tileEls);
   ring.index = clamp(pickerIndex, 0, tileEls.length - 1);
   ring.paint();
-  // A cursor restored onto an overflow row (9+ projects) starts in view.
-  ring.current()?.scrollIntoView({ block: 'nearest' });
+  // A cursor restored onto an overflow row (9+ projects) starts fully in view.
+  scrollPickerToRow(grid, ring.index);
 
   renderActionBar([]); // no separate "Open" verb — covered by Select chip
   setPrimaryShortcut({ gamepad: 'cross', keyboard: 'Enter', label: 'Select',
@@ -5914,9 +5914,21 @@ function pickerMove(dir) {
   ring.index = next;
   pickerIndex = next;
   ring.paint();
-  // An overflow row (9+ projects) scrolls into view as the cursor reaches it.
-  ring.current()?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  scrollPickerToRow(grid, next);
   updatePickerShortcuts();
+}
+
+/* Scroll the picker so the cursor's row is FULLY visible: the last row snaps
+ * all the way to the bottom (block:'nearest' stopped at the scrollport edge,
+ * leaving the row's bottom under the fade) and the first row snaps to the
+ * very top; middle rows use nearest. */
+function scrollPickerToRow(grid, index) {
+  const cols = grid._cols || 4;
+  const row = Math.floor(index / cols);
+  const lastRow = Math.floor((ring.elements.length - 1) / cols);
+  if (row === 0) grid.scrollTo({ top: 0, behavior: 'smooth' });
+  else if (row === lastRow) grid.scrollTo({ top: grid.scrollHeight, behavior: 'smooth' });
+  else ring.elements[index]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 async function exitToProjects() {
   releaseActiveRequest();   // navigate away without canceling the agent's run
