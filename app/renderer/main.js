@@ -1166,8 +1166,10 @@ function renderProjects() {
   tileEls.push(plus);
 
   surfaceEl.appendChild(grid);
-  // 9+ tiles overflow into a 3rd full-height row that scrolls; the bottom fade
-  // hints at it and lifts once the user reaches the end.
+  // 9+ tiles overflow into a 3rd row that scrolls: rows shave slightly so a
+  // sliver of row 3 peeks above the fold, and the bottom fade hints at the
+  // rest, lifting once the user reaches the end.
+  grid.classList.toggle('overflowing', tileEls.length > cols * rows);
   const updateFade = () => grid.classList.toggle('fade-bottom',
     grid.scrollHeight - grid.clientHeight - grid.scrollTop > 4);
   grid.addEventListener('scroll', updateFade, { passive: true });
@@ -1548,9 +1550,13 @@ async function openFocused() {
   const idx = ring.index;
   const sourceTile = ring.current();
   const sourceRect = sourceTile?.getBoundingClientRect();
-  // Destination: the create flow or the L1 grid — both use the default padded
-  // surface, unlike the frameless L0 we're leaving.
-  const targetRect = surfaceContentRectFor(MODE_GRID);
+  // Destination: the L1 grid / create flow, whose visible container is the
+  // surface PANEL itself (L0 is frameless, so the panel appears on arrival).
+  // The morph must land on the panel's outer rect — targeting the padded
+  // content rect leaves the clone smaller and offset from the panel it
+  // becomes.
+  const r = surfaceEl.getBoundingClientRect();
+  const targetRect = { left: r.left, top: r.top, width: r.width, height: r.height };
   playSfx('zoomin');   // L0 → L1 (project tile selected; also "+ New")
   if (idx === tileCount() - 1) {
     // "+ New" — enter create flow with the same morph as a project tile.
