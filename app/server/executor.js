@@ -11,7 +11,7 @@ import { createTask, getTask, updateTask, nextQueued, tasksForAgent } from './ta
 import { getProject, addAgent } from './projects.js';
 import { getRole } from './roles.js';
 import { charterFileNameFor } from './charters.js';
-import { interpretIntent } from './orchestrator.js';
+import { interpretIntent, kickoffDecisionsBlock } from './orchestrator.js';
 import { setLastSpec, appendTurn } from './scratchpad.js';
 import { emitActivity, emitDelegate, emitNotification, emitStatus, publish as publishEvent } from './events.js';
 import { readNote, writeNote } from './backends/notes.js';
@@ -20,8 +20,23 @@ import { callOpenRouterText } from './llm.js';
 
 const MAX_ACTIVE = 3;     // concurrent agent turns per project
 const MAX_ATTEMPTS = 2;   // 1 retry on a thrown turn
+const TURN_TIMEOUT_MS = 240_000;  // a hung turn fails instead of freezing the queue
+// A blocked task doesn't wait on the user forever: after this window the PM
+// directs the agent to proceed on best judgment (once per task). Set
+// BRIDGE_BLOCKED_TIMEOUT_MIN=0 to disable the fallback.
+const BLOCKED_FALLBACK_MS = Number(process.env.BRIDGE_BLOCKED_TIMEOUT_MIN ?? 10) * 60_000;
 
 const draining = new Map();  // projectId → in-flight drain promise
+
+/** Reject after `ms` so a turn whose connection stalled forever fails the task
+ * (and retries/reports through the normal path) instead of wedging its worker. */
+function withTimeout(promise, ms, label) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise).finally(() => clearTimeout(timer)),
+    new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`${label} timed out after ${ms}ms`)), ms); }),
+  ]);
+}
 
 /** Queue a task and kick the project's drain loop (idempotent). Returns the task. */
 export function enqueueTask({ projectId, agentId, description, from = null }, opts = {}) {
@@ -31,24 +46,46 @@ export function enqueueTask({ projectId, agentId, description, from = null }, op
 }
 
 /** Run queued tasks for a project, up to MAX_ACTIVE at a time, until the queue
- * is empty. Re-entrant: a second call while running returns the same promise. */
+ * is empty. Re-entrant: a second call while running returns the same promise.
+ * A work-stealing POOL (not a batch): every task completion and every enqueue
+ * pumps the scheduler, so a free slot picks up new work immediately — one slow
+ * turn never holds up the others, and tasks enqueued mid-drain (delegations)
+ * start as soon as a slot frees (the old batch model waited for the whole
+ * batch before starting more). */
 export function drain(projectId, opts = {}) {
-  if (draining.has(projectId)) return draining.get(projectId);
-  const p = (async () => {
-    for (;;) {
-      const batch = [];
-      while (batch.length < (opts.maxActive || MAX_ACTIVE)) {
-        const t = nextQueued(projectId);
-        if (!t) break;
-        updateTask(t.id, { status: 'in_progress', attempts: t.attempts + 1 });
-        batch.push(runTask(getTask(t.id), opts));
-      }
-      if (!batch.length) break;
-      await Promise.allSettled(batch);
-    }
-  })().finally(() => draining.delete(projectId));
-  draining.set(projectId, p);
-  return p;
+  const existing = draining.get(projectId);
+  if (existing) { pump(projectId); return existing.promise; }
+  const state = { active: 0, opts, max: opts.maxActive || MAX_ACTIVE };
+  state.promise = new Promise(r => { state.resolve = r; });
+  draining.set(projectId, state);
+  pump(projectId);
+  maybeSettle(projectId);   // nothing queued at all → settle immediately
+  return state.promise;
+}
+
+function pump(projectId) {
+  const state = draining.get(projectId);
+  if (!state) return;
+  while (state.active < state.max) {
+    const t = nextQueued(projectId);
+    if (!t) break;
+    // Claiming (queued → in_progress) is synchronous, so two pumps can never
+    // grab the same task.
+    updateTask(t.id, { status: 'in_progress', attempts: t.attempts + 1 });
+    state.active++;
+    runTask(getTask(t.id), state.opts)
+      .catch(err => console.warn(`[executor] runTask ${t.id}:`, err?.message))
+      .finally(() => { state.active--; pump(projectId); maybeSettle(projectId); });
+  }
+}
+
+function maybeSettle(projectId) {
+  const state = draining.get(projectId);
+  if (!state) return;
+  if (state.active === 0 && !nextQueued(projectId)) {
+    draining.delete(projectId);
+    state.resolve();
+  }
 }
 
 /** The user messaged an agent that was blocked waiting on them — the agent
@@ -75,10 +112,10 @@ async function runTask(task, opts = {}) {
   const fromRole = task.from?.role || getRole('pm').label;
   try {
     emitDelegate(task.projectId, task.from?.agentId || project.leadAgentId, agent.id, task.description);
-    const spec = await interpret({
+    const spec = await withTimeout(interpret({
       projectId: task.projectId, agentId: agent.id, text: task.description, effort: 'high',
       handoff: { from: fromName, fromRole, to: agent.name, toRole: getRole(agent.role).label },
-    });
+    }), opts.turnTimeoutMs || TURN_TIMEOUT_MS, `${agent.name} turn`);
     setLastSpec(agent.id, spec);
     // Keep the agent visibly working through the settle phase: interpretIntent
     // ends on 'idle', but settleReply may still run a PM auto-answer + a second
@@ -114,6 +151,9 @@ async function settleReply(task, project, agent, spec, opts) {
     }
     if (!target) {
       updateTask(task.id, { status: 'failed', output: `delegate to unknown role "${toRole}"` });
+      emitActivity(project.id, `${agent.name}: task failed — delegate to unknown role "${toRole}"`, agent.id);
+      emitNotification({ kind: 'warn', projectId: project.id, title: `${agent.name}: delegation failed`,
+                         body: `No agent for role "${toRole}" — task: ${task.description.slice(0, 100)}` });
       return;
     }
     const desc = (String(spec.task || '').trim() || `Help with: ${spec.body || ''}`).slice(0, 400);
@@ -133,10 +173,10 @@ async function settleReply(task, project, agent, spec, opts) {
       const lead = project.agents.find(a => a.id === project.leadAgentId);
       const interpret = opts.interpret || interpretIntent;
       emitDelegate(project.id, project.leadAgentId, agent.id, answer);
-      const spec2 = await interpret({
+      const spec2 = await withTimeout(interpret({
         projectId: project.id, agentId: agent.id, text: answer, effort: 'high',
         handoff: { from: lead?.name || 'PM', fromRole: getRole('pm').label, to: agent.name, toRole: getRole(agent.role).label },
-      });
+      }), opts.turnTimeoutMs || TURN_TIMEOUT_MS, `${agent.name} turn`);
       setLastSpec(agent.id, spec2);
       return settleReply(getTask(task.id), project, agent, spec2, opts);
     }
@@ -146,6 +186,7 @@ async function settleReply(task, project, agent, spec, opts) {
     emitActivity(project.id, `${agent.name}: needs your input`, agent.id, { awaitKind: 'reply' });
     emitNotification({ kind: 'info', projectId: project.id, title: `${agent.name} needs input`,
                        body: String(spec.title || spec.body || '').slice(0, 140) });
+    scheduleBlockedFallback(task, opts);
     return;
   }
 
@@ -153,6 +194,49 @@ async function settleReply(task, project, agent, spec, opts) {
   const body = String(spec?.body || spec?.title || '').trim();
   updateTask(task.id, { status: 'done', output: body.slice(0, 2000) });
   reportToLead(project, agent, task, body);
+}
+
+/** After the fallback window, a task still blocked on the user resumes on the
+ * PM's best-judgment directive — once per task (autoResumed guard), so a
+ * repeat question blocks permanently and genuinely waits for the human. */
+function scheduleBlockedFallback(task, opts = {}) {
+  const ms = opts.blockTimeoutMs ?? BLOCKED_FALLBACK_MS;
+  if (!(ms > 0)) return;
+  if (getTask(task.id)?.autoResumed) return;
+  const timer = setTimeout(() => {
+    resumeBlockedTask(task.id, opts)
+      .catch(err => console.warn(`[executor] blocked fallback ${task.id}:`, err?.message));
+  }, ms);
+  timer.unref?.();
+}
+
+/** Resume a blocked task with a best-judgment directive from the PM. No-op if
+ * the user already answered (status changed) or the task is gone. */
+export async function resumeBlockedTask(taskId, opts = {}) {
+  const task = getTask(taskId);
+  if (!task || task.status !== 'blocked_on_user') return;
+  const project = getProject(task.projectId);
+  const agent = project?.agents.find(a => a.id === task.agentId);
+  if (!project || !agent) return;
+  const directive = 'No reply from the user — use your best judgment: pick the option that best serves the ' +
+    'project goal, state your assumption briefly, and complete the task in this reply.';
+  updateTask(task.id, { status: 'in_progress', autoResumed: true });
+  emitActivity(project.id, `${agent.name}: no reply — proceeding on best judgment`, agent.id);
+  const interpret = opts.interpret || interpretIntent;
+  const lead = project.agents.find(a => a.id === project.leadAgentId);
+  emitStatus(project.id, agent.id, 'analyzing');
+  try {
+    emitDelegate(project.id, project.leadAgentId, agent.id, directive);
+    const spec = await withTimeout(interpret({
+      projectId: project.id, agentId: agent.id, text: directive, effort: 'high',
+      handoff: { from: lead?.name || 'PM', fromRole: getRole('pm').label, to: agent.name, toRole: getRole(agent.role).label },
+    }), opts.turnTimeoutMs || TURN_TIMEOUT_MS, `${agent.name} turn`);
+    setLastSpec(agent.id, spec);
+    await settleReply(getTask(task.id), project, agent, spec, opts);
+  } catch (err) {
+    updateTask(task.id, { status: 'failed', output: String(err?.message || err) });
+    emitActivity(project.id, `${agent.name}: task failed — ${String(err?.message || err).slice(0, 80)}`, agent.id);
+  } finally { emitStatus(project.id, agent.id, 'idle'); }
 }
 
 /** PM answers a specialist's question from the PRD/goal, or returns null to
@@ -169,7 +253,8 @@ async function tryPmAnswer(project, agent, spec, opts = {}) {
     `Your teammate ${agent.name} (${getRole(agent.role)?.label}) asked this while working on their task:\n` +
     `---\n${question}\nOptions offered: ${spec.choices.join(' / ')}\n---\n` +
     (prd ? `Project PRD:\n---\n${String(prd).slice(0, 4000)}\n---\n` : '') +
-    `If the PRD, the goal, or sound product judgment determines the answer, reply with ONLY that answer ` +
+    kickoffDecisionsBlock(project.id) +
+    `If the PRD, the kickoff decisions, the goal, or sound product judgment determines the answer, reply with ONLY that answer ` +
     `(short and direct; picking one of the options is fine). ` +
     `If this genuinely needs the human's preference or information you don't have, reply with exactly: ASK USER`;
   const raw = await ct({ apiKey, model: getModelForRole('pm'), prompt, timeoutMs: 20_000 });

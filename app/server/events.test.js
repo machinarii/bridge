@@ -1,6 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { publish, subscribe, emitActivity, emitDelegate, emitStatus, statusSnapshot, _feedBufferSize } from './events.js';
+import { publish, subscribe, emitActivity, emitDelegate, emitStatus, emitRunResult, statusSnapshot, _feedBufferSize } from './events.js';
+
+test('run_result events are buffered and replayed to late subscribers', () => {
+  emitRunResult('pRun', { ok: true, phase: 'run', url: 'http://localhost:4512', summary: 'build + test green' });
+  const got = [];
+  const unsub = subscribe(null, (ev) => got.push(ev));
+  try {
+    const rr = got.find(e => e.type === 'run_result' && e.projectId === 'pRun');
+    assert.ok(rr, 'run_result backfilled to a late subscriber');
+    assert.equal(rr.backfill, true);
+    assert.equal(rr.ok, true);
+    assert.equal(rr.url, 'http://localhost:4512');
+  } finally { unsub(); }
+});
 
 test('subscribe backfills recent activity/delegate events, flagged backfill:true', () => {
   emitActivity('p1', 'Iris: replied', 'p1__designer', { awaitKind: 'view' });
