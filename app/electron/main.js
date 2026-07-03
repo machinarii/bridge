@@ -177,6 +177,17 @@ function killStt() {
   }
 }
 
+/* Preview containers (bridge-preview-<pid>) are detached and named; without
+ * this they outlive the app on quit/crash, holding CPU and ports 4500-4699
+ * until the same project previews again. Fire-and-forget so quit never waits
+ * on Docker (or hangs when the daemon is down). */
+function cleanupPreviewContainers() {
+  try {
+    spawn('sh', ['-c', 'docker ps -aq --filter name=bridge-preview- | xargs docker rm -f'],
+          { detached: true, stdio: 'ignore' }).unref();
+  } catch { /* docker not installed / not running — nothing to clean */ }
+}
+
 async function createWindow() {
   mainWin = new BrowserWindow({
     width: 1280,
@@ -300,5 +311,5 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-app.on('before-quit', killStt);
+app.on('before-quit', () => { killStt(); cleanupPreviewContainers(); });
 process.on('exit', killStt);

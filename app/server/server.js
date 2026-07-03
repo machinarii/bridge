@@ -27,6 +27,7 @@ import { listTasks } from './tasks.js';
 import { resolveBlockedForAgent } from './executor.js';
 import { hydrateSecretsIntoEnv, readSecret, writeSecret, deleteSecret } from './secrets.js';
 import { healthSnapshot } from './health.js';
+import { recoverOnBoot } from './recovery.js';
 import { createCancelToken, cancelToken, tokenStatus, cleanupStale } from './cancel.js';
 import { countRequest, countCanceled, snapshotMetrics } from './server-metrics.js';
 
@@ -839,8 +840,27 @@ await hydrateSecretsIntoEnv();
 app.listen(PORT, '127.0.0.1', () => {
   console.log(`[bridge] orchestrator listening on http://127.0.0.1:${PORT}`);
   console.log(`[bridge] renderer at http://127.0.0.1:${PORT}/`);
+  // Resume any runs orphaned by the last shutdown/crash — requeue in_progress
+  // tasks, re-kick stuck kickoffs, restart the drain loops.
+  try { recoverOnBoot(); } catch (err) { console.warn('[recovery] boot sweep failed:', err?.message); }
 });
 
 process.on('unhandledRejection', (err) => {
   console.warn('[server] unhandledRejection:', err?.message || err);
+  try {
+    publishEvent({ type: 'notification', kind: 'warn', title: 'Server error',
+                   body: String(err?.message || err).slice(0, 200) });
+  } catch { /* the bus itself failed — nothing more to do */ }
+});
+
+// The server runs in-process inside Electron: without this handler one
+// synchronous throw in a timer/callback kills the whole app with no restart.
+// This is a local single-user tool — availability beats crash purity, so log,
+// surface a notification, and keep serving.
+process.on('uncaughtException', (err) => {
+  console.error('[server] uncaughtException:', err);
+  try {
+    publishEvent({ type: 'notification', kind: 'warn', title: 'Server error (recovered)',
+                   body: String(err?.message || err).slice(0, 200) });
+  } catch { /* the bus itself failed — nothing more to do */ }
 });

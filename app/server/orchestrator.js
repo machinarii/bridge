@@ -1,4 +1,4 @@
-import { listNotes } from './backends/notes.js';
+import { listNotes, readNote } from './backends/notes.js';
 import { appendTurn, getContext } from './scratchpad.js';
 import { getProject, TOPOLOGIES } from './projects.js';
 import { readProjectCharter } from './charters.js';
@@ -10,9 +10,14 @@ import { recordModelCall } from './metrics.js';
 import { emitStatus, emitActivity, emitToken } from './events.js';
 import { validateTileSpec, repairPrompt } from './schema.js';
 import { throwIfCanceled } from './cancel.js';
-import { callOpenRouterJSON } from './llm.js';
+import { callOpenRouterJSON, fetchWithRetry } from './llm.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+// Hard ceilings so a stalled connection can never hang an agent turn (and with
+// it the whole executor queue) forever. Generous: reasoning turns are slow.
+const TURN_FETCH_TIMEOUT_MS = 180_000;
+const CLASSIFY_TIMEOUT_MS = 10_000;
+const STREAM_DEADLINE_MS = 300_000;
 
 /* Shared response voice + conduct for every agent. Injected into the tile-spec
  * and prose system prompts, and reused by the kickoff + team-synthesis prompts. */
@@ -47,12 +52,20 @@ No irreversible/destructive actions without confirmation. Never expose API keys,
  * role in what it actually delivers inside Bridge (docs + code), not real-world
  * tools or hand-offs. */
 const ROLE_GUIDANCE = {
-  designer: `As the Designer you work in written documents and code — never visual-design tools (there is no Figma/Sketch in Bridge). Follow this sequence, and do NOT skip ahead:
-1. Write the design foundation as a markdown doc: design principles, UI guidelines, creative direction, and system design. Then ask the user to confirm before continuing (offer choices if a direction is open).
-2. After they confirm, write use cases and user flows as a markdown doc. Then ask the user to confirm.
-3. Only once the full design documentation is complete and the user has reviewed it, build the GUI directly in code.
+  designer: `As the Designer you work in written documents and code — never visual-design tools (there is no Figma/Sketch in Bridge). Deliver in this sequence:
+1. The design foundation as a markdown doc: design principles, UI guidelines, creative direction, and system design.
+2. Use cases and user flows as a markdown doc.
+3. The GUI, built directly in code.
+When working a delegated task, produce the stages in order WITHOUT stopping to ask for confirmation — list any open design decisions (and the option you chose) at the end of each doc instead. In a direct chat with the user, pause after each stage for their feedback.
 Never promise a Figma file, an external link, a channel post, or a delivery date.`,
 };
+
+/* Injected when the turn is a delegated task (executor / team fan-out), where
+ * stopping to ask the user defeats the autonomous pipeline. */
+const AUTONOMY_GUIDANCE = `
+## Working autonomously (this is a delegated task)
+The user already answered the kickoff questions — check the recorded decisions above before asking anything. Prefer decisions over questions: pick the option that best serves the goal, state your assumption briefly in the deliverable, and complete the work in this reply. Only include "choices" when you genuinely cannot proceed without the user.
+`;
 function roleGuidance(roleId) {
   const g = ROLE_GUIDANCE[roleId];
   return g ? `\n${g}\n` : '';
@@ -84,13 +97,24 @@ function skillsBlock(roleId, taskText) {
 
 /* Tile-spec contract is unchanged from Aurora MVP — see prior README. */
 
+/* The kickoff Q&A answers, resolved into open-questions.md by writeDecisionsDoc
+ * (kickoff.js). Injected into every agent prompt so specialists actually see
+ * what the user decided — without this they re-ask answered questions and
+ * block on the user. Empty until at least one answer is recorded. */
+export function kickoffDecisionsBlock(projectId) {
+  let doc = '';
+  try { doc = readNote(projectId, 'open-questions') || ''; } catch { return ''; }
+  if (!/\*\*Answer:\*\*/.test(doc)) return '';   // unresolved template — nothing decided yet
+  return `\nDecisions the user already made during kickoff — treat these as settled. Do NOT re-ask any of them:\n---\n${doc.slice(0, 4000)}\n---\n`;
+}
+
 /* User-defined custom instructions (Settings → Instructions). Empty by default. */
 function customInstructionsBlock() {
   const ins = (process.env.AI_INSTRUCTIONS || '').trim();
   return ins ? `\n\nAdditional user instructions (always follow):\n${ins}\n` : '';
 }
 
-function systemPrompt({ project, agent, sharedFrom, text }) {
+function systemPrompt({ project, agent, sharedFrom, text, autonomous = false }) {
   const role = getRole(agent.role);
   const charter = readProjectCharter(project, agent.role);
   const topo = project.topology ? TOPOLOGIES[project.topology] : null;
@@ -106,7 +130,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}
+${kickoffDecisionsBlock(project.id)}${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}${autonomous ? AUTONOMY_GUIDANCE : ''}
 Stay in role and on-goal. Speak briefly, in first person when relevant. The user is talking to you specifically.${customInstructionsBlock()}
 ${RESPONSE_STYLE}
 
@@ -191,6 +215,9 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
   if (!agent) throw new Error(`unknown agent: ${agentId}`);
 
   const apiKey = process.env.OPENROUTER_API_KEY;
+  // A handoff means this turn is a delegated task, not a live user chat — the
+  // agent should decide-and-proceed instead of stopping to ask the user.
+  const autonomous = !!handoff;
   // A delegated task records as a From→To handoff turn (so it doesn't render as
   // the user's own "you" bubble). `text` is still the prompt for the model.
   if (handoff) {
@@ -223,7 +250,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
   // Anything unexpected falls through to the structured JSON tile path below,
   // so the worst case is exactly today's behavior.
   try {
-    const streamed = await tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate, effort });
+    const streamed = await tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate, effort, autonomous });
     if (streamed) { emitStatus(projectId, agentId, 'idle'); return streamed; }
   } catch (err) {
     console.warn('[stream] falling back to JSON tile path:', err?.message);
@@ -233,7 +260,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
 
   const history = getContext(agentId).messages.slice(0, -1);
   const messages = [
-    { role: 'system', content: systemPrompt({ project, agent, sharedFrom, text }) },
+    { role: 'system', content: systemPrompt({ project, agent, sharedFrom, text, autonomous }) },
     ...history,
     { role: 'user', content: text },
   ];
@@ -243,7 +270,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
     // "Building" (it's writing code), everyone else as "Drafting".
     emitStatus(projectId, agentId, agent?.role === 'sw_engineer' ? 'building' : 'drafting');
     const t0 = Date.now();
-    const resp = await fetch(OPENROUTER_URL, {
+    const resp = await fetchWithRetry(OPENROUTER_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -252,6 +279,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
         'X-Title': `Bridge - ${agent.name}`,
       },
       body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages, ...samplingFor({ effort, regenerate }) }),
+      signal: AbortSignal.timeout(TURN_FETCH_TIMEOUT_MS),
     });
 
     if (!resp.ok) {
@@ -338,7 +366,7 @@ function parseSpec(raw) {
  * intents (note/list/compose/…) still use the structured path. */
 
 /* Role + charter, but instruct a direct prose reply (no JSON tile spec). */
-function proseSystemPrompt({ project, agent, sharedFrom, text }) {
+function proseSystemPrompt({ project, agent, sharedFrom, text, autonomous = false }) {
   const role = getRole(agent.role);
   const charter = readProjectCharter(project, agent.role);
   const topo = project.topology ? TOPOLOGIES[project.topology] : null;
@@ -353,7 +381,7 @@ Your charter for this project:
 ---
 ${charter}
 ---
-${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}
+${kickoffDecisionsBlock(project.id)}${roleGuidance(agent.role)}${skillsBlock(agent.role, text)}${learningsBlock(project.id, agent.role)}${topoLine}${sharedBlock}${autonomous ? AUTONOMY_GUIDANCE : ''}
 Stay in role and on-goal. Answer the user directly in clear, concise prose — first person where natural. Do NOT return JSON, tile specs, or code fences unless you're quoting actual code.${customInstructionsBlock()}
 ${RESPONSE_STYLE}`;
 }
@@ -365,6 +393,7 @@ async function classifyIntent({ apiKey, text }) {
     const r = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(CLASSIFY_TIMEOUT_MS),
       body: JSON.stringify({
         model: getRouterModel(),
         max_tokens: 4,
@@ -384,6 +413,12 @@ async function classifyIntent({ apiKey, text }) {
 /* Stream a chat completion, invoking onDelta(text) per content chunk. Returns
  * the full accumulated text. Throws on a non-OK / bodyless response. */
 async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
+  // One controller covers connect AND the whole read loop: a stream that stalls
+  // without ever sending [DONE] aborts at the deadline instead of hanging the
+  // turn (and the executor queue behind it) forever.
+  const ctrl = new AbortController();
+  const deadline = setTimeout(() => ctrl.abort(), STREAM_DEADLINE_MS);
+  try {
   const resp = await fetch(OPENROUTER_URL, {
     method: 'POST',
     headers: {
@@ -393,6 +428,7 @@ async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
       'X-Title': 'Bridge',
     },
     body: JSON.stringify({ model, stream: true, messages, ...(extra || {}) }),
+    signal: ctrl.signal,
   });
   if (!resp.ok || !resp.body) throw new Error(`stream ${resp.status}`);
   const reader = resp.body.getReader();
@@ -416,16 +452,17 @@ async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
     }
   }
   return full;
+  } finally { clearTimeout(deadline); }
 }
 
 /* Returns a hydrated 'reader' spec on success, or null to defer to the JSON
  * tile path (action intents, empty output, or classify failure). */
-async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate = 0, effort = 'high' }) {
+async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate = 0, effort = 'high', autonomous = false }) {
   if (await classifyIntent({ apiKey, text }) !== 'answer') return null;
   emitStatus(projectId, agentId, agent?.role === 'sw_engineer' ? 'building' : 'drafting');
   const history = getContext(agentId).messages.slice(0, -1);
   const messages = [
-    { role: 'system', content: proseSystemPrompt({ project, agent, sharedFrom, text }) },
+    { role: 'system', content: proseSystemPrompt({ project, agent, sharedFrom, text, autonomous }) },
     ...history,
     { role: 'user', content: text },
   ];
