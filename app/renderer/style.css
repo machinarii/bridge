@@ -1467,12 +1467,12 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   z-index: 3;                            /* above bubbles, below .surface-close (z5) */
   pointer-events: none;                  /* never intercept the close-x or the scrollbar gutter */
   /* Opaque at the very top (name fully legible) fading to transparent so
-     content dissolves into it. Ash black (neutral — matches the panel base,
-     no blue cast); the translucency lets the agent-color glow tint the band. */
+     content dissolves into it. Warm dark ash — a touch of red/orange so the
+     band blends into the sunset backdrop instead of reading flat black. */
   background: linear-gradient(to bottom,
-    rgba(18, 18, 20, 0.94) 0%,
-    rgba(18, 18, 20, 0.90) 45%,
-    rgba(18, 18, 20, 0.70) 72%,
+    rgba(46, 24, 19, 0.94) 0%,
+    rgba(42, 23, 19, 0.90) 45%,
+    rgba(36, 20, 17, 0.70) 72%,
     transparent 100%);
 }
 .agent-view .agent-header::after { content: none; }   /* old opaque band removed */
