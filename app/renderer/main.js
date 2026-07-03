@@ -5870,7 +5870,10 @@ function bumpEdge(el, dir, d = 16) {
  * Returns the new index, or null when the press was consumed (footer entry or
  * a rubberband) and the caller should not move. */
 function stepGrid(grid, i, n, dir) {
-  const cols = grid._cols, rows = grid._rows;
+  // Rows come from the LIVE tile count, not the layout template (_rows): an
+  // overflowing L0 picker holds 3+ content rows in a 2-row-tall scrollport,
+  // and Down must walk every row before dropping to the footer rail.
+  const cols = grid._cols, rows = Math.ceil(n / cols) || grid._rows;
   const r = Math.floor(i / cols), c = i % cols;
   if (dir === 'down') {
     const below = (r + 1) * cols + c;
@@ -5911,6 +5914,8 @@ function pickerMove(dir) {
   ring.index = next;
   pickerIndex = next;
   ring.paint();
+  // An overflow row (9+ projects) scrolls into view as the cursor reaches it.
+  ring.current()?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   updatePickerShortcuts();
 }
 async function exitToProjects() {
