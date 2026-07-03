@@ -635,7 +635,7 @@ function backZoomWithSnapshot(resolveToRect, renderNewView) {
     width: `${sRect.width}px`, height: `${sRect.height}px`,
     margin: '0', pointerEvents: 'none', zIndex: '50',
     background: bgTransparent
-      ? 'linear-gradient(180deg, rgba(46,24,19,0.62) 0%, rgba(26,15,13,0.66) 100%)'
+      ? 'linear-gradient(180deg, hsl(calc(11deg + var(--theme-hue, 0deg)) 42% 13% / 0.62) 0%, hsl(calc(11deg + var(--theme-hue, 0deg)) 33% 8% / 0.66) 100%)'
       : cs.background,
     border: 'none',   // containers are borderless now — the card matches
     borderRadius: bgTransparent ? 'var(--radius, 14px)' : cs.borderRadius,
@@ -7610,6 +7610,48 @@ settingsBtnEl?.addEventListener('keydown', (e) => {
 settingsSaveEl?.addEventListener('click', () => saveSettings());
 settingsCancelEl?.addEventListener('click', () => { playSfx('select'); closeSettings(); });
 document.getElementById('settings-close')?.addEventListener('click', () => { playSfx('select'); closeSettings(); });
+
+/* ---------- Themes (Settings → Themes) ----------
+ * One hue per theme: JS writes --theme-hue on <html>; every surface token,
+ * the backdrop image (hue-rotate), the L2 header band, and the back-zoom
+ * card derive from it, so the whole app shifts together. Per-device. */
+const THEMES = [
+  { id: 'sunset', label: 'Sunset', hue: 0 },     // the warm default
+  { id: 'forest', label: 'Forest', hue: 120 },
+  { id: 'ocean',  label: 'Ocean',  hue: 200 },
+  { id: 'violet', label: 'Violet', hue: 265 },
+  { id: 'rose',   label: 'Rose',   hue: 320 },
+];
+function applyTheme(id, { persist = true } = {}) {
+  const t = THEMES.find(x => x.id === id) || THEMES[0];
+  document.documentElement.style.setProperty('--theme-hue', `${t.hue}deg`);
+  if (persist) { try { localStorage.setItem('bridge-theme', t.id); } catch {} }
+  document.querySelectorAll('#settings-themes .theme-swatch').forEach(el => {
+    const on = el.dataset.theme === t.id;
+    el.classList.toggle('active', on);
+    el.setAttribute('aria-checked', String(on));
+  });
+}
+function savedThemeId() {
+  try { return localStorage.getItem('bridge-theme') || 'sunset'; } catch { return 'sunset'; }
+}
+{
+  const wrap = document.getElementById('settings-themes');
+  if (wrap) {
+    for (const t of THEMES) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'theme-swatch';
+      b.dataset.theme = t.id;
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', 'false');
+      b.innerHTML = `<span class="swatch-chip" style="--swatch-hue:${t.hue}deg"></span><span class="swatch-label">${t.label}</span>`;
+      b.addEventListener('click', () => { playSfx('select'); applyTheme(t.id); });
+      wrap.appendChild(b);
+    }
+  }
+  applyTheme(savedThemeId(), { persist: false });
+}
 
 /* ---------- Full-screen toggle ---------- */
 const fullscreenBtnEl = document.getElementById('fullscreen-btn');
