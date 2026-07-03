@@ -27,7 +27,7 @@ Agents are powered by **any model on OpenRouter** (choose a default and override
 
   (These screen *layers* are written "Layer 0/1/2" throughout — distinct from the gamepad **L1 / R1** shoulder buttons.)
 - **Parallel agents & subagents.** Agents run *concurrently* rather than one-at-a-time — you can have several projects' teams working at once — and any agent can **delegate to a teammate**, splitting a big task into pieces and synthesizing the results back into one answer. A delegate's reply surfaces in the chat as a labeled bubble (group-chat style), with a `From → To` handoff marker so you can follow who did what.
-- **Plan-first PM kickoff that puts the team to work.** Create a project and the PM drafts a **kickoff plan** in the lead chat — *Approve* (one tap) and it writes a PRD, roadmap, operating notes, and open-questions doc, then asks its follow-up questions **one at a time** as selectable choices. When the questions are answered, kickoff is **complete** and the team actually **starts building**: every assigned specialist runs its task and produces a first deliverable. The PM even **auto-adds a missing specialist** if a task needs a role that isn't on the team yet (and tells you who it added and why). *Reject* holds it off.
+- **Plan-first PM kickoff, then a self-driving run.** Create a project and the PM drafts a **kickoff plan** in the lead chat — *Approve* (one tap) and it writes a PRD, roadmap, operating notes, and open-questions doc, then asks its follow-up questions **one at a time** as selectable choices. Answer them once and the run drives itself: your answers are **injected into every agent's prompt** (nobody re-asks), specialists draft their domain plans autonomously, the build **scaffolds and sandbox-verifies itself** (no "Build it"/"Run it" gates — `BRIDGE_AUTO_BUILD=off` restores them), and a task blocked on your input **proceeds on the PM's best judgment** after a fallback window (`BRIDGE_BLOCKED_TIMEOUT_MIN`, default 10 minutes, `0` disables). The PM even **auto-adds a missing specialist** if a task needs a role that isn't on the team yet. *Reject* holds it off.
 - **Topology-shaped teams.** Creating a project walks you through *roles → topology → name → goal*. The **work topology** — Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, or Async pull / queue — is written into the project's `PRD.md` *and* injected into the PM's routing prompt, so it actually shapes how work is assigned and whether teammates report back or coordinate.
 - **Agents ask, not guess.** When direction is unclear an agent offers **multi-select choices** right in the bubble — A/B/C buttons in a horizontal row plus an **"Other — hold to talk"** for a free-form answer; pick one or more and **Submit**. Agents follow a shared house style (legible reasoning, telegraphic bullets, banned clichés) and are **grounded** — they produce documents and code here, never fake Figma files, channels, or delivery dates.
 - **Voice-first, controller-navigable.** Hold to talk; every on-screen action shows its controller glyph (✕ select, ○ back, L1/R1 switch, R2 push-to-talk). Keyboard mirrors all of it.
@@ -44,7 +44,8 @@ For the full vision and design rationale see the (local, unpublished) `docs/` fo
 - **Multi-project command center** — run many projects, each with its own agent team and state.
 - **Role-typed agent teams** — PM lead + specialists (Software/Hardware Engineer, Designer, QA, Data Scientist, Security, Researcher, Copywriter, Marketing, Legal); every agent has a globally unique name and a persistent identity.
 - **Work topologies** — pick how a team coordinates (Hub-and-spoke, Rotating lead, Mesh / mob, Feature teams, Async pull / queue); the rule is written into `project.md` and drives the PM's routing.
-- **PM auto-kickoff** — on project creation the PM proposes a plan-first kickoff; on approval it drafts PRD + roadmap + operating-notes + open-questions docs, assigns topology-shaped tasks, and asks follow-up questions.
+- **PM auto-kickoff → autonomous pipeline** — on project creation the PM proposes a plan-first kickoff; on approval it drafts PRD + roadmap + operating-notes + open-questions docs, assigns topology-shaped tasks, and asks its follow-up questions once. From there the run is self-driving: answers feed every agent prompt, specialists plan autonomously, and the build scaffolds → sandbox-verifies on its own.
+- **Durable, self-healing runs** — every model call retries transient failures with backoff and carries hard timeouts (a hung connection can never freeze a queue); the executor is a work-stealing pool; a server restart **resumes** orphaned tasks and stuck kickoffs instead of zombie-ing them; the activity feed persists to disk and replays after restarts; crash handlers keep one bad async error from taking the app down.
 - **In-bubble multi-select choices** — agents offer A/B/C options (one horizontal row) + an "Other — hold to talk" free-form; toggle with Enter/✕ and Submit. Answered questions stay on screen as a read-only record of what you picked.
 - **Live agent-tile states** — a Layer 1 tile reads **Drafting/Analyzing** (green) while working, **Waiting for response** (orange) when an agent asked you something (clears when you reply), and **Task complete** (green) when an agent finished a deliverable you haven't opened (clears when you view it).
 - **Three-level navigation** — projects → team grid → agent view, consistent for spatial/motor memory.
@@ -59,7 +60,8 @@ For the full vision and design rationale see the (local, unpublished) `docs/` fo
 - **Agent skills** — playbooks injected into each agent's prompts by role, adopted from the open Claude-skills ecosystem on GitHub (anthropics/skills, obra/superpowers, pbakaus/impeccable, trailofbits/skills, aklofas/kicad-happy, …) plus Bridge-native ones. Toggle them in Settings → Skills.
 - **Activity feed, memory, and file explorer** drawers. The Activity feed is **cross-project everywhere** — agent responses from all projects as project → agent · role → summary cards. The Explorer's files/folders are mouse-clickable (open / expand). Per-project notes with optional **git auto-save**.
 - **GitHub pairing** — connect your GitHub account from Settings via a **keyboard-free OAuth device flow** (scan a QR on your phone or open a pre-filled authorize link on-device).
-- **Settings** — OpenRouter key, default + per-role + router + **council** models, **custom AI instructions**, agent skill toggles, git auto-save, GitHub pairing (MCP plugins coming soon).
+- **Themes** — five one-tap color moods (Sunset · Forest · Ocean · Violet · Rose) in Settings → Themes; one hue variable shifts the backdrop image, panels, drawers, and modals together, remembered per device.
+- **Settings** — OpenRouter key, default + per-role + router + **council** models, **custom AI instructions**, agent skill toggles, git auto-save, GitHub pairing, themes (MCP plugins coming soon).
 
 ---
 
@@ -107,6 +109,8 @@ cd app/server && npm install && cd ../..
 #    cp app/server/.env.example app/server/.env   # then edit:
 #      OPENROUTER_API_KEY=sk-or-...
 #      OPENROUTER_MODEL=anthropic/claude-opus-4.8   # default if unset
+#      BRIDGE_AUTO_BUILD=off             # optional: restore the manual Build/Run gates
+#      BRIDGE_BLOCKED_TIMEOUT_MIN=10     # optional: blocked-task fallback (0 = wait forever)
 #    (.env is git-ignored — never commit personal credentials)
 
 # 3. run the app
@@ -197,6 +201,9 @@ Open Settings from the footer (⚙). Tabs:
   GitHub Claude-skills ecosystem (each entry records its `source` repo).
 - **MCP** — register MCP plugins *(coming soon)*.
 - **Git** — auto-save each project's state to its git repo on an interval.
+- **Health** — live checks for key runtime dependencies.
+- **Themes** — five color moods (Sunset is the default look); one tap shifts the
+  backdrop, panels, and modals together, remembered on the device.
 
 ---
 

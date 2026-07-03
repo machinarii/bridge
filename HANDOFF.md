@@ -19,6 +19,8 @@ cd app/server && npm install && cd ../..
 #    OPENROUTER_API_KEY=sk-or-...        (required for agent replies + kickoff)
 #    OPENROUTER_MODEL=anthropic/claude-opus-4.8   (default if unset)
 #    (LOCAL_STT_URL defaults to http://127.0.0.1:8123/transcribe)
+#    BRIDGE_AUTO_BUILD=off               (optional: restore manual Build/Run gates)
+#    BRIDGE_BLOCKED_TIMEOUT_MIN=10       (optional: blocked-task fallback, 0 = wait forever)
 
 # 3. Parakeet STT sidecar (required for voice) — needs ffmpeg on PATH (8.x is fine)
 python3 -m venv app/stt/.venv
@@ -40,7 +42,34 @@ Notes:
 - Voice is **Parakeet-only** — it never falls back to the browser engine. If the sidecar is down, voice shows a visible STT error.
 - **QA shortcut:** `npm run qa:new -- trading` (or `recipes` / `iot`) seeds a fully-formed project from prefilled name/objective/features and kicks off — skips the capture UI. Prefilled copy-paste text for the capture screens + a flow walkthrough live in **`QA-GUIDE.md`**.
 
-## What's new (this session — designer skills bundled into Bridge)
+## What's new (this session — self-driving orchestration + sunset UI + themes)
+
+Two arcs in one session (2026-07-02, ~40 commits): the orchestration-autonomy overhaul (branch `orchestration-autonomy`, merged to `main`) and a full visual refresh.
+
+**Orchestration — "answer the kickoff questions once, then the run drives itself":**
+
+- **Kickoff answers reach the agents** — `kickoffDecisionsBlock()` (orchestrator.js) injects the resolved `open-questions.md` into the tile-spec, prose, and PM-auto-answer prompts. Before this, answers were written to a doc nothing read, so agents re-asked and blocked.
+- **No more interactive team_review round** — specialists draft domain plans autonomously (`planAgentTurn`) after the PM's Q&A; the legacy interactive branch survives only for projects persisted mid-`team_review`.
+- **Auto build → run** — `proposeBuildOrClose` starts `executeBuild` → `executeRun` (extracted, shared with the manual gates) on its own. Unit-test mode (injected `callText`) keeps manual gates; `BRIDGE_AUTO_BUILD=off` restores them at runtime.
+- **Blocked-task fallback** — a `blocked_on_user` task resumes once on a PM best-judgment directive after `BRIDGE_BLOCKED_TIMEOUT_MIN` (default 10; 0 = wait forever).
+- **Network hardening** — `fetchWithRetry` (llm.js): backoff on 429/402/408/5xx + dropped connections, honors Retry-After; hard timeouts on every orchestrator fetch (180s turn / 10s classify / 300s stream deadline). Metrics had shown 50/174 calls failing in sub-300ms bursts with zero retries.
+- **Executor rebuilt as a work-stealing pool** (`pump()` in executor.js) + 240s per-turn timeout — one slow/hung turn no longer freezes the project queue; mid-drain delegations start as soon as a slot frees.
+- **Boot recovery** (`recovery.js`, runs at listen) — requeues orphaned `in_progress` tasks, resumes kickoffs stuck at `running`/`drafting`, kicks the drain loops, posts a "Resumed after restart" notification. Restarts used to zombie every mid-flight run.
+- **Durability & observability** — activity/delegate/`run_result` events persist to `~/bridge-projects/.bridge/events.jsonl` and rehydrate on boot (the Activity panel no longer blanks after a restart); `emitRunResult` gives every scaffold/run a buffered terminal verdict; `uncaughtException`/`unhandledRejection` handlers log + notify + keep serving; `before-quit` removes leaked `bridge-preview-*` containers.
+- **Autonomy prompts** — delegated turns (handoff present) get decide-and-proceed guidance; the Designer's three confirm-gates apply only in direct chat.
+
+**UI — warm backdrop + ash-neutral chrome + themes:**
+
+- Abstract sunset backdrop (`app/assets/abstract-background.jpg`, `?v=5`) on a fixed `body::before` layer (cover/center, 38% scrim). NOTE: the backstop background must stay on `<html>` only — an opaque `body` background paints **above** the negative-z pseudo-element and hides the image.
+- Whole palette retoned ash-neutral, then made theme-aware: `--theme-hue`/`--theme-sat` on `:root` drive `--bg`/`--bg-elev`/`--bg-elev-2`/`--panel`, modal scrims, the warm L2 header band, and the back-zoom card. **Settings → Themes** (Sunset/Forest/Ocean/Violet/Rose, localStorage-persisted); Sunset = 4% saturation = the exact pre-theme neutral ash.
+- L0: frameless surface, live clock (top-right), 22% tile borders, full-height overflow rows (scroll + top/bottom fades + row-3 peek), d-pad walks all rows before the footer.
+- Morph transitions measure the **destination** mode's geometry (`surfaceContentRectFor`); L0→L1 lands on the panel's outer rect; council enters with the same morph; the back-zoom card is a translucent warm gradient.
+- Containers are borderless (transparent 1px borders left a bright double-composite hairline in Chromium — use `border: none`); L2 horizontal padding matches L1 (28px); focused-bubble glow uncut (scrollport glow-room + negative margin); focused user bubbles shift by the action row's real footprint.
+- Esc in native full screen is intercepted in Electron main (`before-input-event`) and forwarded over IPC as Back — **requires an app rebuild/run-from-source**; the June 11 packaged Bridge.app predates all Electron-side changes.
+
+Tests: **229/229** (`cd app/server && npm test`). New suites: llm-retry, recovery, kickoff-autonomy, orchestrator-decisions; events/executor extended.
+
+## What's new (previous session — designer skills bundled into Bridge)
 
 Server-side (`app/server/skills.js` + `skill-playbooks/`). Four design skills now ship **in the Bridge repo** — no separate `~/.claude/skills/` install needed. They flow through the existing skill registry → orchestrator prompt-injection path like every other skill.
 
@@ -327,7 +356,7 @@ Big feature + a long tail of UX fixes (see `git log 416dec7..HEAD`). Highlights:
 
 ## Tests
 
-`node --test "app/server/*.test.js"` (from the repo root) → currently **207/207 pass**. Hermeticity rule: tests MUST set `BRIDGE_STATE_DIR` + `BRIDGE_PROJECTS_BASE` to throwaway temp dirs before importing server modules — never touch the real `~/bridge-projects/.bridge/` registry or `~/bridge-projects/` repos (a past test wiped real data). All state modules (`projects.js`, `tasks.js`, `scratchpad.js`) resolve paths lazily through `state-dir.js`, so the env vars work as long as they're set before first use.
+`node --test "app/server/*.test.js"` (from the repo root) → currently **229/229 pass**. Hermeticity rule: tests MUST set `BRIDGE_STATE_DIR` + `BRIDGE_PROJECTS_BASE` to throwaway temp dirs before importing server modules — never touch the real `~/bridge-projects/.bridge/` registry or `~/bridge-projects/` repos (a past test wiped real data). All state modules (`projects.js`, `tasks.js`, `scratchpad.js`) resolve paths lazily through `state-dir.js`, so the env vars work as long as they're set before first use.
 
 ## Known gaps / follow-ups
 
