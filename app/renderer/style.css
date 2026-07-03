@@ -1190,7 +1190,9 @@ body[data-mode="add_agent"] #surface {
       color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%,
       transparent 60%),
     rgba(18, 18, 20, 0.55);
-  border-color: transparent;   /* borderless panels — the tone shift IS the edge */
+  /* Fully borderless — a transparent border here double-composites the
+   * translucent bg along the 1px border strip (bright hairline artifact). */
+  border: none;
   /* Heading breathing room matches L2: 1.25rem above the title text
    * (.project-heading pads 0.25rem itself; L2's .agent-header pads 1.25rem). */
   padding-top: 1rem;
@@ -1209,7 +1211,7 @@ body[data-mode="zoom"] #surface {
  * translucent ash panel as L1, minus the project-color wash (no project yet). */
 body[data-mode^="new_project_"] #surface {
   background: rgba(18, 18, 20, 0.55);
-  border-color: transparent;
+  border: none;
 }
 
 /* L0 is frameless too: the project tiles sit directly on the baseplate, with
@@ -1429,7 +1431,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
      wider, softer fade. */
   --header-h: 8.5rem;
   border-radius: 12px;
-  border: 1px solid transparent;   /* borderless — kept for layout stability */
+  border: none;   /* transparent 1px borders leave a bright hairline over translucent bg */
   overflow: hidden;
   /* Match the L1 surface backdrop exactly so the L2 container reads
    * as "the same room, zoomed in" rather than a new visual context:
