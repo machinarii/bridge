@@ -209,6 +209,16 @@ async function createWindow() {
   // would show Chromium's "press and hold Esc" notice).
   mainWin.on('enter-full-screen', () => mainWin?.webContents.send('bridge:fullscreen-changed', true));
   mainWin.on('leave-full-screen', () => mainWin?.webContents.send('bridge:fullscreen-changed', false));
+  // Esc while in native full screen: macOS exits full screen before the
+  // renderer can treat the key as Back. Intercept it here, block the OS
+  // default, and forward it so the renderer routes it through the normal
+  // Esc/Back path. Full screen exits only via the button / Cmd+F.
+  mainWin.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || input.key !== 'Escape') return;
+    if (!mainWin?.isFullScreen()) return;
+    event.preventDefault();
+    if (!input.isAutoRepeat) mainWin.webContents.send('bridge:escape-pressed');
+  });
   // Open external links in the user's default browser, not inside
   // the Electron window.
   mainWin.webContents.setWindowOpenHandler(({ url }) => {

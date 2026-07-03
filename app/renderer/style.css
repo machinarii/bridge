@@ -89,7 +89,7 @@ html, body {
    * over the image's bright areas; --bg backstops while the jpg loads. */
   background:
     linear-gradient(rgba(10, 14, 20, 0.38), rgba(10, 14, 20, 0.38)),
-    url('/assets/abstract-background.jpg?v=3') center / cover no-repeat fixed,
+    url('/assets/abstract-background.jpg?v=4') center / cover no-repeat fixed,
     var(--bg);
   color: var(--fg);
   font-family: 'Barlow Condensed', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -1179,11 +1179,14 @@ body[data-surface-close-focus="true"] #surface {
  * this project" rather than a context switch. */
 body[data-mode="grid"] #surface,
 body[data-mode="add_agent"] #surface {
+  /* Translucent ash-black panel (neutral tone — no blue/green cast) so the
+   * backdrop shows through; the project-color radial wash stays on top. */
   background:
     radial-gradient(ellipse 120% 80% at 50% -10%,
       color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%,
       transparent 60%),
-    var(--bg-elev);
+    rgba(18, 18, 20, 0.55);
+  border-color: rgba(255, 255, 255, 0.14);
   /* Heading breathing room matches L2: 1.25rem above the title text
    * (.project-heading pads 0.25rem itself; L2's .agent-header pads 1.25rem). */
   padding-top: 1rem;

@@ -12,4 +12,11 @@ contextBridge.exposeInMainWorld('bridge', {
     ipcRenderer.on('bridge:fullscreen-changed', handler);
     return () => ipcRenderer.removeListener('bridge:fullscreen-changed', handler);
   },
+  // Esc pressed while in native full screen (main intercepts it so macOS
+  // doesn't exit full screen; the renderer routes it to Back).
+  onEscapePressed: (cb) => {
+    const handler = () => cb();
+    ipcRenderer.on('bridge:escape-pressed', handler);
+    return () => ipcRenderer.removeListener('bridge:escape-pressed', handler);
+  },
 });
