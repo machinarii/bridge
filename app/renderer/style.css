@@ -1420,8 +1420,9 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
   min-height: 0;
   position: relative;
   /* Top padding moves onto the absolute header (which restores 1.25rem
-     itself) and onto --header-h for the chat's scroll clearance. */
-  padding: 0 1.5rem 0;
+     itself) and onto --header-h for the chat's scroll clearance.
+     Horizontal padding matches the L1 surface (28px). */
+  padding: 0 28px 0;
   /* Single source of truth for the header overlay height = the gradient/
      dissolve depth AND the chat's top clearance (they must match so the
      first bubble lands fully visible just below the fade). Bigger = a
