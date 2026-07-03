@@ -1190,29 +1190,10 @@ body[data-mode="add_agent"] #surface {
       color-mix(in oklab, var(--agent-color, #6ea8ff) 28%, transparent) 0%,
       transparent 60%),
     rgba(18, 18, 20, 0.55);
-  border-color: transparent;
+  border-color: transparent;   /* borderless panels — the tone shift IS the edge */
   /* Heading breathing room matches L2: 1.25rem above the title text
    * (.project-heading pads 0.25rem itself; L2's .agent-header pads 1.25rem). */
   padding-top: 1rem;
-}
-/* Gradient border ring: bright at the top, dissolving toward the bottom so
- * the edge doesn't glare against the dark lower backdrop. A masked 1px
- * pseudo-element ring — border-image can't follow border-radius. */
-body[data-mode="grid"] #surface::before,
-body[data-mode="add_agent"] #surface::before {
-  content: '';
-  position: absolute; inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(180deg,
-    rgba(255,255,255,0.20) 0%,
-    rgba(255,255,255,0.10) 45%,
-    rgba(255,255,255,0.02) 100%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          mask-composite: exclude;
-  pointer-events: none;
 }
 
 /* L2 lets .agent-view BE the visible container — no nested chrome. The council
@@ -1228,7 +1209,7 @@ body[data-mode="zoom"] #surface {
  * translucent ash panel as L1, minus the project-color wash (no project yet). */
 body[data-mode^="new_project_"] #surface {
   background: rgba(18, 18, 20, 0.55);
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: transparent;
 }
 
 /* L0 is frameless too: the project tiles sit directly on the baseplate, with
@@ -1447,7 +1428,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
      wider, softer fade. */
   --header-h: 8.5rem;
   border-radius: 12px;
-  border: 1px solid transparent;   /* visible edge = the ::before gradient ring */
+  border: 1px solid transparent;   /* borderless — kept for layout stability */
   overflow: hidden;
   /* Match the L1 surface backdrop exactly so the L2 container reads
    * as "the same room, zoomed in" rather than a new visual context:
@@ -1459,23 +1440,7 @@ body[data-mode="zoom"][data-speaking="true"] #surface .agent-view {
       transparent 60%),
     rgba(18, 18, 20, 0.55);
 }
-/* Gradient border ring, same as L1: bright at the top, dissolving toward the
- * bottom so the edge doesn't glare against the dark lower backdrop. */
-.agent-view::before {
-  content: '';
-  position: absolute; inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(180deg,
-    rgba(255,255,255,0.20) 0%,
-    rgba(255,255,255,0.10) 45%,
-    rgba(255,255,255,0.02) 100%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          mask-composite: exclude;
-  pointer-events: none;
-}
+.agent-view::before { content: none; }
 .agent-view > * { position: relative; }
 .agent-view .agent-view-hint {
   position: absolute;
