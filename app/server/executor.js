@@ -16,7 +16,8 @@ import { setLastSpec, appendTurn } from './scratchpad.js';
 import { emitActivity, emitDelegate, emitNotification, emitStatus, publish as publishEvent } from './events.js';
 import { readNote, writeNote } from './backends/notes.js';
 import { getModelForRole } from './models.js';
-import { callOpenRouterText } from './llm.js';
+import { callOpenRouterText, mergeSignals } from './llm.js';
+import { tokenSignal } from './cancel.js';
 
 const MAX_ACTIVE = 3;     // concurrent agent turns per project
 const MAX_ATTEMPTS = 2;   // 1 retry on a thrown turn
@@ -30,12 +31,23 @@ const draining = new Map();  // projectId → in-flight drain promise
 
 /** Reject after `ms` so a turn whose connection stalled forever fails the task
  * (and retries/reports through the normal path) instead of wedging its worker. */
-function withTimeout(promise, ms, label) {
+function withTimeout(promise, ms, label, controller = null) {
   let timer;
   return Promise.race([
     Promise.resolve(promise).finally(() => clearTimeout(timer)),
-    new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`${label} timed out after ${ms}ms`)), ms); }),
+    new Promise((_, rej) => {
+      timer = setTimeout(() => {
+        const err = new Error(`${label} timed out after ${ms}ms`);
+        err.name = 'AbortError';
+        controller?.abort?.(err);
+        rej(err);
+      }, ms);
+    }),
   ]);
+}
+
+function turnSignal(opts = {}) {
+  return mergeSignals(opts.signal, tokenSignal(opts.cancelToken));
 }
 
 /** Queue a task and kick the project's drain loop (idempotent). Returns the task. */
@@ -112,10 +124,16 @@ async function runTask(task, opts = {}) {
   const fromRole = task.from?.role || getRole('pm').label;
   try {
     emitDelegate(task.projectId, task.from?.agentId || project.leadAgentId, agent.id, task.description);
+    const ctrl = new AbortController();
+    const signal = mergeSignals(turnSignal(opts), ctrl.signal);
+    const timeoutMs = opts.turnTimeoutMs || TURN_TIMEOUT_MS;
     const spec = await withTimeout(interpret({
       projectId: task.projectId, agentId: agent.id, text: task.description, effort: 'high',
+      mode: 'autonomous',
+      deadlineMs: timeoutMs,
+      signal,
       handoff: { from: fromName, fromRole, to: agent.name, toRole: getRole(agent.role).label },
-    }), opts.turnTimeoutMs || TURN_TIMEOUT_MS, `${agent.name} turn`);
+    }), timeoutMs, `${agent.name} turn`, ctrl);
     setLastSpec(agent.id, spec);
     // Keep the agent visibly working through the settle phase: interpretIntent
     // ends on 'idle', but settleReply may still run a PM auto-answer + a second
@@ -173,10 +191,16 @@ async function settleReply(task, project, agent, spec, opts) {
       const lead = project.agents.find(a => a.id === project.leadAgentId);
       const interpret = opts.interpret || interpretIntent;
       emitDelegate(project.id, project.leadAgentId, agent.id, answer);
+      const ctrl = new AbortController();
+      const signal = mergeSignals(turnSignal(opts), ctrl.signal);
+      const timeoutMs = opts.turnTimeoutMs || TURN_TIMEOUT_MS;
       const spec2 = await withTimeout(interpret({
         projectId: project.id, agentId: agent.id, text: answer, effort: 'high',
+        mode: 'autonomous',
+        deadlineMs: timeoutMs,
+        signal,
         handoff: { from: lead?.name || 'PM', fromRole: getRole('pm').label, to: agent.name, toRole: getRole(agent.role).label },
-      }), opts.turnTimeoutMs || TURN_TIMEOUT_MS, `${agent.name} turn`);
+      }), timeoutMs, `${agent.name} turn`, ctrl);
       setLastSpec(agent.id, spec2);
       return settleReply(getTask(task.id), project, agent, spec2, opts);
     }
@@ -227,10 +251,16 @@ export async function resumeBlockedTask(taskId, opts = {}) {
   emitStatus(project.id, agent.id, 'analyzing');
   try {
     emitDelegate(project.id, project.leadAgentId, agent.id, directive);
+    const ctrl = new AbortController();
+    const signal = mergeSignals(turnSignal(opts), ctrl.signal);
+    const timeoutMs = opts.turnTimeoutMs || TURN_TIMEOUT_MS;
     const spec = await withTimeout(interpret({
       projectId: project.id, agentId: agent.id, text: directive, effort: 'high',
+      mode: 'autonomous',
+      deadlineMs: timeoutMs,
+      signal,
       handoff: { from: lead?.name || 'PM', fromRole: getRole('pm').label, to: agent.name, toRole: getRole(agent.role).label },
-    }), opts.turnTimeoutMs || TURN_TIMEOUT_MS, `${agent.name} turn`);
+    }), timeoutMs, `${agent.name} turn`, ctrl);
     setLastSpec(agent.id, spec);
     await settleReply(getTask(task.id), project, agent, spec, opts);
   } catch (err) {
@@ -257,7 +287,7 @@ async function tryPmAnswer(project, agent, spec, opts = {}) {
     `If the PRD, the kickoff decisions, the goal, or sound product judgment determines the answer, reply with ONLY that answer ` +
     `(short and direct; picking one of the options is fine). ` +
     `If this genuinely needs the human's preference or information you don't have, reply with exactly: ASK USER`;
-  const raw = await ct({ apiKey, model: getModelForRole('pm'), prompt, timeoutMs: 20_000 });
+  const raw = await ct({ apiKey, model: getModelForRole('pm'), prompt, timeoutMs: 20_000, signal: turnSignal(opts) });
   const t = String(raw || '').trim();
   if (!t || /^ASK USER\b/i.test(t)) return null;
   return t.slice(0, 400);

@@ -45,6 +45,29 @@ test('missing usage / fields default to null, ok coerced to boolean', () => {
   assert.equal(r.ok, false);
 });
 
+test('records orchestration events with counts', () => {
+  metrics.recordOrchestrationEvent({
+    projectId: 'p1',
+    kind: 'team_voice',
+    latencyMs: 42.4,
+    counts: { assigned: 3, timedOut: 1 },
+    ok: true,
+  });
+  const [r] = lines();
+  assert.equal(r.type, 'orchestration');
+  assert.equal(r.projectId, 'p1');
+  assert.equal(r.kind, 'team_voice');
+  assert.equal(r.latencyMs, 42);
+  assert.deepEqual(r.counts, { assigned: 3, timedOut: 1 });
+  assert.equal(r.ok, true);
+});
+
+test('BRIDGE_METRICS=off disables orchestration logging', () => {
+  process.env.BRIDGE_METRICS = 'off';
+  metrics.recordOrchestrationEvent({ projectId: 'p1', kind: 'team_voice' });
+  assert.equal(lines().length, 0);
+});
+
 test('BRIDGE_METRICS=off disables logging', () => {
   process.env.BRIDGE_METRICS = 'off';
   metrics.recordModelCall({ model: 'a/x', ok: true });

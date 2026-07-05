@@ -9,8 +9,8 @@ import { learningsBlock } from './learnings.js';
 import { recordModelCall } from './metrics.js';
 import { emitStatus, emitActivity, emitToken } from './events.js';
 import { validateTileSpec, repairPrompt } from './schema.js';
-import { throwIfCanceled } from './cancel.js';
-import { callOpenRouterJSON, fetchWithRetry } from './llm.js';
+import { throwIfCanceled, tokenSignal } from './cancel.js';
+import { callOpenRouterJSON, deadlineSignal, fetchWithRetry, mergeSignals } from './llm.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 // Hard ceilings so a stalled connection can never hang an agent turn (and with
@@ -18,6 +18,21 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const TURN_FETCH_TIMEOUT_MS = 180_000;
 const CLASSIFY_TIMEOUT_MS = 10_000;
 const STREAM_DEADLINE_MS = 300_000;
+const agentTurnLocks = new Map();
+
+async function runAgentExclusive(agentId, fn) {
+  const previous = agentTurnLocks.get(agentId) || Promise.resolve();
+  let release;
+  const current = new Promise(r => { release = r; });
+  const tail = previous.then(() => current, () => current);
+  agentTurnLocks.set(agentId, tail);
+  await previous.catch(() => {});
+  try { return await fn(); }
+  finally {
+    release();
+    if (agentTurnLocks.get(agentId) === tail) agentTurnLocks.delete(agentId);
+  }
+}
 
 /* Shared response voice + conduct for every agent. Injected into the tile-spec
  * and prose system prompts, and reused by the kickoff + team-synthesis prompts. */
@@ -208,13 +223,19 @@ function samplingFor({ effort, regenerate }) {
   return out;
 }
 
-export async function interpretIntent({ projectId, agentId, text, sharedFrom, regenerate = 0, effort = 'high', handoff, cancelToken = null }) {
+export async function interpretIntent(args) {
+  return runAgentExclusive(args.agentId, () => interpretIntentLocked(args));
+}
+
+async function interpretIntentLocked({ projectId, agentId, text, sharedFrom, regenerate = 0, effort = 'high', handoff, cancelToken = null, signal = null, deadlineMs = TURN_FETCH_TIMEOUT_MS, mode = 'direct' }) {
   const project = getProject(projectId);
   if (!project) throw new Error(`unknown project: ${projectId}`);
   const agent = project.agents.find(a => a.id === agentId);
   if (!agent) throw new Error(`unknown agent: ${agentId}`);
 
   const apiKey = process.env.OPENROUTER_API_KEY;
+  const operationDeadline = deadlineSignal(deadlineMs, mergeSignals(signal, tokenSignal(cancelToken)), `${agent.name} turn`);
+  const operationSignal = operationDeadline.signal;
   // A handoff means this turn is a delegated task, not a live user chat — the
   // agent should decide-and-proceed instead of stopping to ask the user.
   const autonomous = !!handoff;
@@ -239,7 +260,9 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
 
   // v2 status: agent is reading context, evaluating inputs.
   emitStatus(projectId, agentId, 'analyzing');
+  try {
   throwIfCanceled(cancelToken);
+  if (operationSignal?.aborted) throw operationSignal.reason || new Error('aborted');
 
   if (!apiKey || apiKey.includes('replace-me')) {
     const spec = fallbackSpec(text, 'OPENROUTER_API_KEY missing — using local classifier.');
@@ -250,7 +273,9 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
   // Anything unexpected falls through to the structured JSON tile path below,
   // so the worst case is exactly today's behavior.
   try {
-    const streamed = await tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate, effort, autonomous });
+    const streamed = mode === 'direct' && !autonomous
+      ? await tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate, effort, autonomous, signal: operationSignal })
+      : null;
     if (streamed) { emitStatus(projectId, agentId, 'idle'); return streamed; }
   } catch (err) {
     console.warn('[stream] falling back to JSON tile path:', err?.message);
@@ -270,17 +295,23 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
     // "Building" (it's writing code), everyone else as "Drafting".
     emitStatus(projectId, agentId, agent?.role === 'sw_engineer' ? 'building' : 'drafting');
     const t0 = Date.now();
-    const resp = await fetchWithRetry(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'http://localhost/aurora-bridge',
-        'X-Title': `Bridge - ${agent.name}`,
-      },
-      body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages, ...samplingFor({ effort, regenerate }) }),
-      signal: AbortSignal.timeout(TURN_FETCH_TIMEOUT_MS),
-    });
+    const fetchDeadline = deadlineSignal(TURN_FETCH_TIMEOUT_MS, operationSignal, `${agent.name} json turn`);
+    let resp;
+    try {
+      resp = await fetchWithRetry(OPENROUTER_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'http://localhost/aurora-bridge',
+          'X-Title': `Bridge - ${agent.name}`,
+        },
+        body: JSON.stringify({ model, response_format: { type: 'json_object' }, messages, ...samplingFor({ effort, regenerate }) }),
+        signal: fetchDeadline.signal,
+      });
+    } finally {
+      fetchDeadline.cleanup();
+    }
 
     if (!resp.ok) {
       const errText = await resp.text();
@@ -299,6 +330,7 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
         model: getRouterModel(),
         prompt: repairPrompt({ kind: 'tile', raw }),
         meta: { role: agent.role, kind: 'repair' },
+        signal: operationSignal,
       });
       spec = validateTileSpec(repaired) || spec;
     }
@@ -309,6 +341,9 @@ export async function interpretIntent({ projectId, agentId, text, sharedFrom, re
     return hydrateSpec(spec, { project, agent, text });
   } finally {
     emitStatus(projectId, agentId, 'idle');
+  }
+  } finally {
+    operationDeadline.cleanup();
   }
 }
 
@@ -388,12 +423,14 @@ ${RESPONSE_STYLE}`;
 
 /* Cheap router-model classification: ANSWER (prose) vs ACTION (tile). Defaults
  * to 'action' on any doubt, so action intents always get the structured path. */
-async function classifyIntent({ apiKey, text }) {
+async function classifyIntent({ apiKey, text, signal = null }) {
+  let deadline = null;
   try {
-    const r = await fetch(OPENROUTER_URL, {
+    deadline = deadlineSignal(CLASSIFY_TIMEOUT_MS, signal, 'intent classification');
+    const r = await fetchWithRetry(OPENROUTER_URL, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(CLASSIFY_TIMEOUT_MS),
+      signal: deadline.signal,
       body: JSON.stringify({
         model: getRouterModel(),
         max_tokens: 4,
@@ -402,24 +439,24 @@ async function classifyIntent({ apiKey, text }) {
           { role: 'user', content: String(text).slice(0, 600) },
         ],
       }),
-    });
+    }, { lane: 'router' });
     if (!r.ok) return 'action';
     const d = await r.json();
     const w = (d?.choices?.[0]?.message?.content || '').trim().toLowerCase();
     return w.startsWith('answer') ? 'answer' : 'action';
   } catch { return 'action'; }
+  finally { deadline?.cleanup?.(); }
 }
 
 /* Stream a chat completion, invoking onDelta(text) per content chunk. Returns
  * the full accumulated text. Throws on a non-OK / bodyless response. */
-async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
+async function streamOpenRouter({ apiKey, model, messages, onDelta, extra, signal = null }) {
   // One controller covers connect AND the whole read loop: a stream that stalls
   // without ever sending [DONE] aborts at the deadline instead of hanging the
   // turn (and the executor queue behind it) forever.
-  const ctrl = new AbortController();
-  const deadline = setTimeout(() => ctrl.abort(), STREAM_DEADLINE_MS);
+  const streamDeadline = deadlineSignal(STREAM_DEADLINE_MS, signal, 'streaming turn');
   try {
-  const resp = await fetch(OPENROUTER_URL, {
+  const resp = await fetchWithRetry(OPENROUTER_URL, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -428,7 +465,7 @@ async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
       'X-Title': 'Bridge',
     },
     body: JSON.stringify({ model, stream: true, messages, ...(extra || {}) }),
-    signal: ctrl.signal,
+    signal: streamDeadline.signal,
   });
   if (!resp.ok || !resp.body) throw new Error(`stream ${resp.status}`);
   const reader = resp.body.getReader();
@@ -452,13 +489,13 @@ async function streamOpenRouter({ apiKey, model, messages, onDelta, extra }) {
     }
   }
   return full;
-  } finally { clearTimeout(deadline); }
+  } finally { streamDeadline.cleanup(); }
 }
 
 /* Returns a hydrated 'reader' spec on success, or null to defer to the JSON
  * tile path (action intents, empty output, or classify failure). */
-async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate = 0, effort = 'high', autonomous = false }) {
-  if (await classifyIntent({ apiKey, text }) !== 'answer') return null;
+async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey, text, sharedFrom, regenerate = 0, effort = 'high', autonomous = false, signal = null }) {
+  if (await classifyIntent({ apiKey, text, signal }) !== 'answer') return null;
   emitStatus(projectId, agentId, agent?.role === 'sw_engineer' ? 'building' : 'drafting');
   const history = getContext(agentId).messages.slice(0, -1);
   const messages = [
@@ -471,6 +508,7 @@ async function tryStreamProseAnswer({ projectId, agentId, project, agent, apiKey
     model: getModelForRole(agent.role),
     messages,
     extra: samplingFor({ effort, regenerate }),
+    signal,
     onDelta: (d) => emitToken(projectId, agentId, d),
   });
   if (!full || !full.trim()) return null;

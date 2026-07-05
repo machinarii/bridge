@@ -33,3 +33,39 @@ test('a re-run delegated task does not append a duplicate handoff bubble', async
     assert.equal(afterRetry, afterFirst, 'retry does not add a second identical handoff');
   } finally { deleteProject(p.id); }
 });
+
+test('parallel turns for the same agent are serialized before model calls', async () => {
+  const p = await createProject({ name: 'Agent Lock', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.OPENROUTER_API_KEY;
+  process.env.OPENROUTER_API_KEY = 'test-key';
+  try {
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    let active = 0;
+    let maxActive = 0;
+    globalThis.fetch = async () => {
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise(r => setTimeout(r, 25));
+      active--;
+      const content = JSON.stringify({
+        intent: 'answer',
+        template: 'reader',
+        title: 'Done',
+        body: 'ok',
+        actions: [{ verb: 'Back', glyph: 'circle', action: { type: 'cancel' } }],
+      });
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
+    };
+    await Promise.all([
+      interpretIntent({ projectId: p.id, agentId: designer.id, text: 'first', mode: 'team' }),
+      interpretIntent({ projectId: p.id, agentId: designer.id, text: 'second', mode: 'team' }),
+    ]);
+    assert.equal(maxActive, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey == null) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = originalKey;
+    deleteProject(p.id);
+  }
+});
