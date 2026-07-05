@@ -13,14 +13,14 @@ import { appendTurn, getContext } from './scratchpad.js';
 import { getModelForRole, getDefaultModel, getRouterModel } from './models.js';
 import { emitStatus, emitActivity, emitDelegate, emitNotification } from './events.js';
 import { validateRouting, validateTileSpec, repairPrompt } from './schema.js';
-import { callOpenRouterJSON as callJson } from './llm.js';
-import { throwIfCanceled } from './cancel.js';
+import { callOpenRouterJSON as callJson, mergeSignals } from './llm.js';
+import { throwIfCanceled, tokenSignal } from './cancel.js';
+import { recordOrchestrationEvent } from './metrics.js';
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const FANOUT_CAP = 5;
 const ROUTING_TIMEOUT_MS = 20_000;
 const SYNTHESIS_TIMEOUT_MS = 20_000;
-const ASSIGNEE_TIMEOUT_MS = 20_000;
+const TEAM_SOFT_DEADLINE_MS = Number(process.env.BRIDGE_TEAM_SOFT_DEADLINE_MS || 90_000);
 
 const SHARED_FROM_MAX = 3;
 const SHARED_SNIPPET_MAX_CHARS = 240;
@@ -61,28 +61,13 @@ export function digestLineFor(agent) {
   return t.slice(0, DIGEST_MAX_CHARS) || '—';
 }
 
-async function callOpenRouterJSON({ apiKey, model, prompt, timeoutMs }) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const r = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json',
-                 'HTTP-Referer': 'http://localhost/aurora-bridge', 'X-Title': 'Bridge - team' },
-      body: JSON.stringify({ model, response_format: { type: 'json_object' },
-                             messages: [{ role: 'user', content: prompt }] }),
-      signal: ctrl.signal,
-    });
-    if (!r.ok) throw new Error(`OpenRouter ${r.status}: ${(await r.text()).slice(0,200)}`);
-    const data = await r.json();
-    return data?.choices?.[0]?.message?.content || '';
-  } finally { clearTimeout(t); }
-}
-
-export async function runTeamVoice({ projectId, text, effort = 'medium', cancelToken = null }) {
+export async function runTeamVoice({ projectId, text, effort = 'medium', cancelToken = null, signal = null, interpret = interpretIntent, softDeadlineMs = TEAM_SOFT_DEADLINE_MS }) {
+  const tTeam = Date.now();
   const project = getProject(projectId);
   if (!project) throw new Error(`unknown project: ${projectId}`);
   throwIfCanceled(cancelToken);
+  const softCtrl = new AbortController();
+  const operationSignal = mergeSignals(signal, tokenSignal(cancelToken), softCtrl.signal);
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey || apiKey.includes('replace-me')) {
     return {
@@ -124,7 +109,16 @@ export async function runTeamVoice({ projectId, text, effort = 'medium', cancelT
   appendTurn(lead.id, 'user', `[team-voice] ${text}`);
   emitStatus(projectId, lead.id, 'analyzing');
   emitActivity(projectId, `${lead.name}: routing "${text.slice(0, 60)}"`, lead.id);
-  const routingRaw = await callOpenRouterJSON({ apiKey, model: getRouterModel(), prompt: routingPrompt, timeoutMs: ROUTING_TIMEOUT_MS });
+  const tRouting = Date.now();
+  const routingRaw = await callJson({
+    apiKey,
+    model: getRouterModel(),
+    prompt: routingPrompt,
+    timeoutMs: ROUTING_TIMEOUT_MS,
+    meta: { role: 'pm', kind: 'team_routing' },
+    signal: operationSignal,
+  });
+  recordOrchestrationEvent({ projectId, kind: 'team_routing', latencyMs: Date.now() - tRouting, ok: true });
   throwIfCanceled(cancelToken);
   let routing;
   try { routing = parseRoutingOutput(routingRaw); }
@@ -134,6 +128,7 @@ export async function runTeamVoice({ projectId, text, effort = 'medium', cancelT
       model: getRouterModel(),
       prompt: repairPrompt({ kind: 'routing', raw: routingRaw }),
       meta: { role: 'pm', kind: 'routing_repair' },
+      signal: operationSignal,
     });
     throwIfCanceled(cancelToken);
     routing = parseRoutingOutput(repaired);
@@ -149,21 +144,22 @@ export async function runTeamVoice({ projectId, text, effort = 'medium', cancelT
   /* Resolve a single assignment, following any delegate hops up to the
    * depth limit. Returns the terminal spec (intent != 'delegate'). */
   async function runWithDelegation(asg, depth) {
+    const tAssignee = Date.now();
     try {
       throwIfCanceled(cancelToken);
-      const spec = await Promise.race([
-        interpretIntent({
-          projectId,
-          agentId: asg.agentId,
-          text: asg.task,
-          sharedFrom: asg.sharedFrom,
-          effort,
-          cancelToken,
-        }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('assignee timeout')), ASSIGNEE_TIMEOUT_MS)),
-      ]);
+      const spec = await interpret({
+        projectId,
+        agentId: asg.agentId,
+        text: asg.task,
+        sharedFrom: asg.sharedFrom,
+        effort,
+        cancelToken,
+        signal: operationSignal,
+        mode: 'team',
+      });
       throwIfCanceled(cancelToken);
       perAgent[asg.agentId] = spec;
+      recordOrchestrationEvent({ projectId, kind: 'team_assignee', latencyMs: Date.now() - tAssignee, counts: { depth }, ok: true });
 
       if (spec?.intent !== 'delegate') return spec;
       if (depth >= MAX_DELEGATION_DEPTH) {
@@ -221,12 +217,21 @@ export async function runTeamVoice({ projectId, text, effort = 'medium', cancelT
       if (err?.code === 'CANCELED') throw err;
       console.warn(`[team] assignee ${asg.agentId} failed:`, err.message);
       perAgent[asg.agentId] = null;
+      recordOrchestrationEvent({ projectId, kind: 'team_assignee', latencyMs: Date.now() - tAssignee, counts: { depth }, ok: false });
       return null;
     }
   }
 
   throwIfCanceled(cancelToken);
-  await Promise.all(kept.map(asg => runWithDelegation(asg, 0)));
+  const branches = kept.map(asg => runWithDelegation(asg, 0));
+  let timedOut = false;
+  if (softDeadlineMs > 0 && branches.length) {
+    const deadline = new Promise(resolve => setTimeout(() => resolve('deadline'), softDeadlineMs));
+    timedOut = (await Promise.race([Promise.allSettled(branches), deadline])) === 'deadline';
+    if (timedOut) softCtrl.abort(new Error(`team fan-out soft deadline after ${softDeadlineMs}ms`));
+  } else {
+    await Promise.allSettled(branches);
+  }
   throwIfCanceled(cancelToken);
 
   const perAgentText = Object.entries(perAgent).map(([aid, spec]) => {
@@ -243,7 +248,16 @@ export async function runTeamVoice({ projectId, text, effort = 'medium', cancelT
     `{"intent":"answer","template":"reader","context":"Team","title":"<short>","body":"<text>","actions":[{"verb":"Back","glyph":"circle","action":{"type":"cancel"}}]}` +
     RESPONSE_STYLE;
   emitStatus(projectId, lead.id, 'drafting');
-  const synthRaw = await callOpenRouterJSON({ apiKey, model: leadModel, prompt: synthPrompt, timeoutMs: SYNTHESIS_TIMEOUT_MS });
+  const tSynthesis = Date.now();
+  const synthRaw = await callJson({
+    apiKey,
+    model: leadModel,
+    prompt: synthPrompt,
+    timeoutMs: SYNTHESIS_TIMEOUT_MS,
+    meta: { role: 'pm', kind: 'team_synthesis' },
+    signal: mergeSignals(signal, tokenSignal(cancelToken)),
+  });
+  recordOrchestrationEvent({ projectId, kind: 'team_synthesis', latencyMs: Date.now() - tSynthesis, ok: true });
   throwIfCanceled(cancelToken);
   let summary = validateTileSpec(synthRaw);
   if (!summary) {
@@ -264,7 +278,20 @@ export async function runTeamVoice({ projectId, text, effort = 'medium', cancelT
     body: `${lead.name}: ${summary.title || (summary.body || '').slice(0, 140) || 'Team voice complete.'}`,
   });
 
-  return { routing: { assignments: kept, summary_intent: routing.summary_intent, dropped: dropped.length },
+  recordOrchestrationEvent({
+    projectId,
+    kind: 'team_voice',
+    latencyMs: Date.now() - tTeam,
+    counts: {
+      assigned: kept.length,
+      dropped: dropped.length,
+      completed: Object.values(perAgent).filter(Boolean).length,
+      failed: Object.values(perAgent).filter(v => v === null).length,
+      timedOut: timedOut ? 1 : 0,
+    },
+    ok: true,
+  });
+  return { routing: { assignments: kept, summary_intent: routing.summary_intent, dropped: dropped.length, timedOut },
            perAgent, delegations: delegationLog, summary };
 }
 
@@ -277,7 +304,7 @@ export async function runTeamVoice({ projectId, text, effort = 'medium', cancelT
  * reply as a foreign-author bubble in the delegating agent's chat. Returns the
  * terminal (non-delegate) spec — the teammate's answer — or the original spec
  * when it can't resolve (e.g. no enabled agent of the requested role). */
-export async function resolveDelegateSpec({ projectId, fromAgentId, spec, effort = 'high', depth = 0, cancelToken = null }) {
+export async function resolveDelegateSpec({ projectId, fromAgentId, spec, effort = 'high', depth = 0, cancelToken = null, signal = null }) {
   throwIfCanceled(cancelToken);
   if (!spec || spec.intent !== 'delegate') return spec;
   if (depth >= MAX_DELEGATION_DEPTH) return spec;
@@ -310,9 +337,9 @@ export async function resolveDelegateSpec({ projectId, fromAgentId, spec, effort
     fromRole: getRole(fromAgent?.role)?.label || '',
     snippet: (spec.body || '').slice(0, SHARED_SNIPPET_MAX_CHARS),
   }];
-  let childSpec = await interpretIntent({ projectId, agentId: target.id, text: task, sharedFrom, effort, cancelToken });
+  let childSpec = await interpretIntent({ projectId, agentId: target.id, text: task, sharedFrom, effort, cancelToken, signal, mode: 'team' });
   // follow any further delegate hops the teammate makes
-  childSpec = await resolveDelegateSpec({ projectId, fromAgentId: target.id, spec: childSpec, effort, depth: depth + 1, cancelToken });
+  childSpec = await resolveDelegateSpec({ projectId, fromAgentId: target.id, spec: childSpec, effort, depth: depth + 1, cancelToken, signal });
 
   // Group-chat view: surface the teammate's answer in the delegating agent's
   // L2 chat, tagged with the teammate's identity.

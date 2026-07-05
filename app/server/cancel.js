@@ -5,10 +5,11 @@
 
 import { randomUUID } from 'node:crypto';
 
-const TOKENS = new Map(); // token -> { canceled, reason, at, kind, projectId, ownerAgentId }
+const TOKENS = new Map(); // token -> { canceled, reason, at, kind, projectId, ownerAgentId, controller }
 
 export function createCancelToken(meta = {}) {
   const token = randomUUID();
+  const controller = new AbortController();
   TOKENS.set(token, {
     canceled: false,
     reason: '',
@@ -16,6 +17,7 @@ export function createCancelToken(meta = {}) {
     kind: String(meta.kind || ''),
     projectId: String(meta.projectId || ''),
     ownerAgentId: String(meta.ownerAgentId || ''),
+    controller,
   });
   return token;
 }
@@ -26,13 +28,15 @@ export function cancelToken(token, reason = 'Canceled by user') {
   rec.canceled = true;
   rec.reason = String(reason || 'Canceled by user').slice(0, 240);
   rec.canceledAt = Date.now();
+  rec.controller?.abort?.(rec.reason);
   return true;
 }
 
 export function tokenStatus(token) {
   const rec = TOKENS.get(String(token || '').trim());
   if (!rec) return null;
-  return { ...rec };
+  const { controller, ...safe } = rec;
+  return { ...safe };
 }
 
 export function throwIfCanceled(token) {
@@ -43,6 +47,12 @@ export function throwIfCanceled(token) {
     e.code = 'CANCELED';
     throw e;
   }
+}
+
+export function tokenSignal(token) {
+  if (!token) return null;
+  const rec = TOKENS.get(String(token || '').trim());
+  return rec?.controller?.signal || null;
 }
 
 export function completeToken(token) {

@@ -4,6 +4,7 @@
  * path; disable with BRIDGE_METRICS=off.
  *
  *   recordModelCall({ model, role?, kind?, latencyMs?, usage?, ok? })
+ *   recordOrchestrationEvent({ projectId?, kind, latencyMs?, counts?, ok? })
  *   metricsFile() → absolute path of the log (for tooling/tests)
  */
 
@@ -37,6 +38,27 @@ export function recordModelCall({ model = null, role = null, kind = null, latenc
     const f = metricsFile();
     appendFileSync(f, JSON.stringify(rec) + '\n', 'utf8');
     if (statSync(f).size > maxBytes()) renameSync(f, f + '.1');   // roll, keep one prior generation
+  } catch (err) {
+    if (!_warned) { _warned = true; console.warn('[metrics] logging disabled:', err.message); }
+  }
+}
+
+export function recordOrchestrationEvent({ projectId = null, kind = null, latencyMs = null, counts = null, ok = true } = {}) {
+  if ((process.env.BRIDGE_METRICS || 'on') === 'off') return;
+  try {
+    ensureStateDir();
+    const rec = {
+      ts: Date.now(),
+      type: 'orchestration',
+      projectId,
+      kind,
+      ok: !!ok,
+      latencyMs: Number.isFinite(latencyMs) ? Math.round(latencyMs) : null,
+      counts: counts && typeof counts === 'object' ? counts : null,
+    };
+    const f = metricsFile();
+    appendFileSync(f, JSON.stringify(rec) + '\n', 'utf8');
+    if (statSync(f).size > maxBytes()) renameSync(f, f + '.1');
   } catch (err) {
     if (!_warned) { _warned = true; console.warn('[metrics] logging disabled:', err.message); }
   }
