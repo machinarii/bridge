@@ -54,8 +54,9 @@ test('a question the PM can answer resumes the agent without the user', async ()
       return { intent: 'answer', template: 'reader', title: 'Done', body: 'Dark theme it is.' };
     };
     const callText = async () => 'Dark';   // the PM answers decisively
-    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'pick a theme' }, { interpret, callText, apiKey: 'k' });
-    await drain(p.id, { interpret, callText, apiKey: 'k' });
+    const callJSON = async () => '{}';     // learning hook: nothing durable
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'pick a theme' }, { interpret, callText, callJSON, apiKey: 'k' });
+    await drain(p.id, { interpret, callText, callJSON, apiKey: 'k' });
     const [t] = listTasks(p.id);
     assert.equal(t.status, 'done');
     assert.deepEqual(seen, ['pick a theme', 'Dark'], 'PM answer became the agent\'s next turn');
@@ -167,7 +168,7 @@ test('a blocked task auto-resumes on best judgment after the fallback window', a
         ? { intent: 'answer', template: 'reader', title: 'Done', body: 'Went with dark theme.' }
         : questionSpec('Dark or light?', ['Dark', 'Light']);
     const callText = async () => 'ASK USER';   // the PM can't answer either
-    const opts = { interpret, callText, apiKey: 'k', blockTimeoutMs: 20 };
+    const opts = { interpret, callText, callJSON: async () => '{}', apiKey: 'k', blockTimeoutMs: 20 };
     enqueueTask({ projectId: p.id, agentId: designer.id, description: 'pick theme' }, opts);
     await drain(p.id, opts);
     assert.equal(listTasks(p.id)[0].status, 'blocked_on_user', 'blocks first — the user gets a window to reply');
@@ -241,9 +242,52 @@ test('agent stays non-idle through the settle phase (no status gap for the PM an
       verbDuringPmCall = statusSnapshot(p.id)[designer.id] || 'idle';
       return 'Dark';
     };
-    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'pick theme' }, { interpret, callText, apiKey: 'k' });
-    await drain(p.id, { interpret, callText, apiKey: 'k' });
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'pick theme' }, { interpret, callText, callJSON: async () => '{}', apiKey: 'k' });
+    await drain(p.id, { interpret, callText, callJSON: async () => '{}', apiKey: 'k' });
     assert.notEqual(verbDuringPmCall, 'idle', 'agent reads as working while the PM answers');
     assert.equal(statusSnapshot(p.id)[designer.id], undefined, 'idle again once the task settles');
+  } finally { deleteProject(p.id); }
+});
+
+/* --- the learning hook: a finished deliverable feeds the durable learnings
+   store, which orchestrator.js injects into every later agent prompt. --- */
+const { getLearnings, clearLearnings } = await import('./learnings.js');
+
+test('a finished deliverable harvests durable learnings', async () => {
+  const p = await createProject({ name: 'Exec Learn', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    clearLearnings(p.id);
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    const interpret = async () => deliverableSpec('We standardized on 8px spacing.');
+    let seen = null;
+    const callJSON = async (args) => {
+      seen = args.prompt;
+      return JSON.stringify({ learnings: [
+        { insight: 'Spacing scale is 8px', type: 'convention', confidence: 9 },
+        { insight: 'Sans-serif only', type: 'decision', confidence: 8 },
+      ] });
+    };
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'set spacing' }, { interpret, callJSON, apiKey: 'k' });
+    await drain(p.id, { interpret, callJSON, apiKey: 'k' });
+
+    assert.match(seen, /8px spacing/, 'the deliverable is what gets mined');
+    const learned = getLearnings(p.id).map(l => l.insight).sort();
+    assert.deepEqual(learned, ['Sans-serif only', 'Spacing scale is 8px']);
+    assert.equal(getLearnings(p.id, { role: 'security' }).length, 2, 'learnings are unscoped — the whole team gets them');
+    assert.equal(listTasks(p.id)[0].status, 'done');
+  } finally { deleteProject(p.id); }
+});
+
+test('the learning hook never fails the task (bad JSON, no learnings, no key)', async () => {
+  const p = await createProject({ name: 'Exec Learn Fail', goal: 'g', roleIds: ['pm', 'designer'], topology: 'hub-and-spoke' });
+  try {
+    clearLearnings(p.id);
+    const designer = getProject(p.id).agents.find(a => a.role === 'designer');
+    const interpret = async () => deliverableSpec('A deliverable.');
+    const callJSON = async () => 'not json at all';
+    enqueueTask({ projectId: p.id, agentId: designer.id, description: 'do a thing' }, { interpret, callJSON, apiKey: 'k' });
+    await drain(p.id, { interpret, callJSON, apiKey: 'k' });
+    assert.equal(listTasks(p.id)[0].status, 'done', 'task still settles');
+    assert.equal(getLearnings(p.id).length, 0);
   } finally { deleteProject(p.id); }
 });

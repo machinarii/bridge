@@ -24,6 +24,8 @@ import {
 } from './autosave.js';
 import { subscribe as subscribeEvents, publish as publishEvent, statusSnapshot } from './events.js';
 import { listTasks } from './tasks.js';
+import { registerLoop, startLoops, runLoop, listLoops } from './loops.js';
+import { chiefOfStaffLoop, latestBrief } from './chief-of-staff.js';
 import { resolveBlockedForAgent } from './executor.js';
 import { hydrateSecretsIntoEnv, readSecret, writeSecret, deleteSecret } from './secrets.js';
 import { healthSnapshot } from './health.js';
@@ -827,8 +829,33 @@ app.get('/projects/:pid/file/*', (req, res) => {
   }
 });
 
+/* ---------- Chief of Staff ----------
+ *
+ * GET  /brief  → the latest brief (the loop's named artifact)
+ * POST /brief  → run the loop now, off-cadence
+ * GET  /loops  → what's registered and when each last ran
+ */
+app.get('/brief', (_req, res) => {
+  const brief = latestBrief();
+  if (!brief) return res.status(404).json({ error: 'no brief yet' });
+  res.json(brief);
+});
+
+app.post('/brief', async (_req, res) => {
+  try {
+    const r = await runLoop('chief-of-staff');
+    res.json(r.result ? { ...r.result, ran: true } : { ran: false, reason: r.error || 'nothing to report' });
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.get('/loops', (_req, res) => res.json({ loops: listLoops() }));
+
 migrateLegacyOnce();
 rescheduleAutosave();
+registerLoop(chiefOfStaffLoop);
+startLoops();
 migrateCharterFilenames();
 cleanupStale();
 await hydrateSecretsIntoEnv();
