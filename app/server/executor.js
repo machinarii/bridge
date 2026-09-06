@@ -15,8 +15,9 @@ import { interpretIntent, kickoffDecisionsBlock } from './orchestrator.js';
 import { setLastSpec, appendTurn } from './scratchpad.js';
 import { emitActivity, emitDelegate, emitNotification, emitStatus, publish as publishEvent } from './events.js';
 import { readNote, writeNote } from './backends/notes.js';
-import { getModelForRole } from './models.js';
-import { callOpenRouterText, mergeSignals } from './llm.js';
+import { getModelForRole, getRouterModel } from './models.js';
+import { callOpenRouterText, callOpenRouterJSON, mergeSignals } from './llm.js';
+import { addLearning } from './learnings.js';
 import { tokenSignal } from './cancel.js';
 
 const MAX_ACTIVE = 3;     // concurrent agent turns per project
@@ -214,10 +215,63 @@ async function settleReply(task, project, agent, spec, opts) {
     return;
   }
 
-  // 3. Deliverable → done. Report to the PM + persist the artifact as a doc.
+  // 3. Deliverable → done. Report to the PM + persist the artifact as a doc,
+  //    then harvest what the team should carry forward.
   const body = String(spec?.body || spec?.title || '').trim();
   updateTask(task.id, { status: 'done', output: body.slice(0, 2000) });
   reportToLead(project, agent, task, body);
+  await captureLearnings(project, agent, task, body, opts);
+}
+
+/* The learning hook. A finished deliverable is the cheapest moment to ask what
+ * the team should never have to re-derive — so one small extraction call turns
+ * it into durable learnings (learnings.js), which are injected into every future
+ * agent prompt above the confidence floor. Without this the store only ever
+ * filled from the council, and agents re-discovered the same decisions and the
+ * same bugs every session.
+ *
+ * Learnings are stored unscoped (role: null) on purpose: a pitfall one role hits
+ * is usually worth the whole team knowing, and the injection cap keeps prompts
+ * lean either way.
+ *
+ * ponytail: awaited, so the executor slot waits out the extraction (~seconds on
+ * the router model). Make it fire-and-forget if queue throughput ever matters.
+ * ponytail: deliverables only — failed and blocked tasks teach plenty too; wire
+ * those in once this one earns its keep. */
+async function captureLearnings(project, agent, task, body, opts = {}) {
+  const apiKey = 'apiKey' in opts ? opts.apiKey : process.env.OPENROUTER_API_KEY;
+  if (!apiKey || apiKey.includes('replace-me') || !body) return [];
+  const cj = opts.callJSON || callOpenRouterJSON;
+  const prompt =
+    `Project "${project.name}" — goal: "${project.goal}".\n` +
+    `${agent.name} (${getRole(agent.role)?.label}) was asked to: ${task.description}\n` +
+    `They delivered:\n---\n${body.slice(0, 6000)}\n---\n` +
+    `Extract only DURABLE learnings — things the team should not have to re-derive next session: ` +
+    `decisions made, pitfalls hit, conventions adopted, user preferences, established facts about this project. ` +
+    `Skip anything that merely restates the task, is obvious, or is true of software in general.\n` +
+    `Reply as JSON: {"learnings":[{"insight":"one specific sentence","type":"decision|pitfall|convention|preference|fact","confidence":1-10}]}\n` +
+    `Confidence 8+ only when the deliverable clearly establishes it. At most 3. ` +
+    `Return {"learnings":[]} when nothing durable was established — that is the common case and a fine answer.`;
+  let parsed;
+  try {
+    parsed = JSON.parse(await cj({
+      apiKey, model: getRouterModel(), prompt, timeoutMs: 30_000,
+      meta: { role: agent.role, kind: 'learning_hook' }, signal: turnSignal(opts),
+    }));
+  } catch (err) {
+    console.warn(`[executor] learning hook (${agent.name}):`, err?.message);
+    return [];
+  }
+  const stored = [];
+  for (const l of (Array.isArray(parsed?.learnings) ? parsed.learnings : []).slice(0, 3)) {
+    const rec = addLearning(project.id, {
+      insight: l?.insight, type: l?.type, confidence: l?.confidence,
+      source: `task:${task.id}`, role: null,
+    });
+    if (rec) stored.push(rec);
+  }
+  if (stored.length) emitActivity(project.id, `${agent.name}: learned ${stored.length} thing${stored.length === 1 ? '' : 's'}`, agent.id);
+  return stored;
 }
 
 /** After the fallback window, a task still blocked on the user resumes on the
